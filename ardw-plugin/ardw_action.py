@@ -9,6 +9,7 @@ import traceback
 import pcbnew
 from .ibom.pcbparser import PcbnewParser, generate_bom, round_floats
 from .ibom.pcbparser import Config
+from .core import parseProject, fix_file
 
 class ARDebugWorkbenchPlugin(pcbnew.ActionPlugin, object):
 
@@ -42,6 +43,17 @@ class ARDebugWorkbenchPlugin(pcbnew.ActionPlugin, object):
             pcb_file_path = board.GetFileName()
             parser = PcbnewParser(pcb_file_path, config, logger, board)
 
+            project_dir = os.path.dirname(os.path.realpath(pcb_file_path))
+            output_dir = os.path.join(project_dir, "ardw")
+            try: 
+                os.makedirs(output_dir)
+            except OSError:
+                if not os.path.isdir(output_dir):
+                    raise
+
+            sch_json_path = os.path.join(output_dir, "schdata.json")
+            parseProject(logger, pcb_file_path, sch_json_path)
+
             logger.info("Parsing pcbdata")
             pcbdata, components = parser.parse()
             if not pcbdata and not components:
@@ -51,13 +63,19 @@ class ARDebugWorkbenchPlugin(pcbnew.ActionPlugin, object):
             pcbdata["bom"] = generate_bom(components, config)
             pcbdata_str = json.dumps(round_floats(pcbdata, 6))
 
-            logger.info("Writing json file")
-            project_dir = os.path.dirname(os.path.realpath(pcb_file_path))
-            project_dir_name = os.path.split(project_dir)[1]
-            json_path = os.path.join(project_dir, "pcbdata.json")
 
-            with open(json_path, "w") as json_file:
+            pcb_json_path = os.path.join(output_dir, "pcbdata.json")
+            logger.info("Writing result to {}".format(pcb_json_path))
+
+            with open(pcb_json_path, "w") as json_file:
                 json_file.write(pcbdata_str)
+
+            logger.info("Checking for svgs and fixing")
+            for filename in os.listdir(output_dir):
+                if filename.endswith(".svg"):
+                    filepath = os.path.join(output_dir, filename)
+                    logger.info("Fixing {}".format(filepath))
+                    fix_file(filepath)
 
             logger.info("Done")
 

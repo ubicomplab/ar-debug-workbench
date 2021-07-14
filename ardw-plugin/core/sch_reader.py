@@ -1,21 +1,17 @@
 # Reads in a .sch and a cache.lib file from EEschema and writes
 # components and their bounding boxes to a .json file
 
-from os import write
-import sexpdata
 import sys
+from .sexpdata import Symbol, loads, car, cdr
 
 
 class LibraryComponent:
-    def __init__(self, name, bbox, pins):
+    def __init__(self, name, units):
         # Symbol name in cache.lib
         self.name = name
 
-        # (x1, y1, x2, y2) bounding box of symbol (relative to 0,0)
-        self.bbox = bbox
-
-        # list of Pins
-        self.pins = pins
+        # list of (bbox, pinlist) = ((x1, y1, x2, y2), [SchPin])
+        self.units = units
 
     # applies a rotation matrix r = (a, b, c, d) to a point p = (x, y)
     def calcRotate(self, p, r):
@@ -23,11 +19,13 @@ class LibraryComponent:
 
     # calculates the bounding box of an actual component given its position
     # and its rotation matrix r = (a, b, c, d)
-    def calcBbox(self, x, y, r):
-        minX = self.bbox[0]
-        minY = self.bbox[1]
-        maxX = self.bbox[2]
-        maxY = self.bbox[3]
+    def calcBbox(self, unit, x, y, r):
+        bbox = self.units[unit - 1][0]
+
+        minX = bbox[0]
+        minY = bbox[1]
+        maxX = bbox[2]
+        maxY = bbox[3]
 
         # Apply the rotation matrix to .sch coordinates
         minPoint = self.calcRotate((minX, minY), r)
@@ -38,9 +36,9 @@ class LibraryComponent:
 
     # calculates the pin list positions for an actual component given
     # position and rotation matrix r = (a, b, c, d)
-    def calcPins(self, x, y, r):
+    def calcPins(self, unit, x, y, r):
         newlist = list()
-        for pin in self.pins:
+        for pin in self.units[unit - 1][1]:
             name = pin.name
             num = pin.num
 
@@ -112,12 +110,9 @@ class SchPin:
 #  class SchPin
 
 class SchComponent:
-    def __init__(self, ref, tstamp, libcomp, pos, rot, bbox, pins):
+    def __init__(self, ref, libcomp, pos, rot, bbox, pins):
         # Component reference, eg. C8
         self.ref = ref
-
-        # tstamp unique identifier, eg. 5848FE1E
-        self.tstamp = tstamp
 
         # Symbol name in cache.lib, eg. arduino_Uno_Rev3-02-TH-eagle-import:C-EU0603-RND
         self.libcomp = libcomp
@@ -155,7 +150,6 @@ class SchComponent:
 
         return ('{o}{{\n'
                 '{o}  "ref": "{ref}",\n'
-                '{o}  "tstamp": "{tstamp}",\n'
                 '{o}  "libcomp": "{libcomp}",\n'
                 '{o}  "pos": {{\n'
                 '{o}    "x": "{pos[0]}",\n'
@@ -174,7 +168,7 @@ class SchComponent:
                 '{o}    "{bbox[3]}"\n'
                 '{o}  ],\n'
                 '{pinstr}\n'
-                '{o}}}').format(o=offset, ref=self.ref, tstamp=self.tstamp,
+                '{o}}}').format(o=offset, ref=self.ref,
                                 libcomp=self.libcomp, pos=self.pos,
                                 rot=self.rot, bbox=self.bbox, pinstr=pinString)
 #  class SchComponent
@@ -262,11 +256,136 @@ class NetInfo:
         return out
 #  class NetInfo
 
+"""
+Given two tuples (minX, minY, maxX, maxY), finds combined
+"""
+def minmax(t1, t2):
+    return (
+        min(t1[0], t2[0]),
+        min(t1[1], t2[1]),
+        max(t1[2], t2[2]),
+        max(t1[3], t2[3])
+    )
 
 """
+Parses a 'DRAW' in a lib file into an array of units,
+each with a bounding box and pin list
+"""
+def parseDraw(libfile, name, unit_count):
+    # list of (minX, minY, maxX, maxY), for index = (unit # - 1)
+    unit_boxes = [(1000, 1000, -1000, -1000)] * unit_count
+
+    # list of [SchPin], for index = (unit # - 1)
+    unit_pins = [[]] * unit_count
+
+    # Fast forward to next DRAW
+    line = libfile.readline()
+    while line:
+        if line.startswith("DRAW"):
+            break
+        else:
+            line = libfile.readline()
+
+    # Get the first data line
+    line = libfile.readline()
+
+    while not line.startswith("ENDDRAW"):
+        tokens = line.split()
+        if tokens[0] == "A" or tokens[0] == "C":
+            # arc
+            x = int(tokens[1])
+            y = int(tokens[2])
+            r = int(tokens[3])
+            if tokens[0] == "A":
+                u = int(tokens[6])
+            else:
+                u = int(tokens[4])
+
+            coordrange = (x - r, y - r, x + r, y + r)
+
+            if u == 0:
+                # apply to all
+                for i in range(unit_count):
+                    unit_boxes[i] = minmax(unit_boxes[i], coordrange)
+            else:
+                unit_boxes[u - 1] = minmax(unit_boxes[u - 1], coordrange)
+        elif tokens[0] == "X":
+            # pin
+            u = int(tokens[9])
+
+            # Get data needed for bbox
+            x = int(tokens[3])
+            y = int(tokens[4])
+
+            coordrange = (x, y, x, y)
+
+            # Get remaining data for pin list
+            pname = tokens[1]
+            pnum = tokens[2]
+            plen = int(tokens[5])
+            orientation = tokens[6]
+
+            # Recall that in .lib files, y increases up and x increases right
+            if (orientation == "U"):
+                end = (x, y + plen)
+            elif (orientation == "D"):
+                end = (x, y - plen)
+            elif (orientation == "L"):
+                end = (x - plen, y)
+            else:  # "R"
+                end = (x + plen, y)
+
+            if u == 0:
+                # apply to all
+                for i in range(unit_count):
+                    unit_boxes[i] = minmax(unit_boxes[i], coordrange)
+                    unit_pins[i].append(SchPin(pname, pnum, (x, y), end))
+            else:
+                unit_boxes[u - 1] = minmax(unit_boxes[u - 1], coordrange)
+                unit_pins[u - 1].append(SchPin(pname, pnum, (x, y), end))
+        elif tokens[0] == "S":
+            # rect
+            x1 = int(tokens[1])
+            y1 = int(tokens[2])
+            x2 = int(tokens[3])
+            y2 = int(tokens[4])
+            u = int(tokens[5])
+
+            coordrange = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
+
+            if u == 0:
+                # apply to all
+                for i in range(unit_count):
+                    unit_boxes[i] = minmax(unit_boxes[i], coordrange)
+            else:
+                unit_boxes[u - 1] = minmax(unit_boxes[u - 1], coordrange)
+        elif tokens[0] == "P":
+            # polygon
+            # ignoring "B" bezier curve for now, because there's no documentation
+            u = int(tokens[2])
+            n = int(tokens[1])
+            for i in range(0, n):
+                x = int(tokens[2 * i + 5])
+                y = int(tokens[2 * i + 6])
+                coordrange = (x, y, x, y)
+                if u == 0:
+                    # apply to all
+                    for i in range(unit_count):
+                        unit_boxes[i] = minmax(unit_boxes[i], coordrange)
+                else:
+                    unit_boxes[u - 1] = minmax(unit_boxes[u - 1], coordrange)
+
+        line = libfile.readline()
+
+    units = [(unit_boxes[i], unit_pins[i]) for i in range(unit_count)]
+    return LibraryComponent(name, units)
+#  parseDraw()
+
+"""
+DEPRECATED
 Parses a 'DRAW' in a lib file into a bounding box and pins
 """
-def parseDraw(libfile, name):
+def parseDraw_DEPRECATED(libfile, name):
     # values for bbox
     minX = 1000
     minY = 1000
@@ -352,7 +471,7 @@ def parseDraw(libfile, name):
         line = libfile.readline()
 
     return LibraryComponent(name, (minX, minY, maxX, maxY), pins)
-#  parseDraw()
+#  parseDraw_DEPRECATED()
 
 """
 Input: libfile -- file with Eeschema schematic library file format
@@ -370,10 +489,12 @@ def readLibFile(libfile, libname):
 
     while line:
         if line.startswith("DEF"):
-            name = line.split()[1]
+            tokens = line.split()
+            name = tokens[1]
+            unit_count = int(tokens[7])
             if libname:
                 name = libname + "_" + name
-            libDict[name] = parseDraw(libfile, name)
+            libDict[name] = parseDraw(libfile, name, unit_count)
 
         line = libfile.readline()
 
@@ -428,9 +549,11 @@ def parseComponent(schfile, compDict):
     # for some reason, ':' is used in .sch and '_' is used in .lib
     libcomp = lineL[1].replace(":", "_")
 
+    unit = int(lineU[1])
+
     if libcomp not in compDict:
         print("Component {} missing from libraries".format(libcomp))
-        compDict[libcomp] = LibraryComponent("COULD NOT FIND {}".format(libcomp), (0, 0, 0, 0), [])
+        compDict[libcomp] = LibraryComponent("COULD NOT FIND {}".format(libcomp), [(0, 0, 0, 0), []])
     
     cacheComp = compDict[libcomp]
 
@@ -448,8 +571,8 @@ def parseComponent(schfile, compDict):
     # Note: the spec guarantees that these values are either -1, 0, or 1
     rot = (int(rotline[0]), int(rotline[1]), int(rotline[2]), int(rotline[3]))
     
-    bbox = cacheComp.calcBbox(pos[0], pos[1], rot)
-    pins = cacheComp.calcPins(pos[0], pos[1], rot)
+    bbox = cacheComp.calcBbox(unit, pos[0], pos[1], rot)
+    pins = cacheComp.calcPins(unit, pos[0], pos[1], rot)
 
     # Fast forward to the end of the component
     while line:
@@ -458,7 +581,7 @@ def parseComponent(schfile, compDict):
         else:
             line = schfile.readline()
 
-    return SchComponent(lineL[2], lineU[3], libcomp, pos, rot, bbox, pins)
+    return SchComponent(lineL[2], libcomp, pos, rot, bbox, pins)
 #  parseComponent()
 
 """
@@ -517,7 +640,7 @@ def parseSchFile(schname, schpath, compDict):
 #  parseSchFile()
 
 def getraw(s):
-    if isinstance(s, sexpdata.Symbol):
+    if isinstance(s, Symbol):
         return s.value()
     else:
         return s
@@ -526,12 +649,12 @@ def getraw(s):
 def parseNetFile(filepath):
     nets = []
     with open(filepath) as file:
-        data = sexpdata.loads(file.read())
+        data = loads(file.read())
 
         netdata = None
         for d in range(1, len(data)):
-            if sexpdata.car(data[d]).value() == "nets":
-                netdata = sexpdata.cdr(data[d])
+            if car(data[d]).value() == "nets":
+                netdata = cdr(data[d])
                 break
         
         if netdata is None:

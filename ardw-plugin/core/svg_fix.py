@@ -1,10 +1,11 @@
 # Changes svg width/height to be proportional to their viewbox
+# This is necessary for the scaling and zooming of the schematic to work
 
 import os
 import re
 import sys
 
-def fix_file(svgpath):
+def fix_file(svgpath, outpath=None):
     if not os.path.isfile(svgpath):
         print("Error: file not found at {}".format(svgpath))
         return
@@ -24,7 +25,9 @@ def fix_file(svgpath):
             data[linenum] = re.sub(matchpattern, replacepattern, line)
             break
 
-    with open(svgpath, "w") as file:
+    if outpath is None:
+        outpath = svgpath
+    with open(outpath, "w") as file:
         file.writelines(data)
 
 

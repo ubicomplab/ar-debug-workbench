@@ -2,8 +2,8 @@ const express = require("express");
 const app = express();
 const winston = require("winston");
 
-var schdata = require("./data/olinuxino-schdata.json")
-var pcbdata = require("./data/olinuxino-pcbdata.json")
+var schdata = require("./data/schdata.json")
+var pcbdata = require("./data/pcbdata.json")
 
 app.get("/", (req, res) => {
     res.sendFile(__dirname + "/public/index.html");
