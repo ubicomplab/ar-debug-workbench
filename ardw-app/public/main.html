@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>BoardViz</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body>
+    <div id="topmostdiv" class="topmostdiv">
+        <div id="menubar">
+            This is the menu bar
+        </div>
+        <div id="display" class="split">
+            <div id="schematic-div">
+                <div id="schematic-canvas">
+                    <div class="canvas-container">
+                        <canvas id="sch_bg" style="z-index: 0"></canvas>
+                        <canvas id="sch_hl" style="z-index: 1"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="layout-div">
+                <div id="front-canvas" touch-action="none">
+                    <div class="canvas-container">
+                        <canvas id="F_bg" style="z-index: 10"></canvas>
+                        <canvas id="F_fab" style="z-index: 11"></canvas>
+                        <canvas id="F_slk" style="z-index: 12"></canvas>
+                        <canvas id="F_hl" style="z-index: 13"></canvas>
+                    </div>
+                </div>
+                <div id="back-canvas" touch-action="none">
+                    <div class="canvas-container">
+                        <canvas id="B_bg" style="z-index: 10"></canvas>
+                        <canvas id="B_fab" style="z-index: 11"></canvas>
+                        <canvas id="B_slk" style="z-index: 12"></canvas>
+                        <canvas id="B_hl" style="z-index: 13"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/split.js/dist/split.min.js"></script>
+    <script src="./render.js"></script>
+    <script src="./main.js"></script>
+</body>
+
+</html>

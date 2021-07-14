@@ -1,0 +1,96 @@
+:root {
+    --pcb-edge-color: black;
+    --pad-color: #878787;
+    --pad-hole-color: #CCCCCC;
+    /*--pad-color-highlight: #D04040;*/
+    --pad-color-highlight: rgba(0, 123, 255, 1);
+    --pin1-outline-color: #ffb629;
+    --pin1-outline-color-highlight: #b4ff03;
+    --silkscreen-edge-color: #aa4;
+    --silkscreen-polygon-color: #4aa;
+    --silkscreen-text-color: #4aa;
+    --fabrication-edge-color: #907651;
+    --fabrication-polygon-color: #907651;
+    --fabrication-text-color: #a27c24;
+    --track-color: #def5f1;
+    --track-color-highlight: #D04040;
+    --zone-color: #def5f1;
+    --zone-color-highlight: #d0404080;
+    
+    /* Style for schematic */
+    /* --schematic-highlight-fill-color: rgba(208, 64, 64, 0.25); */
+    --schematic-highlight-fill-color: rgba(0, 123, 255, 0.25);
+    /* --schematic-highlight-line-color: rgba(208, 64, 64, 1); */
+    --schematic-highlight-line-color: rgba(0, 123, 255, 1);
+    --schematic-highlight-line-width: 12;
+
+    --test1-fill: rgba(0, 255, 0, 0.25);
+    --test1-line: rgba(0, 255, 0, 1);
+    --test2-fill: rgba(255, 128, 0, 0.25);
+    --test2-line: rgba(255, 128, 0, 1);
+}
+
+html, body {
+    margin: 0px;
+    height: 100%;
+    font-family: Verdana, sans-serif;
+}
+
+.dark.topmostdiv {
+    --pcb-edge-color: #eee;
+    --pad-color: #808080;
+    --pin1-outline-color: #ffa800;
+    --pin1-outline-color-highlight: #ccff00;
+    --track-color: #42524f;
+    --zone-color: #42524f;
+    background-color: #252c30;
+    color: #eee;
+}
+
+#display {
+    height: calc(100vh - 40px);
+    width: 100vw;
+}
+
+div.canvas-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+div.canvas-container>canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+#layout-div>div {
+    width: 100%;
+}
+
+#schematic-div>div {
+    height: 100%;
+}
+
+/* split.js */
+.split {
+    display: flex;
+    flex-direction: row;
+}
+
+
+.gutter {
+    background-color: #eee;
+    background-repeat: no-repeat;
+    background-position: 50%;
+}
+
+.gutter.gutter-horizontal {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+    cursor: col-resize;
+}
+
+.gutter.gutter-vertical {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+    cursor: row-resize;
+}
