@@ -511,23 +511,6 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
     drawNets(canvasdict.highlight, canvasdict.layer, true);
   }
 }
-/*
-function drawHighlightsOnLayer(canvasdict, clear = true) {
-  if (clear) {
-    clearCanvas(canvasdict.highlight);
-  }
-  if (highlightedFootprints.length > 0) {
-    drawFootprints(canvasdict.highlight, canvasdict.layer,
-      canvasdict.transform.s * canvasdict.transform.zoom, true);
-  }
-  if (Object.keys(highlightedPins).length > 0) {
-    drawPins(canvasdict.highlight, canvasdict.layer);
-  }
-  if (highlightedNet !== null) {
-    drawNets(canvasdict.highlight, canvasdict.layer, true);
-  }
-}
-*/
 
 function drawHighlights() {
   drawHighlightsOnLayer(allcanvas.front);
@@ -831,6 +814,9 @@ function pinsClicked(pin_hits) {
   if (highlightedPin != -1 && pindict[selected].schid != currentSchematic) {
     switchSchematic(pindict[selected].schid);
   }
+
+  currentSelectionField.innerHTML = `Pin ${pindict[selected].ref}.${pindict[selected].num}`;
+
   drawHighlights();
   drawSchematicHighlights();
 }
@@ -848,6 +834,9 @@ function footprintsClicked(footprintIndexes) {
   if (highlightedComponent !== -1 && !(compdict[selected].schids.includes(currentSchematic))) {
     switchSchematic(compdict[selected].schids[0]);
   }
+
+  currentSelectionField.innerHTML = `Component ${compdict[selected].ref}`;
+
   drawHighlights();
   drawSchematicHighlights();
 }
@@ -857,44 +846,11 @@ function deselectAll(redraw) {
   highlightedPin = -1;
   highlightedNet = null;
   if (redraw) {
+    currentSelectionField.innerHTML = "None";
     drawHighlights();
     drawSchematicHighlights();
   }
 }
-/*
-function footprintsClicked(footprintIndexes) {
-  // Just gonna highlight the first one in the list
-  selected = footprintIndexes[0];
-  // Type consistency
-  selected = parseInt(selected);
-  if (selected == lastClicked) {
-    // Clicking against de-selects
-    lastClicked = -1;
-    highlightedFootprints = [];
-  } else {
-    lastClicked = selected;
-    highlightedFootprints = [selected];
-  }
-  drawHighlights();
-  if (highlightedFootprints.length > 0 && !(compdict[selected].schids.includes(currentSchematic))) {
-    switchSchematic(compdict[selected].schids[0])
-  }
-  drawSchematicHighlights();
-}
-*/
-/*
-function footprintsClicked(footprintIndexes) {
-  var lastClickedIndex = footprintIndexes.indexOf(lastClicked);
-  for (var i = 1; i <= footprintIndexes.length; i++) {
-      var refIndex = footprintIndexes[(lastClickedIndex + i) % footprintIndexes.length];
-      if (refIndex in footprintIndexToHandler) {
-          lastClicked = refIndex;
-          footprintIndexToHandler[refIndex]();
-          break;
-      }
-  }
-}
-*/
 
 // Expects box to have format [x1, y1, x2, y2]
 function isClickInBox(coords, box) {
@@ -949,39 +905,6 @@ function schematicHitScan(coords) {
   }
   return allhits;
 }
-/*
-function schematicHitScan(coords) {
-  hits = [];
-  pin_hits = [];
-  // TODO may be inefficient to loop over every single component but idk
-  // TODO part 2 may be extremely inefficient to loop over every single pin too
-  for (var refid in compdict) {
-    if (compdict[refid].schids.includes(currentSchematic)) {
-      for (var unitnum in compdict[refid].units) {
-        var unit = compdict[refid].units[unitnum];
-        if (unit.schid == currentSchematic) {
-          if (isClickInBox(coords, unit.bbox)) {
-            hits.push(parseInt(refid));
-          }
-
-          for (var pin of unit.pins) {
-            if (isClickInBox(coords, pinBoxFromPos(pin.pos))) {
-              pin_hits.push({
-                "ref": compdict[refid].ref,
-                "pin": pin.num
-              });
-            }
-          }
-        }
-      }
-    }
-  }
-  return {
-    "hits": hits,
-    "pin_hits": pin_hits
-  };
-}
-*/
 
 function getMousePos(layerdict, evt) {
   var canvas = layerdict.bg;
@@ -1030,30 +953,8 @@ function handleMouseClick(e, layerdict) {
       clickmenu.style.left = e.clientX + "px";
 
       for (let hit of hits) {
-        var optdiv = document.createElement("div");
-        if (hit.type === "comp") {
-          optdiv.addEventListener("click", () => {
-            console.log("Yay")
-            footprintsClicked([hit.val]);
-            clickmenu.classList.add("hidden");
-          });
-          optdiv.innerHTML = `Component ${compdict[hit.val].ref}`;
-        } else if (hit.type === "pin") {
-          optdiv.addEventListener("click", () => {
-            pinsClicked([hit.val]);
-            clickmenu.classList.add("hidden");
-          });
-          optdiv.innerHTML = `Pin ${pindict[hit.val].ref}.${pindict[hit.val].num}`;
-        } else {
-          optdiv.addEventListener("click", () => {
-            selectNet(hit.val);
-            clickmenu.classList.add("hidden");
-          });
-          optdiv.innerHTML = `Net ${hit.val}`;
-        }
-        clickmenu.appendChild(optdiv);
+        appendSelectionDiv(clickmenu, hit.val, hit.type);
       }
-
       clickmenu.classList.remove("hidden");
     } else {
       // Clicked on nothing
@@ -1087,12 +988,6 @@ function handleMouseClick(e, layerdict) {
       if (net !== highlightedNet) {
         // TODO net selection
         //netClicked(net);
-      }
-    }
-    if (highlightedNet === null) {
-      var footprints = bboxHitScan(layerdict.layer, ...v);
-      if (footprints.length > 0) {
-        footprintsClicked(footprints);
       }
     }
     */

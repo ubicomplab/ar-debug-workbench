@@ -18,9 +18,29 @@ var highlightedNet = null; // netname
 
 var debugCompPins = null;
 
-var sch_zoom_default; // different for each schematic
+var currentSelectionField = null; // document element
+
+var sch_zoom_default; // changes for each schematic
 var SCH_CLICK_BUFFER = 20; // how much of a buffer there is around the bbox of sch components
 var PIN_BBOX_SIZE = 50; // how big the bbox around a pin is
+
+// Holds svg of schematic and its highlights
+var schematic_canvas = {
+    transform: {
+        x: 0,
+        y: 0,
+        s: 1,
+        panx: 0,
+        pany: 0,
+        zoom: 0.1 // Overridden on load
+    },
+    pointerStates: {},
+    anotherPointerTapped: false,
+    layer: "S",
+    bg: document.getElementById("sch_bg"),
+    highlight: document.getElementById("sch_hl"),
+    img: new Image()
+}
 
 display_split = Split(["#schematic-div", "#layout-div"], {
     sizes: [50, 50],
@@ -273,30 +293,84 @@ function initData() {
     currentSchematic = 1
 }
 
+function appendSelectionDiv(parent, val, type) {
+    var div = document.createElement("div");
+    if (type === "comp") {
+        div.addEventListener("click", () => {
+            footprintsClicked([val]);
+            parent.classList.add("hidden");
+        });
+        div.innerHTML = `Component ${compdict[val].ref}`;
+    } else if (type === "pin") {
+        div.addEventListener("click", () => {
+            pinsClicked([val]);
+            parent.classList.add("hidden");
+        });
+        div.innerHTML = `Pin ${pindict[val].ref}.${pindict[val].num}`;
+    } else {
+        div.addEventListener("click", () => {
+            selectNet(val);
+            parent.classList.add("hidden");
+        });
+        div.innerHTML = `Net ${val}`;
+    }
+    parent.appendChild(div);
+}
+
 function initPage() {
     // Assume for now that 1st schematic shares title with project
     var projtitle = schdata.schematics[schid_to_idx[1]].name
     document.getElementById("projtitle").textContent = projtitle
 
-    // TODO handlers for settings, search bar, etc
+    currentSelectionField = document.getElementById("current-field");
+
+    var input = document.getElementById("search-input");
+    var searchlist = document.getElementById("search-content");
+
+    input.value = "";
+    input.addEventListener("focusin", () => {
+        searchlist.classList.remove("hidden");
+    });
+
+    for (let refid in compdict) {
+        appendSelectionDiv(searchlist, refid, "comp");
+    }
+    for (let pinidx in pindict) {
+        appendSelectionDiv(searchlist, pinidx, "pin");
+    }
+    for (let netname in netdict) {
+        appendSelectionDiv(searchlist, netname, "net");
+    }
 }
 
-// Holds svg of schematic and its highlights
-var schematic_canvas = {
-    transform: {
-        x: 0,
-        y: 0,
-        s: 1,
-        panx: 0,
-        pany: 0,
-        zoom: 0.1 // Overridden on load
-    },
-    pointerStates: {},
-    anotherPointerTapped: false,
-    layer: "S",
-    bg: document.getElementById("sch_bg"),
-    highlight: document.getElementById("sch_hl"),
-    img: new Image()
+function searchBarHandler() {
+    var input = document.getElementById("search-input");
+    var filter = input.value.toLowerCase();
+    var tokens = filter.split(/(\s+)/).filter( e => e.trim().length > 0);
+
+    var divs = document.getElementById("search-content").getElementsByTagName("div");
+    for (var i = 0; i < divs.length; i++) {
+        let val = divs[i].innerText.toLowerCase();
+        let match = true;
+        for (let token of tokens) {
+            if (val.indexOf(token) == -1) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            divs[i].classList.remove("hidden");
+        } else {
+            divs[i].classList.add("hidden");
+        }
+    }
+}
+
+function searchBarX() {
+    var searchlist = document.getElementById("search-content");
+    var input = document.getElementById("search-input");
+    searchlist.classList.add("hidden");
+    input.value = "";
 }
 
 function drawCanvasImg(layerdict, x = 0, y = 0, backgroundColor = null) {
@@ -379,15 +453,16 @@ function selectNet(netname) {
             console.log(`Error: selected net ${netname} is not in netdict`);
             return;
         }
-        // De-select any selected components or pins
-        highlightedComponent = -1;
-        highlightedPin = -1;
+        deselectAll(false);
 
         highlightedNet = netname;
         if (!netdict[netname].includes(currentSchematic)) {
             switchSchematic(netdict[netname][0]);
         }
     }
+
+    currentSelectionField.innerHTML = `Net ${netname}`;
+
     drawHighlights();
     drawSchematicHighlights();
 }
@@ -443,7 +518,7 @@ function drawSchematicHighlights() {
             drawSchBox(ctx, pinBoxFromPos(pin.pos));
         } else {
             console.log(`Warning: current pin ${pin.ref} / ${pin.num} is on schid ${pin.schid},` +
-                        `but we are on schid ${currentSchematic}`);
+                `but we are on schid ${currentSchematic}`);
         }
     }
     if (debugCompPins !== null) {
@@ -460,88 +535,6 @@ function drawSchematicHighlights() {
             }
         }
     }
-    /*
-    if (highlightedFootprints.length > 0) {
-        for (var refid of highlightedFootprints) {
-            for (var unitnum in compdict[refid].units) {
-                var unit = compdict[refid].units[unitnum];
-                if (unit.schid == currentSchematic) {
-                    var box = unit.bbox.map((b) => parseFloat(b));
-
-                    ctx.beginPath();
-                    ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
-                    ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
-                    ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
-                    ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
-                    ctx.fill();
-                    ctx.stroke();
-                }
-            }
-        }
-    }
-    if (Object.keys(highlightedPins).length > 0) {
-        for (var ref in highlightedPins) {
-            var refid = ref_to_id[ref];
-            if (refid == undefined) {
-                console.log(`Error: Highlighted pin ref ${ref} not in comp dict`)
-                continue;
-            }
-            for (var pin of highlightedPins[ref]) {
-                // Don't know which unit the pin is in
-                for (var unitnum in compdict[refid].units) {
-                    var unit = compdict[refid].units[unitnum];
-                    if (unit.schid == currentSchematic) {
-                        for (var unitpin of unit.pins) {
-                            if (pin == unitpin.num) {
-                                // Finally found correct pin
-                                // TODO maybe make this process a function, or more efficient
-
-                                var box = pinBoxFromPos(unitpin.pos);
-
-                                ctx.beginPath();
-                                ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
-                                ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
-                                ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
-                                ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
-                                ctx.fill();
-                                ctx.stroke();
-                            }
-                        }
-                    }
-                }
-
-            }
-        }
-    }
-    */
-    /*
-    if (highlightedPins.length > 0) {
-        for (var pininfo of highlightedPins) {
-            var refid = ref_to_id[pininfo.ref];
-            for (var unitnum in compdict[refid].units) {
-                var unit = compdict[refid].units[unitnum];
-                if (unit.schid == currentSchematic) {
-                    for (var unitpin of unit.pins) {
-                        if (pininfo.pin == unitpin.num) {
-                            // Finally found correct pin
-                            // TODO maybe make this process a function, or more efficient
-
-                            var box = pinBoxFromPos(unitpin.pos);
-
-                            ctx.beginPath();
-                            ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
-                            ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
-                            ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
-                            ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
-                            ctx.fill();
-                            ctx.stroke();
-                        }
-                    }
-                }
-            }
-        }
-    }
-    */
 }
 
 
