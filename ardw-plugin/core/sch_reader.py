@@ -110,18 +110,23 @@ class SchPin:
 #  class SchPin
 
 class SchComponent:
-    def __init__(self, ref, libcomp, pos, rot, bbox, pins):
+    def __init__(self, ref, libcomp, unit, bbox, pins):
         # Component reference, eg. C8
         self.ref = ref
 
         # Symbol name in cache.lib, eg. arduino_Uno_Rev3-02-TH-eagle-import:C-EU0603-RND
         self.libcomp = libcomp
 
+        # Unit number (starts at 1)
+        self.unit = unit
+
+        """
         # (x,y) position, eg. (3100, 7200)
         self.pos = pos
 
         # (a, b, c, d) rotation matrix, eg. (0, 1, -1, 0)
         self.rot = rot
+        """
 
         # (x1, y1, x2, y2) bounding box, eg. (3020, 7100, 3180, 7400)
         self.bbox = bbox
@@ -151,16 +156,7 @@ class SchComponent:
         return ('{o}{{\n'
                 '{o}  "ref": "{ref}",\n'
                 '{o}  "libcomp": "{libcomp}",\n'
-                '{o}  "pos": {{\n'
-                '{o}    "x": "{pos[0]}",\n'
-                '{o}    "y": "{pos[1]}"\n'
-                '{o}  }},\n'
-                '{o}  "rot": [\n'
-                '{o}    "{rot[0]}",\n'
-                '{o}    "{rot[1]}",\n'
-                '{o}    "{rot[2]}",\n'
-                '{o}    "{rot[3]}"\n'
-                '{o}  ],\n'
+                '{o}  "unit": "{unit}",\n'
                 '{o}  "bbox": [\n'
                 '{o}    "{bbox[0]}",\n'
                 '{o}    "{bbox[1]}",\n'
@@ -168,9 +164,8 @@ class SchComponent:
                 '{o}    "{bbox[3]}"\n'
                 '{o}  ],\n'
                 '{pinstr}\n'
-                '{o}}}').format(o=offset, ref=self.ref,
-                                libcomp=self.libcomp, pos=self.pos,
-                                rot=self.rot, bbox=self.bbox, pinstr=pinString)
+                '{o}}}').format(o=offset, ref=self.ref, libcomp=self.libcomp,
+                                unit=self.unit, bbox=self.bbox, pinstr=pinString)
 #  class SchComponent
 
 class Schematic:
@@ -276,7 +271,9 @@ def parseDraw(libfile, name, unit_count):
     unit_boxes = [(1000, 1000, -1000, -1000)] * unit_count
 
     # list of [SchPin], for index = (unit # - 1)
-    unit_pins = [[]] * unit_count
+    unit_pins = []
+    for _ in range(unit_count):
+        unit_pins.append([])
 
     # Fast forward to next DRAW
     line = libfile.readline()
@@ -581,7 +578,7 @@ def parseComponent(schfile, compDict):
         else:
             line = schfile.readline()
 
-    return SchComponent(lineL[2], libcomp, pos, rot, bbox, pins)
+    return SchComponent(lineL[2], libcomp, unit, bbox, pins)
 #  parseComponent()
 
 """
