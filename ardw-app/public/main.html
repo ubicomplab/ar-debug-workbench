@@ -9,7 +9,19 @@
 <body>
     <div id="topmostdiv" class="topmostdiv">
         <div id="menubar">
-            This is the menu bar
+            <div id="menubar-left">
+                <h1 id="projtitle"></h1>
+            </div>
+            <div id="menubar-right">
+                <div id="search">
+                    <div id="search-field"></div>
+                    <div id="search-context"></div>
+                </div>
+                <div id="settings">
+                    <div id="settings-btn"></div>
+                    <div id="settings-context"></div>
+                </div>
+            </div>
         </div>
         <div id="display" class="split">
             <div id="schematic-div">
@@ -19,6 +31,7 @@
                         <canvas id="sch_hl" style="z-index: 1"></canvas>
                     </div>
                 </div>
+                <div id="sch-multi-click" class="hidden"></div>
             </div>
             <div id="layout-div">
                 <div id="front-canvas" touch-action="none">

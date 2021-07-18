@@ -47,8 +47,16 @@ html, body {
     color: #eee;
 }
 
+#menubar {
+    height: 40px;
+}
+
+#menubar h1 {
+    margin: 0;
+}
+
 #display {
-    height: calc(100vh - 40px);
+    height: calc(100vh - 45px);
     width: 100vw;
 }
 
@@ -68,8 +76,35 @@ div.canvas-container>canvas {
     width: 100%;
 }
 
-#schematic-div>div {
+#schematic-div {
+    position: relative;
+}
+
+#schematic-canvas {
     height: 100%;
+    position: relative;
+    z-index: 0;
+}
+
+.hidden {
+    display: none;
+}
+
+#sch-multi-click {
+    position: absolute;
+    z-index: 50;
+    border: 2px solid #007bff;
+    border-radius: 4px;
+    background: white;
+}
+
+#sch-multi-click div {
+    width: 100%;
+    height: 30px;
+    border: 1px solid #eee;
+    box-sizing: border-box;
+    padding: 3px;
+    cursor: pointer;
 }
 
 /* split.js */

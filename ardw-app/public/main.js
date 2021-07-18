@@ -2,20 +2,25 @@ var socket = io();
 
 var topmostdiv = document.getElementById("topmostdiv");
 
-var schid_to_pos = {}; // schid : index in schdata.schematics
+var schid_to_idx = {}; // schid : index in schdata.schematics
 var ref_to_id = {}; // ref : refid
 var bomdict = {};   // refid : bomentry
 var compdict = {};  // refid : comp data (sch + bomentry)
-
-var highlightedFootprints = [];
-var highlightedNet = null;
-var lastClicked = -1;
+var netdict = {};   // netname : schids
+var pindict = {};   // pinidx : pin data (ref, name, num, pos, schid, net)
 
 var numSchematics;
 var currentSchematic; // schid (starts at 1)
 
+var highlightedComponent = -1; // refid
+var highlightedPin = -1; // pinidx
+var highlightedNet = null; // netname
+
+var debugCompPins = null;
+
 var sch_zoom_default; // different for each schematic
-var sch_click_buffer = 20; // how much of a buffer there is around the bbox of sch components
+var SCH_CLICK_BUFFER = 20; // how much of a buffer there is around the bbox of sch components
+var PIN_BBOX_SIZE = 50; // how big the bbox around a pin is
 
 display_split = Split(["#schematic-div", "#layout-div"], {
     sizes: [50, 50],
@@ -170,38 +175,96 @@ function initData() {
         }
     }
 
-    // TODO handle components with multiple bboxes (across schematics)
-    schid_to_pos = {};
+    // Build compdict of {refid : ref, libcomp, schids = [], units = {unit : schid, bbox = [], pins = []}}
+    schid_to_idx = {};
     compdict = {};
     for (var i in schdata.schematics) {
         var sch = schdata.schematics[i];
         var schid = parseInt(sch.orderpos.sheet);
-        schid_to_pos[schid] = i; // this is necessary bc schdata schematics may be out of order
+        schid_to_idx[schid] = i; // this is necessary bc schdata schematics may be out of order
         for (var comp of sch.components) {
             var refid = ref_to_id[comp.ref];
 
             if (refid === undefined) {
                 // We have a component not found in the pcbnew data
-                console.log(`Component ${comp.ref} found in schematic but not in layout`);
+                console.log(`Error: Component ${comp.ref} found in schematic but not in layout`);
                 continue;
             }
+
+            var unit = parseInt(comp.unit);
 
             if (refid in compdict) {
                 if (!(schid in compdict[refid].schids)) {
                     compdict[refid].schids.push(schid);
                 }
-                compdict[refid].boxes.push({
-                    "box": comp.bbox,
-                    "schid": schid
-                });
+                if (unit in compdict[refid].units) {
+                    console.log(`Error: Component ${comp.ref} has unit ${unit} multiple times`)
+                    continue;
+                }
             } else {
-                comp["bomentry"] = bomdict[refid];
-                comp["schids"] = [schid];
-                comp["boxes"] = [{
-                    "box": comp.bbox,
-                    "schid": schid
-                }]
-                compdict[refid] = comp;
+                compdict[refid] = {
+                    "ref": comp.ref,
+                    "libcomp": comp.libcomp,
+                    "schids": [schid],
+                    //"bomentry": bomdict[refid],
+                    "units": {}
+                };
+            }
+
+            compdict[refid].units[unit] = {
+                "schid": schid,
+                "bbox": comp.bbox,
+                "pins": comp.pins
+            };
+        }
+    }
+
+    // For each pin in each net, assign the appropriate net to the pin in compdict
+    // Also, populate netdict with {code : name, schids}
+    netdict = {};
+    for (var i in schdata.nets) {
+        var netinfo = schdata.nets[i];
+        var schids = [];
+        for (var netpin of netinfo.pins) {
+            var refid = ref_to_id[netpin.ref];
+            if (compdict[refid] == undefined) {
+                console.log(`Warning: ref ${netpin.ref} with a pin in net ${netinfo.name} wasn't found`);
+                continue;
+            }
+            for (var unitnum in compdict[refid].units) {
+                for (var unitpinidx in compdict[refid].units[unitnum].pins) {
+                    // netpin.pin should match unitpin.num, not unitpin.name
+                    if (netpin.pin == compdict[refid].units[unitnum].pins[unitpinidx].num) {
+                        // Storing the net (as netname) in the pin for future use in pindict
+                        compdict[refid].units[unitnum].pins[unitpinidx]["net"] = netinfo.name;
+
+                        var schid = compdict[refid].units[unitnum].schid
+                        if (!schids.includes(schid)) {
+                            schids.push(schid);
+                        }
+                    }
+                }
+            }
+        }
+        if (schids.length == 0) {
+            console.log(`Warning: net ${netinfo.name} has no valid pins`);
+            continue;
+        }
+        netdict[netinfo.name] = schids;
+    }
+
+    // All pins get put into one big "dict" with arbitrary pinidx
+    pindict = [];
+    for (var refid in compdict) {
+        for (var unitnum in compdict[refid].units) {
+            var unit = compdict[refid].units[unitnum];
+            for (var pin of unit.pins) {
+                pin["ref"] = compdict[refid].ref;
+                pin["schid"] = unit.schid;
+                if (pin["net"] == undefined) {
+                    pin["net"] = null;
+                }
+                pindict.push(pin);
             }
         }
     }
@@ -209,7 +272,14 @@ function initData() {
     numSchematics = schdata.schematics[0].orderpos.total
     currentSchematic = 1
 }
-// ---------------------------------------- //
+
+function initPage() {
+    // Assume for now that 1st schematic shares title with project
+    var projtitle = schdata.schematics[schid_to_idx[1]].name
+    document.getElementById("projtitle").textContent = projtitle
+
+    // TODO handlers for settings, search bar, etc
+}
 
 // Holds svg of schematic and its highlights
 var schematic_canvas = {
@@ -219,7 +289,7 @@ var schematic_canvas = {
         s: 1,
         panx: 0,
         pany: 0,
-        zoom: 0.1 // Temp aesthetic thing
+        zoom: 0.1 // Overridden on load
     },
     pointerStates: {},
     anotherPointerTapped: false,
@@ -292,8 +362,8 @@ function switchSchematic(schid) {
 
     resizeCanvas(schematic_canvas);
 
-    schdim = schdata.schematics[schid_to_pos[schid]].dimensions;
-    
+    schdim = schdata.schematics[schid_to_idx[schid]].dimensions;
+
     xfactor = parseFloat(schematic_canvas.bg.width) / parseFloat(schdim.x)
     yfactor = parseFloat(schematic_canvas.bg.height) / parseFloat(schdim.y)
 
@@ -301,19 +371,103 @@ function switchSchematic(schid) {
     resetTransform(schematic_canvas);
 }
 
-function drawSchematicHighlights() {
+function selectNet(netname) {
+    if (netname == undefined || netname === null) {
+        highlightedNet = null;
+    } else {
+        if (!(netname in netdict)) {
+            console.log(`Error: selected net ${netname} is not in netdict`);
+            return;
+        }
+        // De-select any selected components or pins
+        highlightedComponent = -1;
+        highlightedPin = -1;
+
+        highlightedNet = netname;
+        if (!netdict[netname].includes(currentSchematic)) {
+            switchSchematic(netdict[netname][0]);
+        }
+    }
+    drawHighlights();
+    drawSchematicHighlights();
+}
+
+function pinBoxFromPos(pos) {
+    pos = pos.map((p) => parseInt(p));
+
+    return [
+        pos[0] - PIN_BBOX_SIZE,
+        pos[1] - PIN_BBOX_SIZE,
+        pos[0] + PIN_BBOX_SIZE,
+        pos[1] + PIN_BBOX_SIZE
+    ];
+}
+
+function drawSchBox(ctx, box) {
     var style = getComputedStyle(topmostdiv);
 
+    ctx.beginPath();
+    ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+    ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
+    ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
+    ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
+    ctx.fill();
+    ctx.stroke();
+}
+
+function drawSchematicHighlights() {
     var canvas = schematic_canvas.highlight;
     prepareCanvas(canvas, false, schematic_canvas.transform);
     clearCanvas(canvas);
     var ctx = canvas.getContext("2d");
+    if (highlightedComponent !== -1) {
+        if (compdict[highlightedComponent] == undefined) {
+            console.log(`Error: highlighted refid ${highlightedComponent} not in compdict`);
+            return;
+        }
+        for (var unitnum in compdict[highlightedComponent].units) {
+            var unit = compdict[highlightedComponent].units[unitnum];
+            if (unit.schid == currentSchematic) {
+                var box = unit.bbox.map((b) => parseFloat(b));
+                drawSchBox(ctx, box);
+            }
+        }
+    }
+    if (highlightedPin !== -1) {
+        if (pindict[highlightedPin] == undefined) {
+            console.log(`Error: highlighted pinidx ${highlightedPin} not in pindict`);
+            return;
+        }
+        var pin = pindict[highlightedPin];
+        if (pin.schid == currentSchematic) {
+            drawSchBox(ctx, pinBoxFromPos(pin.pos));
+        } else {
+            console.log(`Warning: current pin ${pin.ref} / ${pin.num} is on schid ${pin.schid},` +
+                        `but we are on schid ${currentSchematic}`);
+        }
+    }
+    if (debugCompPins !== null) {
+        for (var pin of pindict) {
+            if (pin.ref == debugCompPins && pin.schid == currentSchematic) {
+                drawSchBox(ctx, pinBoxFromPos(pin.pos));
+            }
+        }
+    }
+    if (highlightedNet !== null) {
+        for (var pin of pindict) {
+            if (pin.schid == currentSchematic && pin.net == highlightedNet) {
+                drawSchBox(ctx, pinBoxFromPos(pin.pos));
+            }
+        }
+    }
+    /*
     if (highlightedFootprints.length > 0) {
         for (var refid of highlightedFootprints) {
-            for (var bbox of compdict[refid].boxes) {
-                if (bbox.schid == currentSchematic) {
-                    var box = bbox.box.map((b) => parseFloat(b));
-            
+            for (var unitnum in compdict[refid].units) {
+                var unit = compdict[refid].units[unitnum];
+                if (unit.schid == currentSchematic) {
+                    var box = unit.bbox.map((b) => parseFloat(b));
+
                     ctx.beginPath();
                     ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
                     ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
@@ -321,12 +475,73 @@ function drawSchematicHighlights() {
                     ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
                     ctx.fill();
                     ctx.stroke();
-
-                    // TODO increase stroke width!
                 }
             }
         }
     }
+    if (Object.keys(highlightedPins).length > 0) {
+        for (var ref in highlightedPins) {
+            var refid = ref_to_id[ref];
+            if (refid == undefined) {
+                console.log(`Error: Highlighted pin ref ${ref} not in comp dict`)
+                continue;
+            }
+            for (var pin of highlightedPins[ref]) {
+                // Don't know which unit the pin is in
+                for (var unitnum in compdict[refid].units) {
+                    var unit = compdict[refid].units[unitnum];
+                    if (unit.schid == currentSchematic) {
+                        for (var unitpin of unit.pins) {
+                            if (pin == unitpin.num) {
+                                // Finally found correct pin
+                                // TODO maybe make this process a function, or more efficient
+
+                                var box = pinBoxFromPos(unitpin.pos);
+
+                                ctx.beginPath();
+                                ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+                                ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
+                                ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
+                                ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
+                                ctx.fill();
+                                ctx.stroke();
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+    }
+    */
+    /*
+    if (highlightedPins.length > 0) {
+        for (var pininfo of highlightedPins) {
+            var refid = ref_to_id[pininfo.ref];
+            for (var unitnum in compdict[refid].units) {
+                var unit = compdict[refid].units[unitnum];
+                if (unit.schid == currentSchematic) {
+                    for (var unitpin of unit.pins) {
+                        if (pininfo.pin == unitpin.num) {
+                            // Finally found correct pin
+                            // TODO maybe make this process a function, or more efficient
+
+                            var box = pinBoxFromPos(unitpin.pos);
+
+                            ctx.beginPath();
+                            ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+                            ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
+                            ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
+                            ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
+                            ctx.fill();
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    */
 }
 
 
@@ -345,6 +560,8 @@ window.onload = () => {
         initUtils();
 
         initData();
+
+        initPage();
 
         initRender();
 

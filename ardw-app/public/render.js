@@ -344,6 +344,38 @@ function drawEdgeCuts(canvas, scalefactor) {
   }
 }
 
+function drawPins(canvas, layer) {
+  var style = getComputedStyle(topmostdiv);
+  var padColor = style.getPropertyValue('--pad-color-highlight');
+  var padHoleColor = style.getPropertyValue('--pad-hole-color');
+  var ctx = canvas.getContext("2d");
+
+  var pin = pindict[highlightedPin];
+  if (pin == undefined) {
+    console.log(`Error: highlighted pin ${highlightedPin} is not in pindict`);
+    return;
+  }
+  for (var footprint of pcbdata.footprints) {
+    if (footprint.ref != pin.ref) continue;
+
+    // draw pads
+    var padDrawn = false;
+    for (var pad of footprint.pads) {
+      // padname should match pin.num, not pin.name
+      if (pad.padname == pin.num && pad.layers.includes(layer)) {
+        drawPad(ctx, pad, padColor, false);
+        padDrawn = true;
+      }
+    }
+    if (padDrawn) {
+      // redraw all pad holes because some pads may overlap
+      for (var pad of footprint.pads) {
+        drawPadHole(ctx, pad, padHoleColor);
+      }
+    }
+  }
+}
+
 function drawFootprints(canvas, layer, scalefactor, highlight) {
   var ctx = canvas.getContext("2d");
   ctx.lineWidth = 3 / scalefactor;
@@ -358,7 +390,7 @@ function drawFootprints(canvas, layer, scalefactor, highlight) {
   for (var i = 0; i < pcbdata.footprints.length; i++) {
     var mod = pcbdata.footprints[i];
     var outline = settings.renderDnpOutline && pcbdata.bom.skipped.includes(i);
-    if (!highlight || highlightedFootprints.includes(i)) {
+    if (!highlight || highlightedComponent == i) {
       drawFootprint(ctx, layer, scalefactor, mod, padColor, padHoleColor, outlineColor, highlight, outline);
     }
   }
@@ -468,14 +500,34 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
   if (clear) {
     clearCanvas(canvasdict.highlight);
   }
-  if (highlightedFootprints.length > 0) {
+  if (highlightedComponent != -1) {
     drawFootprints(canvasdict.highlight, canvasdict.layer,
       canvasdict.transform.s * canvasdict.transform.zoom, true);
+  }
+  if (highlightedPin != -1) {
+    drawPins(canvasdict.highlight, canvasdict.layer);
   }
   if (highlightedNet !== null) {
     drawNets(canvasdict.highlight, canvasdict.layer, true);
   }
 }
+/*
+function drawHighlightsOnLayer(canvasdict, clear = true) {
+  if (clear) {
+    clearCanvas(canvasdict.highlight);
+  }
+  if (highlightedFootprints.length > 0) {
+    drawFootprints(canvasdict.highlight, canvasdict.layer,
+      canvasdict.transform.s * canvasdict.transform.zoom, true);
+  }
+  if (Object.keys(highlightedPins).length > 0) {
+    drawPins(canvasdict.highlight, canvasdict.layer);
+  }
+  if (highlightedNet !== null) {
+    drawNets(canvasdict.highlight, canvasdict.layer, true);
+  }
+}
+*/
 
 function drawHighlights() {
   drawHighlightsOnLayer(allcanvas.front);
@@ -766,6 +818,50 @@ function handlePointerDown(e, layerdict) {
   };
 }
 
+function pinsClicked(pin_hits) {
+  // Permitting only single selection
+  var selected = pin_hits[0];
+  if (pindict[selected] == undefined) {
+    console.log(`Error: selected pinidx ${selected} is not in pindict`);
+    return;
+  }
+  deselectAll(false);
+  highlightedPin = selected;
+
+  if (highlightedPin != -1 && pindict[selected].schid != currentSchematic) {
+    switchSchematic(pindict[selected].schid);
+  }
+  drawHighlights();
+  drawSchematicHighlights();
+}
+
+function footprintsClicked(footprintIndexes) {
+  // Permitting only single selection
+  var selected = parseInt(footprintIndexes[0]);
+  if (compdict[selected] == undefined) {
+    console.log(`Error: selected refid ${selected} is not in compdict`);
+    return;
+  }
+  deselectAll(false);
+  highlightedComponent = selected;
+
+  if (highlightedComponent !== -1 && !(compdict[selected].schids.includes(currentSchematic))) {
+    switchSchematic(compdict[selected].schids[0]);
+  }
+  drawHighlights();
+  drawSchematicHighlights();
+}
+
+function deselectAll(redraw) {
+  highlightedComponent = -1;
+  highlightedPin = -1;
+  highlightedNet = null;
+  if (redraw) {
+    drawHighlights();
+    drawSchematicHighlights();
+  }
+}
+/*
 function footprintsClicked(footprintIndexes) {
   // Just gonna highlight the first one in the list
   selected = footprintIndexes[0];
@@ -785,6 +881,7 @@ function footprintsClicked(footprintIndexes) {
   }
   drawSchematicHighlights();
 }
+*/
 /*
 function footprintsClicked(footprintIndexes) {
   var lastClickedIndex = footprintIndexes.indexOf(lastClicked);
@@ -813,28 +910,78 @@ function isClickInBox(coords, box) {
     box[3] = tmp;
   }
 
-  box[0] = box[0] - sch_click_buffer;
-  box[1] = box[1] - sch_click_buffer;
-  box[2] = box[2] + sch_click_buffer;
-  box[3] = box[3] + sch_click_buffer;
+  box[0] = box[0] - SCH_CLICK_BUFFER;
+  box[1] = box[1] - SCH_CLICK_BUFFER;
+  box[2] = box[2] + SCH_CLICK_BUFFER;
+  box[3] = box[3] + SCH_CLICK_BUFFER;
 
   return box[0] <= coords.x && coords.x <= box[2] && box[1] <= coords.y && coords.y <= box[3];
 }
 
 function schematicHitScan(coords) {
+  var allhits = [];
+  for (var refid in compdict) {
+    if (!compdict[refid].schids.includes(currentSchematic)) continue;
+    for (var unitnum in compdict[refid].units) {
+      var unit = compdict[refid].units[unitnum];
+      if (unit.schid == currentSchematic && isClickInBox(coords, unit.bbox)) {
+        allhits.push({
+          "val": parseInt(refid),
+          "type": "comp"
+        });
+      }
+    }
+  }
+  for (var pinidx in pindict) {
+    if (pindict[pinidx].schid != currentSchematic) continue;
+    if (isClickInBox(coords, pinBoxFromPos(pindict[pinidx].pos))) {
+      allhits.push({
+        "val": pinidx,
+        "type": "pin"
+      });
+      if (pindict[pinidx].net) {
+        allhits.push({
+          "val": pindict[pinidx].net,
+          "type": "net"
+        });
+      }
+    }
+  }
+  return allhits;
+}
+/*
+function schematicHitScan(coords) {
   hits = [];
+  pin_hits = [];
   // TODO may be inefficient to loop over every single component but idk
+  // TODO part 2 may be extremely inefficient to loop over every single pin too
   for (var refid in compdict) {
     if (compdict[refid].schids.includes(currentSchematic)) {
-      for (var bbox of compdict[refid].boxes) {
-        if (currentSchematic == bbox.schid && isClickInBox(coords, bbox.box)) {
-          hits.push(parseInt(refid));
+      for (var unitnum in compdict[refid].units) {
+        var unit = compdict[refid].units[unitnum];
+        if (unit.schid == currentSchematic) {
+          if (isClickInBox(coords, unit.bbox)) {
+            hits.push(parseInt(refid));
+          }
+
+          for (var pin of unit.pins) {
+            if (isClickInBox(coords, pinBoxFromPos(pin.pos))) {
+              pin_hits.push({
+                "ref": compdict[refid].ref,
+                "pin": pin.num
+              });
+            }
+          }
         }
       }
     }
   }
-  return hits;
+  return {
+    "hits": hits,
+    "pin_hits": pin_hits
+  };
 }
+*/
 
 function getMousePos(layerdict, evt) {
   var canvas = layerdict.bg;
@@ -860,13 +1007,61 @@ function handleMouseClick(e, layerdict) {
   }
 
   if (layerdict.layer === "S") {
+    // Click in schematic
     var coords = getMousePos(layerdict, e)
-    console.log(`sch click at (${coords.x.toFixed(1)},${coords.y.toFixed(1)})`)
-    hits = schematicHitScan(coords)
-    if (hits.length > 0) {
-      footprintsClicked(hits);
+    // TODO menu to choose if multiple hits
+    hits = schematicHitScan(coords);
+
+    var clickmenu = document.getElementById("sch-multi-click");
+
+    if (hits.length == 1) {
+      // Single click, just select what was clicked
+      if (hits[0].type === "comp") {
+        footprintsClicked([hits[0].val]);
+      } else {
+        pinsClicked([hits[0].val]);
+      }
+    } else if (hits.length > 1) {
+      // Multi click
+      // Clear existing children and position menu at click
+      // TODO make sure menu can't go out of #display
+      clickmenu.innerHTML = "";
+      clickmenu.style.top = e.clientY + "px";
+      clickmenu.style.left = e.clientX + "px";
+
+      for (let hit of hits) {
+        var optdiv = document.createElement("div");
+        if (hit.type === "comp") {
+          optdiv.addEventListener("click", () => {
+            console.log("Yay")
+            footprintsClicked([hit.val]);
+            clickmenu.classList.add("hidden");
+          });
+          optdiv.innerHTML = `Component ${compdict[hit.val].ref}`;
+        } else if (hit.type === "pin") {
+          optdiv.addEventListener("click", () => {
+            pinsClicked([hit.val]);
+            clickmenu.classList.add("hidden");
+          });
+          optdiv.innerHTML = `Pin ${pindict[hit.val].ref}.${pindict[hit.val].num}`;
+        } else {
+          optdiv.addEventListener("click", () => {
+            selectNet(hit.val);
+            clickmenu.classList.add("hidden");
+          });
+          optdiv.innerHTML = `Net ${hit.val}`;
+        }
+        clickmenu.appendChild(optdiv);
+      }
+
+      clickmenu.classList.remove("hidden");
+    } else {
+      // Clicked on nothing
+      clickmenu.classList.add("hidden");
+      deselectAll(true);
     }
   } else {
+    // Click in layout
     var x = e.offsetX;
     var y = e.offsetY;
     var t = layerdict.transform;
@@ -877,10 +1072,21 @@ function handleMouseClick(e, layerdict) {
     }
     y = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
     var v = rotateVector([x, y], -settings.boardRotation);
+
+    // TODO atm only components can be selected in layout
+    var footprints = bboxHitScan(layerdict.layer, ...v);
+    if (footprints.length > 0) {
+      footprintsClicked(footprints);
+    } else {
+      // Clicked nothing, deselect
+      deselectAll(true);
+    }
+    /*
     if ("nets" in pcbdata) {
       var net = netHitScan(layerdict.layer, ...v);
       if (net !== highlightedNet) {
-        netClicked(net);
+        // TODO net selection
+        //netClicked(net);
       }
     }
     if (highlightedNet === null) {
@@ -889,6 +1095,7 @@ function handleMouseClick(e, layerdict) {
         footprintsClicked(footprints);
       }
     }
+    */
   }
 }
 
