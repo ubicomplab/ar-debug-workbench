@@ -2,8 +2,8 @@
     --pcb-edge-color: black;
     --pad-color: #878787;
     --pad-hole-color: #CCCCCC;
-    /*--pad-color-highlight: #D04040;*/
-    --pad-color-highlight: rgba(0, 123, 255, 1);
+    --pad-color-highlight: #D04040;
+    /* --pad-color-highlight: rgba(0, 123, 255, 1); */
     --pin1-outline-color: #ffb629;
     --pin1-outline-color-highlight: #b4ff03;
     --silkscreen-edge-color: #aa4;

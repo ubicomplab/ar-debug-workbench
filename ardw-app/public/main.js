@@ -524,11 +524,6 @@ function initPage() {
         div.addEventListener("click", () => {
             if (schSelectionOpen) {
                 switchSchematic(i);
-                document.querySelectorAll("#sch-selection>div").forEach((child) => {
-                   if (child !== div && !child.classList.contains("label")) {
-                       child.classList.add("hidden");
-                   } 
-                });
             } else {
                 document.querySelectorAll("#sch-selection>div").forEach((child) => {
                     child.classList.remove("hidden");
@@ -634,8 +629,16 @@ function switchSchematic(schid) {
     schematic_canvas.img.src = `http://${window.location.host}/sch${schid}`;
     currentSchematic = schid;
 
-    // resizeCanvas(schematic_canvas);
+    document.querySelectorAll("#sch-selection>div").forEach((div) => {
+        if (!div.classList.contains("label")) {
+            div.classList.add("hidden");
+        }
+        if (div.innerText.startsWith(schid)) {
+            div.classList.remove("hidden");
+        }
+     });
 
+    // resizeCanvas(schematic_canvas);
     var canvas = document.getElementById("schematic-canvas");
     recalcLayerScale(schematic_canvas, canvas.clientWidth * devicePixelRatio, canvas.clientHeight * devicePixelRatio);
 
