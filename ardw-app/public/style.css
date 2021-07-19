@@ -26,6 +26,8 @@
     --test1-line: rgba(0, 255, 0, 1);
     --test2-fill: rgba(255, 128, 0, 0.25);
     --test2-line: rgba(255, 128, 0, 1);
+    --pcb-crosshair-line-color: rgba(208, 64, 64, 0.3);
+    --pcb-crosshair-line-width: 0.5;
 }
 
 html, body {

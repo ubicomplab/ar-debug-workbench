@@ -21,6 +21,7 @@ var debugCompPins = null;
 var currentSelectionField = null; // document element
 
 var schSelectionOpen = false;
+var drawCrosshair = false;
 
 var sch_zoom_default; // changes for each schematic
 var sch_view_minimums = {
@@ -430,8 +431,31 @@ function zoomToSelection() {
     resizeAll();
 }
 
-function crosshairOnSelection() {
-    console.log("Crosshair not implemented");
+function crosshairOnSelection(canvas, layer) {
+    var pos = [];
+    if (highlightedComponent !== -1) {
+        pos = pcbdata.footprints[highlightedComponent].bbox.pos;
+    }
+    if (highlightedPin !== -1) {
+        console.log("Crosshair for pins WIP");
+    }
+    if (highlightedNet !== null) {
+        console.log("Crosshair not available for nets");
+    }
+
+    if (pos.length > 0 && pcbdata.footprints[highlightedComponent].layer == layer) {
+        var style = getComputedStyle(topmostdiv);
+        var ctx = canvas.getContext("2d");
+        ctx.strokeStyle = style.getPropertyValue("--pcb-crosshair-line-color");
+        ctx.lineWidth = style.getPropertyValue("--pcb-crosshair-line-width");
+        ctx.beginPath();
+        ctx.moveTo(0, pos[1]);
+        ctx.lineTo(300, pos[1]);
+        ctx.stroke();
+        ctx.moveTo(pos[0], 0);
+        ctx.lineTo(pos[0], 300);
+        ctx.stroke();
+    }
 }
 
 function initPage() {
@@ -504,7 +528,8 @@ function initPage() {
                 if (settings["find-type"] === "zoom") {
                     zoomToSelection();
                 } else {
-                    crosshairOnSelection();
+                    drawCrosshair = !drawCrosshair;
+                    drawHighlights();
                 }
             }
         }
@@ -673,7 +698,7 @@ function selectNet(netname) {
       if (settings["find-type"] === "zoom") {
         zoomToSelection();
       } else {
-        crosshairOnSelection();
+          drawCrosshair = true;
       }
     }
 

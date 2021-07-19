@@ -510,6 +510,9 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
   if (highlightedNet !== null) {
     drawNets(canvasdict.highlight, canvasdict.layer, true);
   }
+  if (drawCrosshair) {
+    crosshairOnSelection(canvasdict.highlight, canvasdict.layer);
+  }
 }
 
 function drawHighlights() {
@@ -821,7 +824,7 @@ function pinsClicked(pin_hits) {
     if (settings["find-type"] === "zoom") {
       zoomToSelection();
     } else {
-      crosshairOnSelection();
+      drawCrosshair = true;
     }
   }
 
@@ -849,7 +852,7 @@ function footprintsClicked(footprintIndexes) {
     if (settings["find-type"] === "zoom") {
       zoomToSelection();
     } else {
-      crosshairOnSelection();
+      drawCrosshair = true;
     }
   }
 
@@ -861,6 +864,7 @@ function deselectAll(redraw) {
   highlightedComponent = -1;
   highlightedPin = -1;
   highlightedNet = null;
+  drawCrosshair = false;
   if (redraw) {
     currentSelectionField.innerHTML = "None";
     drawHighlights();
