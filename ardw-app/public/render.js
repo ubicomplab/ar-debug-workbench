@@ -18,8 +18,8 @@ function calcFontPoint(linepoint, text, offsetx, offsety, tilt) {
 }
 
 function drawText(ctx, text, color) {
-  if ("ref" in text && !settings.renderReferences) return;
-  if ("val" in text && !settings.renderValues) return;
+  if ("ref" in text && !ibom_settings.renderReferences) return;
+  if ("val" in text && !ibom_settings.renderValues) return;
   ctx.save();
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
@@ -321,11 +321,11 @@ function drawFootprint(ctx, layer, scalefactor, footprint, padColor, padHoleColo
     }
   }
   // draw pads
-  if (settings.renderPads) {
+  if (ibom_settings.renderPads) {
     for (var pad of footprint.pads) {
       if (pad.layers.includes(layer)) {
         drawPad(ctx, pad, padColor, outline);
-        if (pad.pin1 && settings.highlightpin1) {
+        if (pad.pin1 && ibom_settings.highlightpin1) {
           drawPad(ctx, pad, outlineColor, true);
         }
       }
@@ -389,7 +389,7 @@ function drawFootprints(canvas, layer, scalefactor, highlight) {
   }
   for (var i = 0; i < pcbdata.footprints.length; i++) {
     var mod = pcbdata.footprints[i];
-    var outline = settings.renderDnpOutline && pcbdata.bom.skipped.includes(i);
+    var outline = ibom_settings.renderDnpOutline && pcbdata.bom.skipped.includes(i);
     if (!highlight || highlightedComponent == i) {
       drawFootprint(ctx, layer, scalefactor, mod, padColor, padHoleColor, outlineColor, highlight, outline);
     }
@@ -464,15 +464,15 @@ function clearCanvas(canvas, color = null) {
 
 function drawNets(canvas, layer, highlight) {
   var style = getComputedStyle(topmostdiv);
-  if (settings.renderTracks) {
+  if (ibom_settings.renderTracks) {
     var trackColor = style.getPropertyValue(highlight ? '--track-color-highlight' : '--track-color');
     drawTracks(canvas, layer, trackColor, highlight);
   }
-  if (settings.renderZones) {
+  if (ibom_settings.renderZones) {
     var zoneColor = style.getPropertyValue(highlight ? '--zone-color-highlight' : '--zone-color');
     drawZones(canvas, layer, zoneColor, highlight);
   }
-  if (highlight && settings.renderPads) {
+  if (highlight && ibom_settings.renderPads) {
     var padColor = style.getPropertyValue('--pad-color-highlight');
     var padHoleColor = style.getPropertyValue('--pad-hole-color');
     var ctx = canvas.getContext("2d");
@@ -534,7 +534,7 @@ function drawBackground(canvasdict, clear = true) {
   var edgeColor = style.getPropertyValue('--silkscreen-edge-color');
   var polygonColor = style.getPropertyValue('--silkscreen-polygon-color');
   var textColor = style.getPropertyValue('--silkscreen-text-color');
-  if (settings.renderSilkscreen) {
+  if (ibom_settings.renderSilkscreen) {
     drawBgLayer(
       "silkscreen", canvasdict.silk, canvasdict.layer,
       canvasdict.transform.s * canvasdict.transform.zoom,
@@ -543,7 +543,7 @@ function drawBackground(canvasdict, clear = true) {
   edgeColor = style.getPropertyValue('--fabrication-edge-color');
   polygonColor = style.getPropertyValue('--fabrication-polygon-color');
   textColor = style.getPropertyValue('--fabrication-text-color');
-  if (settings.renderFabrication) {
+  if (ibom_settings.renderFabrication) {
     drawBgLayer(
       "fabrication", canvasdict.fab, canvasdict.layer,
       canvasdict.transform.s * canvasdict.transform.zoom,
@@ -561,7 +561,7 @@ function prepareCanvas(canvas, flip, transform) {
     ctx.scale(-1, 1);
   }
   ctx.translate(transform.x, transform.y);
-  ctx.rotate(deg2rad(settings.boardRotation));
+  ctx.rotate(deg2rad(ibom_settings.boardRotation));
   ctx.scale(transform.s, transform.s);
 }
 
@@ -589,7 +589,7 @@ function applyRotation(bbox) {
     [bbox.maxx, bbox.miny],
     [bbox.maxx, bbox.maxy],
   ];
-  corners = corners.map((v) => rotateVector(v, settings.boardRotation));
+  corners = corners.map((v) => rotateVector(v, ibom_settings.boardRotation));
   return {
     minx: corners.reduce((a, v) => Math.min(a, v[0]), Infinity),
     miny: corners.reduce((a, v) => Math.min(a, v[1]), Infinity),
@@ -734,7 +734,7 @@ function pointWithinPad(x, y, pad) {
 
 function netHitScan(layer, x, y) {
   // Check track segments
-  if (settings.renderTracks && pcbdata.tracks) {
+  if (ibom_settings.renderTracks && pcbdata.tracks) {
     for (var track of pcbdata.tracks[layer]) {
       if ('radius' in track) {
         if (pointWithinDistanceToArc(x, y, ...track.center, track.radius, track.startangle, track.endangle, track.width / 2)) {
@@ -748,7 +748,7 @@ function netHitScan(layer, x, y) {
     }
   }
   // Check pads
-  if (settings.renderPads) {
+  if (ibom_settings.renderPads) {
     for (var footprint of pcbdata.footprints) {
       for (var pad of footprint.pads) {
         if (pad.layers.includes(layer) && pointWithinPad(x, y, pad)) {
@@ -817,6 +817,14 @@ function pinsClicked(pin_hits) {
 
   currentSelectionField.innerHTML = `Pin ${pindict[selected].ref}.${pindict[selected].num}`;
 
+  if (settings["find-activate"] === "auto") {
+    if (settings["find-type"] === "zoom") {
+      zoomToSelection();
+    } else {
+      crosshairOnSelection();
+    }
+  }
+
   drawHighlights();
   drawSchematicHighlights();
 }
@@ -836,6 +844,14 @@ function footprintsClicked(footprintIndexes) {
   }
 
   currentSelectionField.innerHTML = `Component ${compdict[selected].ref}`;
+
+  if (settings["find-activate"] === "auto") {
+    if (settings["find-type"] === "zoom") {
+      zoomToSelection();
+    } else {
+      crosshairOnSelection();
+    }
+  }
 
   drawHighlights();
   drawSchematicHighlights();
@@ -932,6 +948,9 @@ function handleMouseClick(e, layerdict) {
   if (layerdict.layer === "S") {
     // Click in schematic
     var coords = getMousePos(layerdict, e)
+    console.log(`click in sch at (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
+    let t = schematic_canvas.transform;
+    // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
     // TODO menu to choose if multiple hits
     hits = schematicHitScan(coords);
 
@@ -972,7 +991,7 @@ function handleMouseClick(e, layerdict) {
       x = (devicePixelRatio * x / t.zoom - t.panx - t.x) / t.s;
     }
     y = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
-    var v = rotateVector([x, y], -settings.boardRotation);
+    var v = rotateVector([x, y], -ibom_settings.boardRotation);
 
     // TODO atm only components can be selected in layout
     var footprints = bboxHitScan(layerdict.layer, ...v);
@@ -998,7 +1017,7 @@ function handlePointerLeave(e, layerdict) {
   e.preventDefault();
   e.stopPropagation();
 
-  if (!settings.redrawOnDrag) {
+  if (!ibom_settings.redrawOnDrag) {
     redrawCanvas(layerdict);
   }
 
@@ -1006,11 +1025,21 @@ function handlePointerLeave(e, layerdict) {
 }
 
 function resetTransform(layerdict) {
-  layerdict.transform.panx = 0;
-  layerdict.transform.pany = 0;
   if (layerdict.layer === "S") {
     layerdict.transform.zoom = sch_zoom_default;
+    var t = layerdict.transform;
+
+    var vw = layerdict.bg.width / (t.zoom * t.s);
+    var vh = layerdict.bg.height / (t.zoom * t.s);
+
+    var centerx = schdata.schematics[schid_to_idx[currentSchematic]].dimensions.x / 2;
+    var centery = schdata.schematics[schid_to_idx[currentSchematic]].dimensions.y / 2;
+
+    layerdict.transform.panx = ((vw / 2) - centerx) * t.s - t.x;
+    layerdict.transform.pany = ((vh / 2) - centery) * t.s - t.y;
   } else {
+    layerdict.transform.panx = 0;
+    layerdict.transform.pany = 0;
     layerdict.transform.zoom = 1;
   }
   redrawCanvas(layerdict);
@@ -1052,7 +1081,7 @@ function handlePointerUp(e, layerdict) {
       layerdict.anotherPointerTapped = true;
     }
   } else {
-    if (!settings.redrawOnDrag) {
+    if (!ibom_settings.redrawOnDrag) {
       redrawCanvas(layerdict);
     }
     layerdict.anotherPointerTapped = false;
@@ -1106,7 +1135,7 @@ function handlePointerMove(e, layerdict) {
   thisPtr.lastX = e.offsetX;
   thisPtr.lastY = e.offsetY;
 
-  if (settings.redrawOnDrag) {
+  if (ibom_settings.redrawOnDrag) {
     redrawCanvas(layerdict);
   }
 }
@@ -1164,14 +1193,14 @@ function addMouseHandlers(div, layerdict) {
 }
 
 function setRedrawOnDrag(value) {
-  settings.redrawOnDrag = value;
+  ibom_settings.redrawOnDrag = value;
   writeStorage("redrawOnDrag", value);
 }
 
 function setBoardRotation(value) {
-  settings.boardRotation = value * 5;
-  writeStorage("boardRotation", settings.boardRotation);
-  document.getElementById("rotationDegree").textContent = settings.boardRotation;
+  ibom_settings.boardRotation = value * 5;
+  writeStorage("boardRotation", ibom_settings.boardRotation);
+  document.getElementById("rotationDegree").textContent = ibom_settings.boardRotation;
   resizeAll();
 }
 

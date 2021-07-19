@@ -26,11 +26,45 @@
                 </div>
                 <div id="settings">
                     <div id="settings-btn"></div>
-                    <div id="settings-content" class="menu-content"></div>
+                    <div id="settings-content" class="menu-content">
+                        <div class="settings-label">Render Options</div>
+                        <div class="settings-item">
+                            Fab
+                            <input type="checkbox" name="settings-render" value="renderFabrication" />
+                        </div>
+                        <div class="settings-item">
+                            Silkscreen
+                            <input type="checkbox" name="settings-render" value="renderSilkscreen" checked />
+                        </div>
+                        <div class="settings-item">
+                            Tracks
+                            <input type="checkbox" name="settings-render" value="renderTracks"/>
+                        </div>
+                        <div class="settings-item">
+                            Zones
+                            <input type="checkbox" name="settings-render" value="renderZones" />
+                        </div>
+                        <div class="settings-label">Find Selection Options</div>
+                        <div class="settings-item">
+                            Press 'F'
+                            <label class="toggle">
+                                <input type="checkbox" id="settings-find-toggle">
+                                <span class="slider"></span>
+                            </label>
+                            Auto
+                        </div>
+                        <div class="settings-item">
+                            <input type="radio" name="settings-find" value="zoom" checked>
+                            <label for="settings-find-zoom">Zoom</label>
+                            <input type="radio" name="settings-find" value="xhair">
+                            <label for="settings-find-xhair">Crosshair</label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         <div id="display" class="split">
+            <div id="sch-multi-click" class="hidden"></div>
             <div id="schematic-div">
                 <div id="schematic-canvas">
                     <div class="canvas-container">
@@ -38,7 +72,9 @@
                         <canvas id="sch_hl" style="z-index: 1"></canvas>
                     </div>
                 </div>
-                <div id="sch-multi-click" class="hidden"></div>
+                <div id="sch-selection">
+                    <div class="label">Current Schematic:</div>
+                </div>
             </div>
             <div id="layout-div">
                 <div id="front-canvas" touch-action="none">
@@ -61,7 +97,7 @@
         </div>
     </div>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://unpkg.com/split.js/dist/split.min.js"></script>
+    <script src="./split.min.js"></script>
     <script src="./render.js"></script>
     <script src="./main.js"></script>
 </body>

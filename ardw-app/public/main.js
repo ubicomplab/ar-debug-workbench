@@ -20,7 +20,15 @@ var debugCompPins = null;
 
 var currentSelectionField = null; // document element
 
+var schSelectionOpen = false;
+
 var sch_zoom_default; // changes for each schematic
+var sch_view_minimums = {
+    "comp": 0.1,
+    "pin": 0.04,
+    "net": 0.5
+};
+var sch_view_maximum = 0.8;
 var SCH_CLICK_BUFFER = 20; // how much of a buffer there is around the bbox of sch components
 var PIN_BBOX_SIZE = 50; // how big the bbox around a pin is
 
@@ -54,8 +62,15 @@ canvas_split = Split(["#front-canvas", "#back-canvas"], {
     onDragEnd: resizeAll
 });
 
-// ------------- IBOM utils.js ------------ //
 var settings = {
+    "log-error": true,
+    "log-warning": false,
+    "find-activate": "key", // 'key', 'auto'
+    "find-type": "zoom"     // 'zoom', 'xhair'
+};
+
+// ------------- IBOM utils.js ------------ //
+var ibom_settings = {
     canvaslayout: "default",
     bomlayout: "default",
     bommode: "ungrouped",
@@ -183,6 +198,18 @@ function parseValue(val, ref) {
 }
 // ---------------------------------------- //
 
+function logerr(msg) {
+    if (settings["log-error"]) {
+        console.log("Error: " + msg);
+    }
+}
+
+function logwarn(msg) {
+    if (settings["log-warning"]) {
+        console.log("Warning" + msg);
+    }
+}
+
 function initData() {
     ref_to_id = {};
     bomdict = {};
@@ -207,7 +234,7 @@ function initData() {
 
             if (refid === undefined) {
                 // We have a component not found in the pcbnew data
-                console.log(`Error: Component ${comp.ref} found in schematic but not in layout`);
+                logwarn(`Component ${comp.ref} found in schematic but not in layout (was ignored)`);
                 continue;
             }
 
@@ -218,7 +245,7 @@ function initData() {
                     compdict[refid].schids.push(schid);
                 }
                 if (unit in compdict[refid].units) {
-                    console.log(`Error: Component ${comp.ref} has unit ${unit} multiple times`)
+                    logerr(`Component ${comp.ref} has unit ${unit} multiple times`)
                     continue;
                 }
             } else {
@@ -248,7 +275,7 @@ function initData() {
         for (var netpin of netinfo.pins) {
             var refid = ref_to_id[netpin.ref];
             if (compdict[refid] == undefined) {
-                console.log(`Warning: ref ${netpin.ref} with a pin in net ${netinfo.name} wasn't found`);
+                logwarn(`ref ${netpin.ref} with a pin in net ${netinfo.name} wasn't found (was ignored)`);
                 continue;
             }
             for (var unitnum in compdict[refid].units) {
@@ -267,7 +294,7 @@ function initData() {
             }
         }
         if (schids.length == 0) {
-            console.log(`Warning: net ${netinfo.name} has no valid pins`);
+            logwarn(`net ${netinfo.name} has no valid pins (left out of netlist)`);
             continue;
         }
         netdict[netinfo.name] = schids;
@@ -317,13 +344,105 @@ function appendSelectionDiv(parent, val, type) {
     parent.appendChild(div);
 }
 
+function zoomToSelection() {
+    console.log("Finding selection");
+    let t = schematic_canvas.transform;
+    // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
+
+    var boxes = [];
+    var targetsize;
+    if (highlightedComponent !== -1) {
+        var comp = compdict[highlightedComponent];
+        for (let unitnum in comp.units) {
+            let unit = comp.units[unitnum];
+            if (unit.schid == currentSchematic) {
+                boxes.push(unit.bbox);
+            }
+        }
+        targetsize = sch_view_minimums["comp"];
+    }
+    if (highlightedPin !== -1) {
+        var pin = pindict[highlightedPin];
+        if (pin.schid == currentSchematic) {
+            boxes.push(pinBoxFromPos(pin.pos));
+        }
+        targetsize = sch_view_minimums["pin"];
+    }
+    if (highlightedNet !== null) {
+        for (let pinidx in pindict) {
+            let pin = pindict[pinidx];
+            if (pin.schid == currentSchematic && pin.net == highlightedNet) {
+                boxes.push(pinBoxFromPos(pin.pos));
+            }
+        }
+        targetsize = sch_view_minimums["net"];
+    }
+
+    if (boxes.length == 0) {
+        return;
+    }
+
+    var extremes = [1000000, 1000000, 0, 0];
+    for (let box of boxes) {
+        extremes[0] = Math.min(extremes[0], box[0], box[2]);
+        extremes[1] = Math.min(extremes[1], box[1], box[3]);
+        extremes[2] = Math.max(extremes[2], box[0], box[2]);
+        extremes[3] = Math.max(extremes[3], box[1], box[3]);
+    }
+    var minwidth = extremes[2] - extremes[0];
+    var minheight = extremes[3] - extremes[1];
+    var centerx = (extremes[0] + extremes[2]) / 2;
+    var centery = (extremes[1] + extremes[3]) / 2;
+    console.log(`min window is ${minwidth}x${minheight} at (${centerx},${centery})`);
+
+    var viewwidth = schematic_canvas.bg.width / (t.zoom * t.s);
+    var viewheight = schematic_canvas.bg.height / (t.zoom * t.s);
+
+    var xrat = minwidth / viewwidth;
+    var yrat = minheight / viewheight;
+
+    var maxrat = Math.max(xrat, yrat);
+
+    // Only zoom if the target will be too small or too large
+    if (maxrat < targetsize || maxrat > sch_view_maximum) {
+        console.log("Zooming")
+        if (maxrat > sch_view_maximum) {
+            targetsize = sch_view_maximum;
+        }
+        var schdim = schdata.schematics[schid_to_idx[currentSchematic]].dimensions;
+        var xzoom = schdim.x * sch_zoom_default * targetsize / minwidth;
+        var yzoom = schdim.y * sch_zoom_default * targetsize / minheight;
+
+        var newzoom = Math.min(xzoom, yzoom);
+        newzoom = Math.max(newzoom, sch_zoom_default);
+
+        schematic_canvas.transform.zoom = newzoom;
+    }
+
+    // Always pan
+    var newvw = schematic_canvas.bg.width / (schematic_canvas.transform.zoom * t.s);
+    var newvh = schematic_canvas.bg.height / (schematic_canvas.transform.zoom * t.s);
+
+    var newpx = ((newvw / 2) - centerx) * t.s - t.x;
+    var newpy = ((newvh / 2) - centery) * t.s - t.y;
+    schematic_canvas.transform.panx = newpx;
+    schematic_canvas.transform.pany = newpy;
+    resizeAll();
+}
+
+function crosshairOnSelection() {
+    console.log("Crosshair not implemented");
+}
+
 function initPage() {
     // Assume for now that 1st schematic shares title with project
     var projtitle = schdata.schematics[schid_to_idx[1]].name
     document.getElementById("projtitle").textContent = projtitle
 
+    // Current selection
     currentSelectionField = document.getElementById("current-field");
 
+    // Search field
     var input = document.getElementById("search-input");
     var searchlist = document.getElementById("search-content");
 
@@ -341,12 +460,94 @@ function initPage() {
     for (let netname in netdict) {
         appendSelectionDiv(searchlist, netname, "net");
     }
+
+    // Settings
+    var renderCheckboxes = document.querySelectorAll('input[name="settings-render"]');
+    renderCheckboxes.forEach((checkbox) => {
+        // Make sure we start in the correct state
+        checkbox.checked = ibom_settings[checkbox.value];
+
+        checkbox.addEventListener("click", () => {
+            ibom_settings[checkbox.value] = checkbox.checked;
+            resizeAll();
+        });
+    });
+
+    var findRadio = document.querySelectorAll('input[name="settings-find"]');
+    findRadio.forEach((radio) => {
+        // Make sure we start in the correct state
+        radio.checked = settings["find-type"] === radio.value;
+
+        radio.addEventListener("click", () => {
+            if (radio.checked) {
+                settings["find-type"] = radio.value;
+            }
+        })
+    })
+
+    var findToggle = document.getElementById("settings-find-toggle");
+    // Make sure we start in the correct state
+    findToggle.checked = settings["find-activate"] === "auto";
+
+    findToggle.addEventListener("click", () => {
+        if (findToggle.checked) {
+            settings["find-activate"] = "auto";
+        } else {
+            settings["find-activate"] = "key";
+        }
+    });
+
+    // Zoom to find feature
+    window.addEventListener("keydown", function (event) {
+        if (document.activeElement !== document.getElementById("search-input")) {
+            if (event.key == "f" && settings["find-activate"] === "key") {
+                if (settings["find-type"] === "zoom") {
+                    zoomToSelection();
+                } else {
+                    crosshairOnSelection();
+                }
+            }
+        }
+    }, true);
+
+    // Schematic selection
+    var schSelectionDisplay = document.getElementById("sch-selection");
+    schSelectionDisplay.firstElementChild.addEventListener("click", () => {
+        document.querySelectorAll("#sch-selection>div").forEach((child) => {
+            child.classList.remove("hidden");
+        });
+        schSelectionOpen = true;
+    });
+    for (let i = 1; i <= numSchematics; i++) {
+        let div = document.createElement("div");
+        div.innerText = `${i}. ${schdata.schematics[schid_to_idx[i]].name}`;
+        div.addEventListener("click", () => {
+            if (schSelectionOpen) {
+                switchSchematic(i);
+                document.querySelectorAll("#sch-selection>div").forEach((child) => {
+                   if (child !== div && !child.classList.contains("label")) {
+                       child.classList.add("hidden");
+                   } 
+                });
+            } else {
+                document.querySelectorAll("#sch-selection>div").forEach((child) => {
+                    child.classList.remove("hidden");
+                });
+            }
+            schSelectionOpen = !schSelectionOpen;
+        });
+        if (i != currentSchematic) {
+            div.classList.add("hidden");
+            schSelectionOpen = false;
+        }
+        schSelectionDisplay.appendChild(div);
+    }
 }
 
 function searchBarHandler() {
     var input = document.getElementById("search-input");
     var filter = input.value.toLowerCase();
-    var tokens = filter.split(/(\s+)/).filter( e => e.trim().length > 0);
+    var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
 
     var divs = document.getElementById("search-content").getElementsByTagName("div");
     for (var i = 0; i < divs.length; i++) {
@@ -426,7 +627,6 @@ function initSchematicCanvas() {
     schematic_canvas.img.onload = function () {
         drawCanvasImg(schematic_canvas, 0, 0);
     };
-    //schematic_canvas.img.src = "./svgs/A64-OlinuXino_Rev_G.svg";
     switchSchematic(1);
 }
 
@@ -434,12 +634,15 @@ function switchSchematic(schid) {
     schematic_canvas.img.src = `http://${window.location.host}/sch${schid}`;
     currentSchematic = schid;
 
-    resizeCanvas(schematic_canvas);
+    // resizeCanvas(schematic_canvas);
 
-    schdim = schdata.schematics[schid_to_idx[schid]].dimensions;
+    var canvas = document.getElementById("schematic-canvas");
+    recalcLayerScale(schematic_canvas, canvas.clientWidth * devicePixelRatio, canvas.clientHeight * devicePixelRatio);
 
-    xfactor = parseFloat(schematic_canvas.bg.width) / parseFloat(schdim.x)
-    yfactor = parseFloat(schematic_canvas.bg.height) / parseFloat(schdim.y)
+    var schdim = schdata.schematics[schid_to_idx[schid]].dimensions;
+
+    var xfactor = parseFloat(schematic_canvas.bg.width) / parseFloat(schdim.x)
+    var yfactor = parseFloat(schematic_canvas.bg.height) / parseFloat(schdim.y)
 
     sch_zoom_default = Math.min(xfactor, yfactor) / schematic_canvas.transform.s;
     resetTransform(schematic_canvas);
@@ -450,7 +653,7 @@ function selectNet(netname) {
         highlightedNet = null;
     } else {
         if (!(netname in netdict)) {
-            console.log(`Error: selected net ${netname} is not in netdict`);
+            logerr(`selected net ${netname} is not in netdict`);
             return;
         }
         deselectAll(false);
@@ -462,6 +665,14 @@ function selectNet(netname) {
     }
 
     currentSelectionField.innerHTML = `Net ${netname}`;
+
+    if (settings["find-activate"] === "auto") {
+      if (settings["find-type"] === "zoom") {
+        zoomToSelection();
+      } else {
+        crosshairOnSelection();
+      }
+    }
 
     drawHighlights();
     drawSchematicHighlights();
@@ -497,7 +708,7 @@ function drawSchematicHighlights() {
     var ctx = canvas.getContext("2d");
     if (highlightedComponent !== -1) {
         if (compdict[highlightedComponent] == undefined) {
-            console.log(`Error: highlighted refid ${highlightedComponent} not in compdict`);
+            logerr(`highlighted refid ${highlightedComponent} not in compdict`);
             return;
         }
         for (var unitnum in compdict[highlightedComponent].units) {
@@ -510,14 +721,14 @@ function drawSchematicHighlights() {
     }
     if (highlightedPin !== -1) {
         if (pindict[highlightedPin] == undefined) {
-            console.log(`Error: highlighted pinidx ${highlightedPin} not in pindict`);
+            logerr(`highlighted pinidx ${highlightedPin} not in pindict`);
             return;
         }
         var pin = pindict[highlightedPin];
         if (pin.schid == currentSchematic) {
             drawSchBox(ctx, pinBoxFromPos(pin.pos));
         } else {
-            console.log(`Warning: current pin ${pin.ref} / ${pin.num} is on schid ${pin.schid},` +
+            logwarn(`current pin ${pin.ref} / ${pin.num} is on schid ${pin.schid},` +
                 `but we are on schid ${currentSchematic}`);
         }
     }
