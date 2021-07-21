@@ -4,6 +4,7 @@ from flask import render_template, send_from_directory
 import json
 import logging
 import os
+import re
 
 from flask.helpers import url_for
 
@@ -87,9 +88,12 @@ def get_schematic_svg(schid):
         dirpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data")
 
         if not os.path.isfile(os.path.join(dirpath, filename)):
-            # KiCad doubles the sheet name when creating svgs
-            # for additional schematic sheets
-            filename = str(schematic["name"]) + filename
+            # Kicad creates complicated svg file names for additional sheets
+            for candidate in os.listdir(dirpath):
+                pattern = str(schematic["name"]) + "-.*\.svg"
+                if re.search(pattern, candidate) is not None:
+                    filename = candidate
+                    break
 
         if not os.path.isfile(os.path.join(dirpath, filename)):
             logging.error(f"Missing file for schid {schid}")

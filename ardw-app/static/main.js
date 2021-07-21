@@ -223,6 +223,9 @@ function initData() {
         }
     }
 
+    numSchematics = schdata.schematics[0].orderpos.total
+    currentSchematic = 1
+
     // Build compdict of {refid : ref, libcomp, schids = [], units = {unit : schid, bbox = [], pins = []}}
     schid_to_idx = {};
     compdict = {};
@@ -230,6 +233,10 @@ function initData() {
         var sch = schdata.schematics[i];
         var schid = parseInt(sch.orderpos.sheet);
         schid_to_idx[schid] = i; // this is necessary bc schdata schematics may be out of order
+        if (sch.components === undefined) {
+            console.log(`Schematic ${schid}/${numSchematics} ${sch.name} has no components, skipping`);
+            continue;
+        }
         for (var comp of sch.components) {
             var refid = ref_to_id[comp.ref];
 
@@ -316,9 +323,6 @@ function initData() {
             }
         }
     }
-
-    numSchematics = schdata.schematics[0].orderpos.total
-    currentSchematic = 1
 }
 
 function appendSelectionDiv(parent, val, type) {
@@ -497,6 +501,15 @@ function initPage() {
         });
     });
 
+    var layoutRotation = document.getElementById("settings-rotation");
+    var rotationLabel = document.getElementById("settings-rotation-label");
+    layoutRotation.value = 0;
+    layoutRotation.addEventListener("input", () => {
+        ibom_settings.boardRotation = layoutRotation.value * 5;
+        rotationLabel.innerHTML = ibom_settings.boardRotation + "&deg;";
+        resizeAll();
+    });
+
     var findRadio = document.querySelectorAll('input[name="settings-find"]');
     findRadio.forEach((radio) => {
         // Make sure we start in the correct state
@@ -658,7 +671,7 @@ function switchSchematic(schid) {
         if (!div.classList.contains("label")) {
             div.classList.add("hidden");
         }
-        if (div.innerText.startsWith(schid)) {
+        if (div.innerText.startsWith(schid + ".")) {
             div.classList.remove("hidden");
         }
      });
