@@ -5,6 +5,8 @@ import json
 import logging
 import os
 
+from flask.helpers import url_for
+
 
 logging.basicConfig(
     filename="ardw.log",
@@ -33,17 +35,38 @@ num_schematics = schdata["schematics"][0]["orderpos"]["total"]
 
 app = Flask(__name__)
 
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        css=url_for("static", filename="style.css"),
+        icon=url_for("static", filename="favicon.ico"),
+        main=url_for("main_page"),
+        proj=url_for("projector_page"),
+        js=url_for("static", filename="index.js")
+    )
 
 @app.route("/main")
 def main_page():
-    return render_template("main.html")
+    return render_template(
+        "main.html",
+        css=url_for("static", filename="style.css"),
+        icon=url_for("static", filename="favicon.ico"),
+        splitjs=url_for("static", filename="split.min.js"),
+        renderjs=url_for("static", filename="render.js"),
+        mainjs=url_for("static", filename="main.js")
+    )
 
 @app.route("/projector")
 def projector_page():
-    return render_template("projector.html")
+    return render_template(
+        "projector.html",
+        css=url_for("static", filename="style.css"),
+        icon=url_for("static", filename="favicon.ico"),
+        renderjs=url_for("static", filename="render.js"),
+        projjs=url_for("static", filename="projector.js")
+    )
 
 @app.route("/schdata")
 def get_schdata():
