@@ -2,8 +2,9 @@
 <html>
 
 <head>
-    <title>BoardViz</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
+    <title>AR Debug Workbench</title>
+    <link rel="stylesheet" type="text/css" href="{{css}}">
+    <link rel="shortcut icon" type="image/png" href="{{icon}}">
 </head>
 
 <body>
@@ -43,6 +44,11 @@
                         <div class="settings-item">
                             Zones
                             <input type="checkbox" name="settings-render" value="renderZones" />
+                        </div>
+                        <div class="settings-item">
+                            <span style="float:left">Layout Rotation</span>
+                            <span id="settings-rotation-label" style="float:right">0&deg;</span>
+                            <input type="range" id="settings-rotation" value="0" min="-36" max="36" />
                         </div>
                         <div class="settings-label">Find Selection Options</div>
                         <div class="settings-item">
@@ -96,10 +102,9 @@
             </div>
         </div>
     </div>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="./split.min.js"></script>
-    <script src="./render.js"></script>
-    <script src="./main.js"></script>
+    <script src="{{splitjs}}"></script>
+    <script src="{{renderjs}}"></script>
+    <script src="{{mainjs}}"></script>
 </body>
 
 </html>

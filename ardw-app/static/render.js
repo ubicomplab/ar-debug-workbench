@@ -554,7 +554,7 @@ function drawBackground(canvasdict, clear = true) {
   }
 }
 
-function prepareCanvas(canvas, flip, transform) {
+function prepareCanvas(canvas, flip, transform, rotate) {
   var ctx = canvas.getContext("2d");
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   var fontsize = 1.55;
@@ -564,7 +564,9 @@ function prepareCanvas(canvas, flip, transform) {
     ctx.scale(-1, 1);
   }
   ctx.translate(transform.x, transform.y);
-  ctx.rotate(deg2rad(ibom_settings.boardRotation));
+  if (rotate) {
+    ctx.rotate(deg2rad(ibom_settings.boardRotation));
+  }
   ctx.scale(transform.s, transform.s);
 }
 
@@ -572,7 +574,7 @@ function prepareLayer(canvasdict) {
   var flip = (canvasdict.layer == "B");
   for (var c of ["bg", "fab", "silk", "highlight"]) {
     if (canvasdict[c]) {
-      prepareCanvas(canvasdict[c], flip, canvasdict.transform);
+      prepareCanvas(canvasdict[c], flip, canvasdict.transform, canvasdict.layer != "S");
     }
   }
 }
@@ -601,8 +603,13 @@ function applyRotation(bbox) {
   }
 }
 
-function recalcLayerScale(layerdict, width, height) {
-  var bbox = applyRotation(pcbdata.edges_bbox);
+function recalcLayerScale(layerdict, width, height, rotate) {
+  var bbox;
+  if (rotate) {
+    bbox = applyRotation(pcbdata.edges_bbox);
+  } else {
+    bbox = pcbdata.edges_bbox;
+  }
   var scalefactor = 0.98 * Math.min(
     width / (bbox.maxx - bbox.minx),
     height / (bbox.maxy - bbox.miny)
@@ -650,7 +657,7 @@ function resizeCanvas(layerdict) {
   }[layerdict.layer];
   var width = document.getElementById(canvasdivid).clientWidth * devicePixelRatio;
   var height = document.getElementById(canvasdivid).clientHeight * devicePixelRatio;
-  recalcLayerScale(layerdict, width, height);
+  recalcLayerScale(layerdict, width, height, layerdict.layer !== "S");
   redrawCanvas(layerdict);
 }
 
@@ -949,6 +956,8 @@ function handleMouseClick(e, layerdict) {
     e.offsetY = e.pageY - e.currentTarget.offsetTop;
   }
 
+  var clickmenu = document.getElementById("sch-multi-click");
+
   if (layerdict.layer === "S") {
     // Click in schematic
     var coords = getMousePos(layerdict, e)
@@ -957,8 +966,6 @@ function handleMouseClick(e, layerdict) {
     // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
     // TODO menu to choose if multiple hits
     hits = schematicHitScan(coords);
-
-    var clickmenu = document.getElementById("sch-multi-click");
 
     if (hits.length == 1) {
       // Single click, just select what was clicked
@@ -999,8 +1006,26 @@ function handleMouseClick(e, layerdict) {
 
     // TODO atm only components can be selected in layout
     var footprints = bboxHitScan(layerdict.layer, ...v);
-    if (footprints.length > 0) {
+    if (footprints.length === 1) {
       footprintsClicked(footprints);
+    }
+    else if (footprints.length > 1) {
+      var hits = [];
+      for (let footprint of footprints) {
+        hits.push({
+          "val": footprint,
+          "type": "comp"
+        });
+      }
+
+      clickmenu.innerHTML = "";
+      clickmenu.style.top = e.clientY + "px";
+      clickmenu.style.left = e.clientX + "px";
+
+      for (let hit of hits) {
+        appendSelectionDiv(clickmenu, hit.val, hit.type);
+      }
+      clickmenu.classList.remove("hidden");
     } else {
       // Clicked nothing, deselect
       deselectAll(true);
