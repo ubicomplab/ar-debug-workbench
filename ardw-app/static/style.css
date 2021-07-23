@@ -269,6 +269,27 @@ div.canvas-container>canvas {
     left: 5px;
     max-height: 85vh;
     overflow-y: scroll;
+    border-color: #eee;
+}
+
+#sch-selection div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+#sch-selection div.current {
+    border-color: #007bff;
+    border-width: 2px;
+}
+#sch-selection div span {
+    display: none;
+}
+#sch-selection div.has-selection span {
+    display: initial;
+    margin-left: 4px;
+}
+#sch-selection div.current.has-selection span {
+    color: #007bff;
 }
 
 /* split.js */

@@ -249,7 +249,7 @@ function initData() {
             var unit = parseInt(comp.unit);
 
             if (refid in compdict) {
-                if (!(schid in compdict[refid].schids)) {
+                if (!(compdict[refid].schids.includes(schid))) {
                     compdict[refid].schids.push(schid);
                 }
                 if (unit in compdict[refid].units) {
@@ -556,28 +556,15 @@ function initPage() {
 
     // Schematic selection
     var schSelectionDisplay = document.getElementById("sch-selection");
-    schSelectionDisplay.firstElementChild.addEventListener("click", () => {
-        document.querySelectorAll("#sch-selection>div").forEach((child) => {
-            child.classList.remove("hidden");
-        });
-        schSelectionOpen = true;
-    });
     for (let i = 1; i <= numSchematics; i++) {
         let div = document.createElement("div");
-        div.innerText = `${i}. ${schdata.schematics[schid_to_idx[i]].name}`;
+        div.innerHTML = `${i}. ${schdata.schematics[schid_to_idx[i]].name}`;
+        div.innerHTML += `<span>&#9666;</span>`;
         div.addEventListener("click", () => {
-            if (schSelectionOpen) {
-                switchSchematic(i);
-            } else {
-                document.querySelectorAll("#sch-selection>div").forEach((child) => {
-                    child.classList.remove("hidden");
-                });
-            }
-            schSelectionOpen = !schSelectionOpen;
+            switchSchematic(i);
         });
-        if (i != currentSchematic) {
-            div.classList.add("hidden");
-            schSelectionOpen = false;
+        if (i == currentSchematic) {
+            div.classList.add("current");
         }
         schSelectionDisplay.appendChild(div);
     }
@@ -675,11 +662,9 @@ function switchSchematic(schid) {
     currentSchematic = schid;
 
     document.querySelectorAll("#sch-selection>div").forEach((div) => {
-        if (!div.classList.contains("label")) {
-            div.classList.add("hidden");
-        }
+        div.classList.remove("current");
         if (div.innerText.startsWith(schid + ".")) {
-            div.classList.remove("hidden");
+            div.classList.add("current");
         }
     });
 
