@@ -267,6 +267,8 @@ div.canvas-container>canvas {
 #sch-selection {
     bottom: 5px;
     left: 5px;
+    max-height: 85vh;
+    overflow-y: scroll;
 }
 
 /* split.js */
