@@ -336,60 +336,60 @@ function initData() {
 
 function appendSelectionDiv(parent, val, type) {
     var div = document.createElement("div");
+    div.addEventListener("click", () => {
+        clickedType[type](val);
+        parent.classList.add("hidden");
+    });
     if (type === "comp") {
-        div.addEventListener("click", () => {
-            componentClicked(val);
-            parent.classList.add("hidden");
-        });
         div.innerHTML = `Component ${compdict[val].ref}`;
     } else if (type === "pin") {
-        div.addEventListener("click", () => {
-            pinClicked(val);
-            parent.classList.add("hidden");
-        });
         div.innerHTML = `Pin ${pindict[val].ref}.${pindict[val].num}`;
     } else {
-        div.addEventListener("click", () => {
-            netClicked(val);
-            parent.classList.add("hidden");
-        });
         div.innerHTML = `Net ${val}`;
     }
     parent.appendChild(div);
 }
 
-function zoomToSelection() {
+function zoomToSelection(layerdict) {
     console.log("Finding selection");
-    let t = schematic_canvas.transform;
+    let t = layerdict.transform;
     // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
 
     var boxes = [];
     var targetsize;
-    if (highlightedComponent !== -1) {
-        var comp = compdict[highlightedComponent];
-        for (let unitnum in comp.units) {
-            let unit = comp.units[unitnum];
-            if (unit.schid == currentSchematic) {
-                boxes.push(unit.bbox);
+
+    if (layerdict.layer === "S") {
+        if (highlightedComponent !== -1) {
+            var comp = compdict[highlightedComponent];
+            for (let unitnum in comp.units) {
+                let unit = comp.units[unitnum];
+                if (unit.schid == currentSchematic) {
+                    boxes.push(unit.bbox);
+                }
             }
+            targetsize = sch_view_minimums["comp"];
         }
-        targetsize = sch_view_minimums["comp"];
-    }
-    if (highlightedPin !== -1) {
-        var pin = pindict[highlightedPin];
-        if (pin.schid == currentSchematic) {
-            boxes.push(pinBoxFromPos(pin.pos));
-        }
-        targetsize = sch_view_minimums["pin"];
-    }
-    if (highlightedNet !== null) {
-        for (let pinidx in pindict) {
-            let pin = pindict[pinidx];
-            if (pin.schid == currentSchematic && pin.net == highlightedNet) {
+        if (highlightedPin !== -1) {
+            var pin = pindict[highlightedPin];
+            if (pin.schid == currentSchematic) {
                 boxes.push(pinBoxFromPos(pin.pos));
             }
+            targetsize = sch_view_minimums["pin"];
         }
-        targetsize = sch_view_minimums["net"];
+        if (highlightedNet !== null) {
+            for (let pinidx in pindict) {
+                let pin = pindict[pinidx];
+                if (pin.schid == currentSchematic && pin.net == highlightedNet) {
+                    boxes.push(pinBoxFromPos(pin.pos));
+                }
+            }
+            targetsize = sch_view_minimums["net"];
+        }
+    } else {
+        // layout canvas F or B
+        if (highlightedComponent !== -1) {
+
+        }
     }
 
     if (boxes.length == 0) {
@@ -409,8 +409,8 @@ function zoomToSelection() {
     var centery = (extremes[1] + extremes[3]) / 2;
     console.log(`min window is ${minwidth}x${minheight} at (${centerx},${centery})`);
 
-    var viewwidth = schematic_canvas.bg.width / (t.zoom * t.s);
-    var viewheight = schematic_canvas.bg.height / (t.zoom * t.s);
+    var viewwidth = layerdict.bg.width / (t.zoom * t.s);
+    var viewheight = layerdict.bg.height / (t.zoom * t.s);
 
     var xrat = minwidth / viewwidth;
     var yrat = minheight / viewheight;
@@ -430,17 +430,17 @@ function zoomToSelection() {
         var newzoom = Math.min(xzoom, yzoom);
         newzoom = Math.max(newzoom, sch_zoom_default);
 
-        schematic_canvas.transform.zoom = newzoom;
+        layerdict.transform.zoom = newzoom;
     }
 
     // Always pan
-    var newvw = schematic_canvas.bg.width / (schematic_canvas.transform.zoom * t.s);
-    var newvh = schematic_canvas.bg.height / (schematic_canvas.transform.zoom * t.s);
+    var newvw = layerdict.bg.width / (layerdict.transform.zoom * t.s);
+    var newvh = layerdict.bg.height / (layerdict.transform.zoom * t.s);
 
     var newpx = ((newvw / 2) - centerx) * t.s - t.x;
     var newpy = ((newvh / 2) - centery) * t.s - t.y;
-    schematic_canvas.transform.panx = newpx;
-    schematic_canvas.transform.pany = newpy;
+    layerdict.transform.panx = newpx;
+    layerdict.transform.pany = newpy;
     resizeAll();
 }
 
@@ -482,6 +482,12 @@ function initPage() {
 
     searchInputField.value = "";
     searchInputField.addEventListener("focusin", () => {
+        searchlist.classList.remove("hidden");
+    });
+    searchInputField.addEventListener("click", () => {
+        searchlist.classList.remove("hidden");
+    });
+    searchInputField.addEventListener("input", () => {
         searchlist.classList.remove("hidden");
     });
 
@@ -545,7 +551,7 @@ function initPage() {
         if (document.activeElement !== document.getElementById("search-input")) {
             if (event.key == "f" && settings["find-activate"] === "key") {
                 if (settings["find-type"] === "zoom") {
-                    zoomToSelection();
+                    zoomToSelection(schematic_canvas);
                 } else {
                     drawCrosshair = !drawCrosshair;
                     drawHighlights();
@@ -801,6 +807,12 @@ function netClicked(netname) {
 }
 function deselectClicked() {
     socket.emit("selection", { "type": "deselect", "val": null });
+}
+var clickedType = {
+    "comp": componentClicked,
+    "pin": pinClicked,
+    "net": netClicked,
+    "deselect": deselectClicked
 }
 
 window.onload = () => {

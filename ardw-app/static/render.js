@@ -1,5 +1,6 @@
 // From Interactive HTML BOM /web/render.js and /web/ibom.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
+// with some modifications and additions
 
 var emptyContext2d = document.createElement("canvas").getContext("2d");
 
@@ -777,6 +778,7 @@ function netHitScan(layer, x, y) {
       }
     }
   }
+  console.log(`nh ${netsHit}`)
   return netsHit;
 }
 
@@ -795,6 +797,7 @@ function pinHitScan(layer, x, y) {
       }
     }
   }
+  console.log(`ph ${pinsHit}`)
   return pinsHit;
 }
 
@@ -868,7 +871,7 @@ function selectComponent(refid) {
 
   if (settings["find-activate"] === "auto") {
     if (settings["find-type"] === "zoom") {
-      zoomToSelection();
+      zoomToSelection(schematic_canvas);
     } else {
       drawCrosshair = true;
     }
@@ -904,7 +907,7 @@ function selectPins(pin_hits) {
 
   if (settings["find-activate"] === "auto") {
     if (settings["find-type"] === "zoom") {
-      zoomToSelection();
+      zoomToSelection(schematic_canvas);
     } else {
       drawCrosshair = true;
     }
@@ -946,7 +949,7 @@ function selectNet(netname) {
 
   if (settings["find-activate"] === "auto") {
     if (settings["find-type"] === "zoom") {
-      zoomToSelection();
+      zoomToSelection(schematic_canvas);
     } else {
       drawCrosshair = true;
     }
@@ -1087,12 +1090,7 @@ function handleMouseClick(e, layerdict) {
 
   if (hits.length == 1) {
     // Single click, just select what was clicked
-    if (hits[0].type === "comp") {
-      socket.emit("selection", hits[0]);
-      componentClicked(hits[0].val);
-    } else {
-      pinClicked(hits[0].val);
-    }
+    clickedType[hits[0].type](hits[0].val);
   } else if (hits.length > 1) {
     // Multi click
     // Clear existing children and position menu at click
@@ -1108,6 +1106,7 @@ function handleMouseClick(e, layerdict) {
   } else {
     // Clicked on nothing
     clickmenu.classList.add("hidden");
+    document.getElementById("search-content").classList.add("hidden");
     deselectClicked();
   }
 }
