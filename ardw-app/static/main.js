@@ -1,10 +1,10 @@
-// var socket = io();
+var socket;
 
 var topmostdiv = document.getElementById("topmostdiv");
 
-var schid_to_idx = {}; // schid : index in schdata.schematics
-var ref_to_id = {}; // ref : refid
-var bomdict = {};   // refid : bomentry
+var schid_to_idx = {};  // schid : index in schdata.schematics
+var ref_to_id = {};     // ref : refid
+var pinref_to_idx = {}; // 'ref.pinnum' : pinidx
 var compdict = {};  // refid : comp data (sch + bomentry)
 var netdict = {};   // netname : schids
 var pindict = {};   // pinidx : pin data (ref, name, num, pos, schid, net)
@@ -18,7 +18,7 @@ var highlightedNet = null; // netname
 
 var debugCompPins = null;
 
-var currentSelectionField = null; // document element
+var searchInputField = null; // document element
 
 var schSelectionOpen = false;
 var drawCrosshair = false;
@@ -65,7 +65,7 @@ canvas_split = Split(["#front-canvas", "#back-canvas"], {
 
 var settings = {
     "log-error": true,
-    "log-warning": false,
+    "log-warning": true,
     "find-activate": "key", // 'key', 'auto'
     "find-type": "zoom"     // 'zoom', 'xhair'
 };
@@ -207,13 +207,13 @@ function logerr(msg) {
 
 function logwarn(msg) {
     if (settings["log-warning"]) {
-        console.log("Warning" + msg);
+        console.log("Warning: " + msg);
     }
 }
 
 function initData() {
     ref_to_id = {};
-    bomdict = {};
+    var bomdict = {};
     for (var bomentry of pcbdata.bom.both.slice()) {
         // Entries may have multiple components
         for (var ref of bomentry[3]) {
@@ -309,6 +309,8 @@ function initData() {
     }
 
     // All pins get put into one big "dict" with arbitrary pinidx
+    pinref_to_idx = {};
+    pinidx = 0;
     pindict = [];
     for (var refid in compdict) {
         for (var unitnum in compdict[refid].units) {
@@ -319,7 +321,14 @@ function initData() {
                 if (pin["net"] == undefined) {
                     pin["net"] = null;
                 }
+                let pin_name = `${pin["ref"]}.${pin["num"]}`;
+                if (pinref_to_idx[pin_name] !== undefined) {
+                    logwarn(`pin name ${pin_name} is not unique`);
+                } else {
+                    pinref_to_idx[pin_name] = pinidx;
+                }
                 pindict.push(pin);
+                pinidx++;
             }
         }
     }
@@ -329,19 +338,19 @@ function appendSelectionDiv(parent, val, type) {
     var div = document.createElement("div");
     if (type === "comp") {
         div.addEventListener("click", () => {
-            footprintsClicked([val]);
+            componentClicked(val);
             parent.classList.add("hidden");
         });
         div.innerHTML = `Component ${compdict[val].ref}`;
     } else if (type === "pin") {
         div.addEventListener("click", () => {
-            pinsClicked([val]);
+            pinClicked(val);
             parent.classList.add("hidden");
         });
         div.innerHTML = `Pin ${pindict[val].ref}.${pindict[val].num}`;
     } else {
         div.addEventListener("click", () => {
-            selectNet(val);
+            netClicked(val);
             parent.classList.add("hidden");
         });
         div.innerHTML = `Net ${val}`;
@@ -467,15 +476,12 @@ function initPage() {
     var projtitle = schdata.schematics[schid_to_idx[1]].name
     document.getElementById("projtitle").textContent = projtitle
 
-    // Current selection
-    currentSelectionField = document.getElementById("current-field");
-
     // Search field
-    var input = document.getElementById("search-input");
+    searchInputField = document.getElementById("search-input");
     var searchlist = document.getElementById("search-content");
 
-    input.value = "";
-    input.addEventListener("focusin", () => {
+    searchInputField.value = "";
+    searchInputField.addEventListener("focusin", () => {
         searchlist.classList.remove("hidden");
     });
 
@@ -605,6 +611,7 @@ function searchBarX() {
     var input = document.getElementById("search-input");
     searchlist.classList.add("hidden");
     input.value = "";
+    deselectClicked();
 }
 
 function drawCanvasImg(layerdict, x = 0, y = 0, backgroundColor = null) {
@@ -674,7 +681,7 @@ function switchSchematic(schid) {
         if (div.innerText.startsWith(schid + ".")) {
             div.classList.remove("hidden");
         }
-     });
+    });
 
     // resizeCanvas(schematic_canvas);
     var canvas = document.getElementById("schematic-canvas");
@@ -687,36 +694,6 @@ function switchSchematic(schid) {
 
     sch_zoom_default = Math.min(xfactor, yfactor) / schematic_canvas.transform.s;
     resetTransform(schematic_canvas);
-}
-
-function selectNet(netname) {
-    if (netname == undefined || netname === null) {
-        highlightedNet = null;
-    } else {
-        if (!(netname in netdict)) {
-            logerr(`selected net ${netname} is not in netdict`);
-            return;
-        }
-        deselectAll(false);
-
-        highlightedNet = netname;
-        if (!netdict[netname].includes(currentSchematic)) {
-            switchSchematic(netdict[netname][0]);
-        }
-    }
-
-    currentSelectionField.innerHTML = `Net ${netname}`;
-
-    if (settings["find-activate"] === "auto") {
-      if (settings["find-type"] === "zoom") {
-        zoomToSelection();
-      } else {
-          drawCrosshair = true;
-      }
-    }
-
-    drawHighlights();
-    drawSchematicHighlights();
 }
 
 function pinBoxFromPos(pos) {
@@ -789,7 +766,57 @@ function drawSchematicHighlights() {
     }
 }
 
+function initSocket() {
+    socket = io();
+    socket.on("connect", () => {
+        console.log("connected")
+    });
+    socket.on("selection", (selection) => {
+        switch (selection.type) {
+            case "comp":
+                selectComponent(selection.val);
+                break;
+            case "pin":
+                selectPins([selection.val]);
+                break;
+            case "net":
+                selectNet(selection.val);
+                break;
+            case "deselect":
+                deselectAll(true);
+                break;
+        }
+    });
+}
 
+// <type>Clicked() functions should be called whever the client wants to select something
+// The actual selection and display is handled when the server echoes the selection back,
+// using the select<type>() functions in render.js
+function componentClicked(refid) {
+    refid = parseInt(refid);
+    if (compdict[refid] == undefined) {
+        logerr(`clicked refid ${refid} is not in compdict`);
+        return;
+    }
+    socket.emit("selection", { "type": "comp", "val": refid });
+}
+function pinClicked(pinidx) {
+    if (pindict[pinidx] == undefined) {
+        logerr(`clicked pinidx ${pinidx} is not in pindict`);
+        return;
+    }
+    socket.emit("selection", { "type": "pin", "val": pinidx });
+}
+function netClicked(netname) {
+    if (!(netname in netdict)) {
+        logerr(`clicked net ${netname} is not in netdict`);
+        return;
+    }
+    socket.emit("selection", { "type": "net", "val": netname });
+}
+function deselectClicked() {
+    socket.emit("selection", { "type": "deselect", "val": null });
+}
 
 window.onload = () => {
     data_urls = ["schdata", "pcbdata"]
@@ -811,6 +838,8 @@ window.onload = () => {
         initRender();
 
         initSchematicCanvas();
+
+        initSocket();
 
         resizeAll();
 

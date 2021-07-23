@@ -1,13 +1,14 @@
 from flask import Flask
 from flask import render_template, send_from_directory
+from flask.helpers import url_for
+from flask_socketio import SocketIO
+from flask_socketio import emit
 
 import json
 import logging
 import os
 import re
 import sys
-
-from flask.helpers import url_for
 
 
 logging.basicConfig(
@@ -41,6 +42,8 @@ if getattr(sys, 'frozen', False):
 else:
     app = Flask(__name__)
 
+app.config["SECRET_KEY"] = "secret!"
+socketio = SocketIO(app)
 
 @app.route("/")
 def index():
@@ -107,5 +110,47 @@ def get_schematic_svg(schid):
     return ""
 
 
+active_connections = 0
+
+# Server tracks current selections and settings
+selection = {
+    "comp": -1,
+    "pin": -1,
+    "net": None
+}
+# for now keeping settings local
+app_settings = {}
+ibom_settings = {}
+
+@socketio.on("connect")
+def handle_connect():
+    global active_connections, selection
+    active_connections += 1
+    logging.info(f"Client connected ({active_connections} active)")
+
+    if selection["comp"] != -1:
+        emit("selection", { "type": "comp", "val": selection["comp"] })
+    elif selection["pin"] != -1:
+        emit("selection", { "type": "pin", "val": selection["pin"] })
+    elif selection["net"] != None:
+        emit("selection", { "type": "net", "val": selection["net"] })
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    global active_connections
+    active_connections -= 1
+    logging.info(f"Client disconnected ({active_connections} active)")
+
+@socketio.on("selection")
+def handle_selection(new_selection):
+    global selection
+    logging.info(f"Received selection update {new_selection}")
+    selection["comp"] = -1
+    selection["pin"] = -1
+    selection["net"] = None
+    if (new_selection["type"] != "deselect"):
+        selection[new_selection["type"]] = new_selection["val"]
+    socketio.emit("selection", new_selection)
+
 if __name__=="__main__":
-    app.run(debug=True)
+    socketio.run(app, debug=True)
