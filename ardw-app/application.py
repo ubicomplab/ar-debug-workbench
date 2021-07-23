@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import sys
 
 from flask.helpers import url_for
 
@@ -34,7 +35,11 @@ if schdata is None or pcbdata is None:
 
 num_schematics = schdata["schematics"][0]["orderpos"]["total"]
 
-app = Flask(__name__)
+if getattr(sys, 'frozen', False):
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    app = Flask(__name__, template_folder=template_folder)
+else:
+    app = Flask(__name__)
 
 
 @app.route("/")
@@ -85,7 +90,7 @@ def get_schematic_svg(schid):
             continue
 
         filename = str(schematic["name"]).strip() + ".svg"
-        dirpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data")
+        dirpath = os.path.join(os.path.realpath("."), "data")
 
         if not os.path.isfile(os.path.join(dirpath, filename)):
             # Kicad creates complicated svg file names for additional sheets
@@ -100,3 +105,7 @@ def get_schematic_svg(schid):
         else:
             return send_from_directory(dirpath, filename)
     return ""
+
+
+if __name__=="__main__":
+    app.run(debug=True)
