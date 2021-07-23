@@ -63,6 +63,7 @@ def main_page():
         css=url_for("static", filename="style.css"),
         icon=url_for("static", filename="favicon.ico"),
         splitjs=url_for("static", filename="split.min.js"),
+        socketiojs=url_for("static", filename="socket.io.min.js"),
         renderjs=url_for("static", filename="render.js"),
         mainjs=url_for("static", filename="main.js")
     )
