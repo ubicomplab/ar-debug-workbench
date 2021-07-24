@@ -48,7 +48,6 @@ html, body {
 }
 
 #menubar {
-    /* height: 40px; */
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -61,8 +60,6 @@ html, body {
     font-size: 20pt;
     width: max-content;
 }
-
-#menubar #current {}
 
 #menubar #menubar-right {
     display: flex;
@@ -179,15 +176,16 @@ input:checked+.slider:before {
 
 #menubar #search-input {
     font-size: 12pt;
+    width: 300px; /* arbitrary */
 }
 
 /* X Button */
-
 #menubar #search-field>span {
     position: absolute;
     right: 2px;
     padding: 2px;
     cursor: pointer;
+    user-select: none;
 }
 
 #menubar #search-content {
@@ -211,8 +209,34 @@ input:checked+.slider:before {
     cursor: pointer;
 }
 
+#menubar #search-nav {
+    display: flex;
+    align-items: center;
+    font-size: 10pt;
+    margin-top: 2px;
+}
+
+#menubar #search-nav span {
+    padding: 0 4px;
+}
+
+#menubar #search-nav-text {
+    flex-grow: 1;
+}
+
+#menubar #search-nav span.button {
+    padding: 1px 4px;
+    cursor: pointer;
+    font-size: 12pt;
+    user-select: none;
+}
+
+#menubar #search-nav span.button:hover {
+    background-color: #eee;
+}
+
 #display {
-    height: calc(100vh - 70px);
+    height: calc(100vh - 80px);
     width: 100vw;
 }
 

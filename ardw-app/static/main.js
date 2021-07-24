@@ -18,9 +18,13 @@ var highlightedNet = null; // netname
 
 var debugCompPins = null;
 
-var searchInputField = null; // document element
+// document elements
+var searchInputField = null;
+var searchNavNum = null;
+var searchNavText = null;
 
-var schSelectionOpen = false;
+var searchNavCurrent = [0, 0];
+
 var drawCrosshair = false;
 
 var sch_zoom_default; // changes for each schematic
@@ -65,7 +69,7 @@ canvas_split = Split(["#front-canvas", "#back-canvas"], {
 
 var settings = {
     "log-error": true,
-    "log-warning": true,
+    "log-warning": false,
     "find-activate": "key", // 'key', 'auto'
     "find-type": "zoom"     // 'zoom', 'xhair'
 };
@@ -267,6 +271,7 @@ function initData() {
             }
 
             compdict[refid].units[unit] = {
+                "num": unit,
                 "schid": schid,
                 "bbox": comp.bbox,
                 "pins": comp.pins
@@ -275,7 +280,7 @@ function initData() {
     }
 
     // For each pin in each net, assign the appropriate net to the pin in compdict
-    // Also, populate netdict with {code : name, schids}
+    // Also, populate netdict with {name : schids, pins}
     netdict = {};
     for (var i in schdata.nets) {
         var netinfo = schdata.nets[i];
@@ -305,7 +310,10 @@ function initData() {
             logwarn(`net ${netinfo.name} has no valid pins (left out of netlist)`);
             continue;
         }
-        netdict[netinfo.name] = schids;
+        netdict[netinfo.name] = {
+            "schids": schids,
+            "pins": []
+        }
     }
 
     // All pins get put into one big "dict" with arbitrary pinidx
@@ -320,6 +328,8 @@ function initData() {
                 pin["schid"] = unit.schid;
                 if (pin["net"] == undefined) {
                     pin["net"] = null;
+                } else if (pin["net"] in netdict) {
+                    netdict[pin["net"]]["pins"].push(pinidx);
                 }
                 let pin_name = `${pin["ref"]}.${pin["num"]}`;
                 if (pinref_to_idx[pin_name] !== undefined) {
@@ -491,6 +501,11 @@ function initPage() {
         searchlist.classList.remove("hidden");
     });
 
+    searchNavNum = document.getElementById("search-nav-num");
+    searchNavText = document.getElementById("search-nav-text");
+    searchNavNum.innerText = "0 of 0";
+    searchNavText.innerText = "";
+
     for (let refid in compdict) {
         appendSelectionDiv(searchlist, refid, "comp");
     }
@@ -605,6 +620,41 @@ function searchBarX() {
     searchlist.classList.add("hidden");
     input.value = "";
     deselectClicked();
+}
+
+function searchNav(dir) {
+    if (searchNavCurrent[1] > 1) {
+        // We have a multi-part selection
+        if (dir === "L") {
+            searchNavCurrent[0] -= 1;
+        } else {
+            searchNavCurrent[0] += 1;
+        }
+        if (searchNavCurrent[0] === 0) {
+            searchNavCurrent[0] = searchNavCurrent[1];
+        } else if (searchNavCurrent[0] > searchNavCurrent[1]) {
+            searchNavCurrent[0] = 1;
+        }
+        searchNavNum.innerText = `${searchNavCurrent[0]} of ${searchNavCurrent[1]}`;
+
+        if (highlightedComponent !== -1) {
+            let comp = compdict[highlightedComponent];
+            let unit = Object.values(comp.units)[searchNavCurrent[0] - 1];
+            searchNavText.innerText = `${comp.ref} ${unit.num}`;
+            if (unit.schid != currentSchematic) {
+                switchSchematic(unit.schid);
+            }
+            // TODO emphasize this unit somehow
+        }
+        if (highlightedNet !== null) {
+            let pin = pindict[netdict[highlightedNet]["pins"][searchNavCurrent[0] - 1]];
+            searchNavText.innerText = `${pin.ref}.${pin.num}`;
+            if (pin.schid != currentSchematic) {
+                switchSchematic(pin.schid);
+            }
+            // TODO emphasize this pin somehow
+        }
+    }
 }
 
 function drawCanvasImg(layerdict, x = 0, y = 0, backgroundColor = null) {

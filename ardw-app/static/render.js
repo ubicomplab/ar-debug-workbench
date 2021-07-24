@@ -778,7 +778,6 @@ function netHitScan(layer, x, y) {
       }
     }
   }
-  console.log(`nh ${netsHit}`)
   return netsHit;
 }
 
@@ -797,7 +796,6 @@ function pinHitScan(layer, x, y) {
       }
     }
   }
-  console.log(`ph ${pinsHit}`)
   return pinsHit;
 }
 
@@ -869,6 +867,19 @@ function selectComponent(refid) {
 
   searchInputField.value = `Component ${compdict[selected].ref}`;
 
+  let numunits = 0;
+  for (let _ in compdict[selected].units) {
+    numunits++;
+  }
+  searchNavCurrent = [1, numunits];
+  searchNavNum.innerText = `1 of ${searchNavCurrent[1]}`;
+
+  if (searchNavCurrent[1] > 1) {
+    searchNavText.innerText = `${compdict[selected].ref} ${Object.values(compdict[selected].units)[0].num}`;
+  } else {
+    searchNavText.innerText = "";
+  }
+
   if (settings["find-activate"] === "auto") {
     if (settings["find-type"] === "zoom") {
       zoomToSelection(schematic_canvas);
@@ -904,6 +915,9 @@ function selectPins(pin_hits) {
   });
 
   searchInputField.value = `Pin ${pindict[selected].ref}.${pindict[selected].num}`;
+  searchNavCurrent = [1, 1];
+  searchNavNum.innerText = "1 of 1";
+  searchNavText.innerText = "";
 
   if (settings["find-activate"] === "auto") {
     if (settings["find-type"] === "zoom") {
@@ -918,34 +932,36 @@ function selectPins(pin_hits) {
 }
 
 function selectNet(netname) {
-  if (netname == undefined || netname === null) {
-    highlightedNet = null;
-  } else {
-    if (!(netname in netdict)) {
-      logerr(`selected net ${netname} is not in netdict`);
-      return;
-    }
-    deselectAll(false);
-
-    highlightedNet = netname;
-    /*
-    if (!netdict[netname].includes(currentSchematic)) {
-      switchSchematic(netdict[netname][0]);
-    }
-    */
-
-    document.querySelectorAll("#sch-selection>div").forEach((div) => {
-      div.classList.remove("has-selection");
-      for (let schid of netdict[netname]) {
-        if (div.innerText.startsWith(schid + ".")) {
-          div.classList.add("has-selection");
-          break;
-        }
-      }
-    });
+  if (!(netname in netdict)) {
+    logerr(`selected net ${netname} is not in netdict`);
+    return;
   }
+  deselectAll(false);
+
+  highlightedNet = netname;
+  /*
+  if (!netdict[netname].includes(currentSchematic)) {
+    switchSchematic(netdict[netname][0]);
+  }
+  */
+
+  document.querySelectorAll("#sch-selection>div").forEach((div) => {
+    div.classList.remove("has-selection");
+    for (let schid of netdict[netname]["schids"]) {
+      if (div.innerText.startsWith(schid + ".")) {
+        div.classList.add("has-selection");
+        break;
+      }
+    }
+  });
 
   searchInputField.value = `Net ${netname}`;
+
+  searchNavCurrent = [1, netdict[netname]["pins"].length];
+  searchNavNum.innerText = `${searchNavCurrent[0]} of ${searchNavCurrent[1]}`;
+
+  var pin1 = pindict[netdict[netname]["pins"][0]];
+  searchNavText.innerText = `${pin1.ref}.${pin1.num}`;
 
   if (settings["find-activate"] === "auto") {
     if (settings["find-type"] === "zoom") {
@@ -969,6 +985,10 @@ function deselectAll(redraw) {
       div.classList.remove("has-selection");
     });
     searchInputField.value = "";
+    searchNavCurrent = [0, 0];
+    searchNavNum.innerText = "0 of 0";
+    searchNavText.innerText = "";
+
     drawHighlights();
     drawSchematicHighlights();
   }
