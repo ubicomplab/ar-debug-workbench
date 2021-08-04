@@ -70,6 +70,16 @@ html, body {
     margin: 10px;
 }
 
+#menubar #tools {
+    display: flex;
+}
+
+#menubar #tools>div {
+    padding: 2px;
+    border: 1px solid #eee;
+    margin: 0 2px;
+}
+
 #menubar #search, #menubar #settings {
     position: relative;
 }
@@ -117,8 +127,16 @@ html, body {
     display: inline-block;
     padding: 6px;
     border: 1px solid #eee;
-    border-top: 0;
+    /* border-top: 0; */
     margin-bottom: 2px;
+}
+
+#menubar .settings-item.button {
+    cursor: pointer;
+}
+
+#menubar .settings-item.button:hover {
+    background-color: #eee;
 }
 
 .toggle {

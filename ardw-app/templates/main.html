@@ -14,15 +14,18 @@
                 <h1 id="projtitle"></h1>
             </div>
             <div id="menubar-right">
+                <div id="tools"></div>
                 <div id="search">
                     <div id="search-field">
-                        <input type="text" id="search-input" placeholder="Search..." onkeyup="searchBarHandler()"/>
+                        <input type="text" id="search-input" placeholder="Search..." onkeyup="searchBarHandler()" />
                         <span onclick="searchBarX()">X</span>
                     </div>
                     <div id="search-content" class="hidden"></div>
                     <div id="search-nav">
-                        <span id="search-nav-num">1 of 4</span>
-                        <span id="search-nav-text"><!-- spacer --></span>
+                        <span id="search-nav-num">0 of 0</span>
+                        <span id="search-nav-text">
+                            <!-- spacer -->
+                        </span>
                         <span class="button" onclick="searchNav('L')">&#x276e;</span>
                         <span class="button" onclick="searchNav('R')">&#x276f;</span>
                     </div>
@@ -30,9 +33,23 @@
                 <div id="settings">
                     <div id="settings-btn"></div>
                     <div id="settings-content" class="menu-content">
-                        <div class="settings-label">Render Options</div>
+                        <div class="settings-label">Display Options</div>
                         <div class="settings-item">
-                            Fab
+                            Schematic
+                            <input type="checkbox" name="settings-display" value="S" checked />
+                        </div>
+                        <div class="settings-item">
+                            Layout
+                            <input type="checkbox" name="settings-display" value="L" checked />
+                            <br />
+                            F
+                            <input type="checkbox" name="settings-display" value="LF" checked />
+                            B
+                            <input type="checkbox" name="settings-display" value="LB" checked />
+                        </div>
+                        <div class="settings-label">Layout Options</div>
+                        <div class="settings-item">
+                            Fab Layer
                             <input type="checkbox" name="settings-render" value="renderFabrication" />
                         </div>
                         <div class="settings-item">
@@ -40,15 +57,23 @@
                             <input type="checkbox" name="settings-render" value="renderSilkscreen" checked />
                         </div>
                         <div class="settings-item">
+                            References
+                            <input type="checkbox" name="settings-render" value="renderReferences" checked />
+                        </div>
+                        <div class="settings-item">
+                            Values
+                            <input type="checkbox" name="settings-render" value="renderValues" checked />
+                        </div>
+                        <div class="settings-item">
                             Tracks
-                            <input type="checkbox" name="settings-render" value="renderTracks"/>
+                            <input type="checkbox" name="settings-render" value="renderTracks" />
                         </div>
                         <div class="settings-item">
                             Zones
                             <input type="checkbox" name="settings-render" value="renderZones" />
                         </div>
                         <div class="settings-item">
-                            <span style="float:left">Layout Rotation</span>
+                            <span style="float:left">Rotation</span>
                             <span id="settings-rotation-label" style="float:right">0&deg;</span>
                             <input type="range" id="settings-rotation" value="0" min="-36" max="36" />
                         </div>
@@ -67,39 +92,53 @@
                             <input type="radio" name="settings-find" value="xhair">
                             <label for="settings-find-xhair">Crosshair</label>
                         </div>
+                        <div class="settings-label">Add Tool</div>
+                        <div class="settings-item button" onclick="requestTool('ptr')">Pointer</div>
+                        <div class="settings-item button" onclick="requestTool('dmm')">DMM</div>
+                        <div class="settings-item button" onclick="requestTool('osc')">Oscilloscope</div>
                     </div>
                 </div>
             </div>
         </div>
-        <div id="display" class="split">
-            <div id="sch-multi-click" class="hidden"></div>
-            <div id="schematic-div">
-                <div id="schematic-canvas">
-                    <div class="canvas-container">
-                        <canvas id="sch_bg" style="z-index: 0"></canvas>
-                        <canvas id="sch_hl" style="z-index: 1"></canvas>
+        <div id="main" class="split">
+            <div id="display" class="split">
+                <div id="sch-multi-click" class="hidden"></div>
+                <div id="schematic-div">
+                    <div id="schematic-canvas">
+                        <div class="canvas-container">
+                            <canvas id="sch_bg" style="z-index: 0"></canvas>
+                            <canvas id="sch_hl" style="z-index: 1"></canvas>
+                        </div>
+                    </div>
+                    <div id="sch-selection">
+                        <div class="label">Schematic Sheets</div>
                     </div>
                 </div>
-                <div id="sch-selection">
-                    <div class="label">Schematic Sheets</div>
+                <div id="layout-div">
+                    <div id="front-canvas" touch-action="none">
+                        <div class="canvas-container">
+                            <canvas id="F_bg" style="z-index: 10"></canvas>
+                            <canvas id="F_fab" style="z-index: 11"></canvas>
+                            <canvas id="F_slk" style="z-index: 12"></canvas>
+                            <canvas id="F_hl" style="z-index: 13"></canvas>
+                        </div>
+                    </div>
+                    <div id="back-canvas" touch-action="none">
+                        <div class="canvas-container">
+                            <canvas id="B_bg" style="z-index: 10"></canvas>
+                            <canvas id="B_fab" style="z-index: 11"></canvas>
+                            <canvas id="B_slk" style="z-index: 12"></canvas>
+                            <canvas id="B_hl" style="z-index: 13"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div id="layout-div">
-                <div id="front-canvas" touch-action="none">
-                    <div class="canvas-container">
-                        <canvas id="F_bg" style="z-index: 10"></canvas>
-                        <canvas id="F_fab" style="z-index: 11"></canvas>
-                        <canvas id="F_slk" style="z-index: 12"></canvas>
-                        <canvas id="F_hl" style="z-index: 13"></canvas>
-                    </div>
+            <div id="sidebar">
+                <div id="sidebar-dmm">
+                    <h2>Multimeter</h2>
                 </div>
-                <div id="back-canvas" touch-action="none">
-                    <div class="canvas-container">
-                        <canvas id="B_bg" style="z-index: 10"></canvas>
-                        <canvas id="B_fab" style="z-index: 11"></canvas>
-                        <canvas id="B_slk" style="z-index: 12"></canvas>
-                        <canvas id="B_hl" style="z-index: 13"></canvas>
-                    </div>
+                <div id="sidebar-osc" class="hidden">
+                    <h2>Oscilloscope</h2>
                 </div>
             </div>
         </div>

@@ -10,6 +10,8 @@ import os
 import re
 import sys
 
+from example_tool import ExampleTool
+
 
 logging.basicConfig(
     filename="ardw.log",
@@ -62,6 +64,7 @@ def main_page():
         "main.html",
         css=url_for("static", filename="style.css"),
         icon=url_for("static", filename="favicon.ico"),
+        layouticon=url_for("static", filename="layout-transparent-96.png"),
         splitjs=url_for("static", filename="split.min.js"),
         socketiojs=url_for("static", filename="socket.io.min.js"),
         renderjs=url_for("static", filename="render.js"),
@@ -122,6 +125,12 @@ selection = {
 # for now keeping settings local
 app_settings = {}
 ibom_settings = {}
+# Server tracks connected tools
+tools = {
+    "ptr": None,
+    "dmm": None,
+    "osc": None
+}
 
 @socketio.on("connect")
 def handle_connect():
@@ -152,6 +161,26 @@ def handle_selection(new_selection):
     if (new_selection["type"] != "deselect"):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
+
+@socketio.on("tool-add")
+def handle_tool_req(tooltype):
+    logging.info(f"Received request for tool type {tooltype}")
+    if tooltype not in tools:
+        emit("tool-add", { "status": "invalid", "type": None })
+    elif tools[tooltype] is not None:
+        emit("tool-add", { "status": "exists", "type": tooltype })
+    else:
+        tools[tooltype] = ExampleTool()
+        emit("tool-add", { "status": "added", "type": tooltype })
+
+@socketio.on("tool-measure")
+def handle_tool_measure(tooltype):
+    global tools
+    logging.info(f"Measure tool {tooltype}")
+    if tooltype in tools and tools[tooltype] is not None:
+        val = tools[tooltype].measure()
+        # only send back to client that requested it
+        emit("tool-measure", { "status": "good", "type": tooltype, "val": val })
 
 if __name__=="__main__":
     socketio.run(app, debug=True)

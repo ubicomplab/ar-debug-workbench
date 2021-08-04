@@ -1064,6 +1064,44 @@ function getMousePos(layerdict, evt) {
   return { x: x, y: y };
 }
 
+// Normalized is (0,0) at top left corner and (1,1) at bottom right corner of edges
+function normalizedToLayoutCoords(normalPos) {
+  var xs = [];
+  var ys = [];
+  for (let edge of pcbdata.edges) {
+    xs.push(parseFloat(edge.start[0]));
+    ys.push(parseFloat(edge.start[1]));
+  }
+  var bounds = [
+    Math.min(...xs),
+    Math.min(...ys),
+    Math.max(...xs),
+    Math.max(...ys)
+  ];
+  var xscale = bounds[2] - bounds[0];
+  var yscale = bounds[3] - bounds[1];
+
+  return [(normalPos[0] * xscale) + bounds[0], (normalPos[1] * yscale) + bounds[1]];
+}
+function layoutToNormalizedCoords(layoutPos) {
+  var xs = [];
+  var ys = [];
+  for (let edge of pcbdata.edges) {
+    xs.push(parseFloat(edge.start[0]));
+    ys.push(parseFloat(edge.start[1]));
+  }
+  var bounds = [
+    Math.min(...xs),
+    Math.min(...ys),
+    Math.max(...xs),
+    Math.max(...ys)
+  ];
+  var xscale = bounds[2] - bounds[0];
+  var yscale = bounds[3] - bounds[1];
+
+  return [(layoutPos[0] - bounds[0]) / xscale, (layoutPos[1] - bounds[1]) / yscale];
+}
+
 function handleMouseClick(e, layerdict) {
   if (!e.hasOwnProperty("offsetX")) {
     // The polyfill doesn't set this properly
@@ -1095,6 +1133,7 @@ function handleMouseClick(e, layerdict) {
     y = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
     var v = rotateVector([x, y], -ibom_settings.boardRotation);
 
+    console.log(`click in layer ${layerdict.layer} at (${x},${y})`);
 
     hits = [];
     for (let comp of bboxHitScan(layerdict.layer, ...v)) {

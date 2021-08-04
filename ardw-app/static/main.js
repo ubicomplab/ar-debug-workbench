@@ -55,21 +55,36 @@ var schematic_canvas = {
     img: new Image()
 }
 
+var sidebarShown = false;
+sidebar_split = Split(["#display", "#sidebar"], {
+    sizes: [100, 0],
+    minSize: 0,
+    gutterSize: 5,
+    onDragEnd: resizeAll
+});
 display_split = Split(["#schematic-div", "#layout-div"], {
     sizes: [50, 50],
+    minSize: 0,
     gutterSize: 5,
     onDragEnd: resizeAll
 });
 canvas_split = Split(["#front-canvas", "#back-canvas"], {
     sizes: [50, 50],
+    minSize: 0,
     gutterSize: 5,
     direction: "vertical",
     onDragEnd: resizeAll
 });
 
+var tools = {
+    "ptr": false,
+    "dmm": false,
+    "osc": false
+}
+
 var settings = {
     "log-error": true,
-    "log-warning": false,
+    "log-warning": true,
     "find-activate": "key", // 'key', 'auto'
     "find-type": "zoom"     // 'zoom', 'xhair'
 };
@@ -351,17 +366,42 @@ function appendSelectionDiv(parent, val, type) {
         parent.classList.add("hidden");
     });
     if (type === "comp") {
+        if (compdict[val] === undefined) {
+            logwarn(`ref ${val} not in compdict`);
+            return;
+        }
         div.innerHTML = `Component ${compdict[val].ref}`;
     } else if (type === "pin") {
+        if (pindict[val] === undefined) {
+            logwarn(`pinidx ${val} not in pindict`);
+            return;
+        }
         div.innerHTML = `Pin ${pindict[val].ref}.${pindict[val].num}`;
     } else {
+        if (netdict[val] === undefined) {
+            logwarn(`net ${val} not in netdict`);
+        }
         div.innerHTML = `Net ${val}`;
     }
     parent.appendChild(div);
 }
 
+function rawBoxFromFootprint(footprint) {
+    var bbox = footprint.bbox;
+    var corner1 = [bbox.relpos[0], bbox.relpos[1]];
+    var corner2 = [bbox.relpos[0] + bbox.size[0], bbox.relpos[1] + bbox.size[1]];
+    corner1 = rotateVector(corner1, bbox.angle);
+    corner2 = rotateVector(corner2, bbox.angle);
+    return [
+        Math.min(corner1[0], corner2[0]) + bbox.pos[0],
+        Math.min(corner1[1], corner2[1]) + bbox.pos[1],
+        Math.max(corner1[0], corner2[0]) + bbox.pos[0],
+        Math.max(corner1[1], corner2[1]) + bbox.pos[1]
+    ];
+}
+
 function zoomToSelection(layerdict) {
-    console.log("Finding selection");
+    console.log(`Finding selection for layer ${layerdict.layer}`);
     let t = layerdict.transform;
     // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
 
@@ -398,7 +438,17 @@ function zoomToSelection(layerdict) {
     } else {
         // layout canvas F or B
         if (highlightedComponent !== -1) {
-
+            var footprint = pcbdata.footprints[highlightedComponent];
+            if (layerdict.layer == footprint.layer) {
+                boxes = [rawBoxFromFootprint(footprint)];
+                targetsize = sch_view_minimums["comp"];
+            }
+        }
+        if (highlightedPin !== -1) {
+            console.log("Pin zooming is WIP");
+        }
+        if (highlightedNet !== null) {
+            console.log("Net zooming is WIP");
         }
     }
 
@@ -429,7 +479,6 @@ function zoomToSelection(layerdict) {
 
     // Only zoom if the target will be too small or too large
     if (maxrat < targetsize || maxrat > sch_view_maximum) {
-        console.log("Zooming")
         if (maxrat > sch_view_maximum) {
             targetsize = sch_view_maximum;
         }
@@ -448,36 +497,46 @@ function zoomToSelection(layerdict) {
     var newvh = layerdict.bg.height / (layerdict.transform.zoom * t.s);
 
     var newpx = ((newvw / 2) - centerx) * t.s - t.x;
+    var flip = (layerdict.layer == "B")
+    if (flip) {
+        newpx = -newpx + (layerdict.bg.width / layerdict.transform.zoom);
+    }
     var newpy = ((newvh / 2) - centery) * t.s - t.y;
     layerdict.transform.panx = newpx;
     layerdict.transform.pany = newpy;
+
     resizeAll();
+}
+
+function crosshairOnPos(canvas, pos) {
+    if (pos.length > 0) {
+        var style = getComputedStyle(topmostdiv);
+        var ctx = canvas.getContext("2d");
+        ctx.strokeStyle = style.getPropertyValue("--pcb-crosshair-line-color");
+        ctx.lineWidth = style.getPropertyValue("--pcb-crosshair-line-width");
+        ctx.beginPath();
+        ctx.moveTo(-100000, pos[1]);
+        ctx.lineTo(100000, pos[1]);
+        ctx.stroke();
+        ctx.moveTo(pos[0], -100000);
+        ctx.lineTo(pos[0], 100000);
+        ctx.stroke();
+    }
 }
 
 function crosshairOnSelection(canvas, layer) {
     var pos = [];
     if (highlightedComponent !== -1) {
         pos = pcbdata.footprints[highlightedComponent].bbox.pos;
+        if (pcbdata.footprints[highlightedComponent].layer == layer) {
+            crosshairOnPos(canvas, pos);
+        }
     }
     if (highlightedPin !== -1) {
         console.log("Crosshair for pins WIP");
     }
     if (highlightedNet !== null) {
         console.log("Crosshair not available for nets");
-    }
-
-    if (pos.length > 0 && pcbdata.footprints[highlightedComponent].layer == layer) {
-        var style = getComputedStyle(topmostdiv);
-        var ctx = canvas.getContext("2d");
-        ctx.strokeStyle = style.getPropertyValue("--pcb-crosshair-line-color");
-        ctx.lineWidth = style.getPropertyValue("--pcb-crosshair-line-width");
-        ctx.beginPath();
-        ctx.moveTo(0, pos[1]);
-        ctx.lineTo(300, pos[1]);
-        ctx.stroke();
-        ctx.moveTo(pos[0], 0);
-        ctx.lineTo(pos[0], 300);
-        ctx.stroke();
     }
 }
 
@@ -517,6 +576,55 @@ function initPage() {
     }
 
     // Settings
+
+    // this is scuffed, do better later
+    var displayCheckboxes = document.querySelectorAll('input[name="settings-display"]');
+    displayCheckboxes.forEach((checkbox) => {
+        // For now just start with everything enabled
+        checkbox.checked = true
+
+        checkbox.addEventListener("click", () => {
+            let s = document.querySelector('input[name="settings-display"][value="S"]');
+            let l = document.querySelector('input[name="settings-display"][value="L"]');
+            let lf = document.querySelector('input[name="settings-display"][value="LF"]');
+            let lb = document.querySelector('input[name="settings-display"][value="LB"]');
+
+            let sch_select = document.getElementById("sch-selection");
+
+            if (s.checked && !l.checked) {
+                display_split.collapse(1);
+                sch_select.classList.remove("hidden");
+            } else if (!s.checked && l.checked) {
+                display_split.collapse(0);
+                sch_select.classList.add("hidden");
+            } else {
+                // Disallow an empty selection
+                display_split.setSizes([50, 50]);
+                s.checked = true;
+                l.checked = true;
+                sch_select.classList.remove("hidden");
+            }
+
+            if (lf.checked && !lb.checked) {
+                canvas_split.collapse(1);
+            } else if (!lf.checked && lb.checked) {
+                canvas_split.collapse(0);
+            } else {
+                // Disallow an empty selection
+                canvas_split.setSizes([50, 50]);
+                lf.checked = true;
+                lb.checked = true;
+            }
+
+            resizeAll();
+
+            // Viewing window is not maintained (without extra effort), so just reset
+            resetTransform(allcanvas.front);
+            resetTransform(allcanvas.back);
+            resetTransform(schematic_canvas);
+        });
+    });
+
     var renderCheckboxes = document.querySelectorAll('input[name="settings-render"]');
     renderCheckboxes.forEach((checkbox) => {
         // Make sure we start in the correct state
@@ -556,6 +664,7 @@ function initPage() {
     findToggle.addEventListener("click", () => {
         if (findToggle.checked) {
             settings["find-activate"] = "auto";
+            console.log("AUTO ZOOM IS WIP")
         } else {
             settings["find-activate"] = "key";
         }
@@ -567,6 +676,8 @@ function initPage() {
             if (event.key == "f" && settings["find-activate"] === "key") {
                 if (settings["find-type"] === "zoom") {
                     zoomToSelection(schematic_canvas);
+                    zoomToSelection(allcanvas.front);
+                    zoomToSelection(allcanvas.back);
                 } else {
                     drawCrosshair = !drawCrosshair;
                     drawHighlights();
@@ -654,6 +765,81 @@ function searchNav(dir) {
             }
             // TODO emphasize this pin somehow
         }
+    }
+}
+
+function requestTool(type) {
+    console.log(`requesting tool ${type}`)
+    socket.emit("tool-add", type);
+}
+
+function addTool(type) {
+    console.log(`received tool ${type}, adding to menubar`);
+
+    if (tools[type]) {
+        console.log("We already have it");
+        return;
+    }
+
+    var div = document.createElement("div");
+    let text = "";
+    switch (type) {
+        case "ptr":
+            text = "Cursor";
+            div.addEventListener("click", () => {
+                socket.emit("tool-measure", "ptr");
+            })
+            break;
+        case "dmm":
+            text = "Multimeter";
+            div.addEventListener("click", () => {
+                if (sidebarShown) {
+                    sidebar_split.collapse(1);
+                } else {
+                    sidebar_split.setSizes([80, 20]);
+                }
+                document.getElementById("sidebar-dmm").classList.remove("hidden");
+                document.getElementById("sidebar-osc").classList.add("hidden");
+                resizeAll();
+                sidebarShown = !sidebarShown;
+            })
+            break;
+        case "osc":
+            text = "Oscilloscope";
+            div.addEventListener("click", () => {
+                if (sidebarShown) {
+                    sidebar_split.collapse(1);
+                } else {
+                    sidebar_split.setSizes([80, 20]);
+                }
+                document.getElementById("sidebar-dmm").classList.add("hidden");
+                document.getElementById("sidebar-osc").classList.remove("hidden");
+                resizeAll();
+                sidebarShown = !sidebarShown;
+            })
+            break;
+    }
+    div.innerText = text;
+    document.getElementById("tools").appendChild(div);
+
+    tools[type] = true;
+}
+
+function toolMeasurement(type, val) {
+    console.log(`tool ${type} measurement = ${val}`)
+
+    if (!tools[type]) {
+        console.log("Measurement for tool we don't have yet");
+        return;
+    }
+
+    if (type == "ptr") {
+        // val is coordinates
+        // only clicking front for now
+        let coords = normalizedToLayoutCoords([val[0] / 100, val[1] / 100]);
+
+        console.log(`want to click in (${coords[0]},${coords[1]})`)
+        // crosshairOnPos(allcanvas.front.highlight, "F", coords)
     }
 }
 
@@ -826,6 +1012,18 @@ function initSocket() {
             case "deselect":
                 deselectAll(true);
                 break;
+        }
+    });
+    socket.on("tool-add", (data) => {
+        console.log(`tool-add: status '${data["status"]}', type '${data["type"]}'`);
+        if (data["status"] == "exists" || data["status"] == "added") {
+            addTool(data["type"]);
+        }
+    });
+    socket.on("tool-measure", (data) => {
+        console.log(`tool-measure: status '${data["status"]}', type '${data["type"]}', val '${data["val"]}'`);
+        if (data["status"] == "good") {
+            toolMeasurement(data["type"], data["val"]);
         }
     });
 }
