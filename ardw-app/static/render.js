@@ -1,8 +1,32 @@
-// From Interactive HTML BOM /web/render.js and /web/ibom.js
+// Rendering for schematic (svg) and layout (from pcbdata), including highlights
+// Layout rendering taken from Interactive HTML BOM /web/ibom.js, /web/render.js, /web/util.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
-// with some modifications and additions
 
+var allcanvas;
+var schematic_canvas;
+
+var topmostdiv = document.getElementById("topmostdiv");
 var emptyContext2d = document.createElement("canvas").getContext("2d");
+
+var ibom_settings = {
+  canvaslayout: "default",
+  bomlayout: "default",
+  bommode: "ungrouped",
+  checkboxes: [],
+  checkboxStoredRefs: {},
+  darkMode: false,
+  highlightpin1: false,
+  redrawOnDrag: true,
+  boardRotation: 0,
+  renderPads: true,
+  renderReferences: true,
+  renderValues: true,
+  renderSilkscreen: true,
+  renderFabrication: false,
+  renderDnpOutline: false,
+  renderTracks: false,
+  renderZones: false,
+}
 
 function deg2rad(deg) {
   return deg * Math.PI / 180;
@@ -111,7 +135,7 @@ function drawText(ctx, text, color) {
   ctx.restore();
 }
 
-function drawedge(ctx, scalefactor, edge, color) {
+function drawEdge(ctx, scalefactor, edge, color) {
   ctx.strokeStyle = color;
   ctx.lineWidth = Math.max(1 / scalefactor, edge.width);
   ctx.lineCap = "round";
@@ -230,7 +254,7 @@ function drawPolygonShape(ctx, shape, color) {
 
 function drawDrawing(ctx, scalefactor, drawing, color) {
   if (["segment", "arc", "circle", "curve"].includes(drawing.type)) {
-    drawedge(ctx, scalefactor, drawing, color);
+    drawEdge(ctx, scalefactor, drawing, color);
   } else if (drawing.type == "polygon") {
     drawPolygonShape(ctx, drawing, color);
   } else {
@@ -341,7 +365,7 @@ function drawEdgeCuts(canvas, scalefactor) {
   var ctx = canvas.getContext("2d");
   var edgecolor = getComputedStyle(topmostdiv).getPropertyValue('--pcb-edge-color');
   for (var edge of pcbdata.edges) {
-    drawedge(ctx, scalefactor, edge, edgecolor);
+    drawEdge(ctx, scalefactor, edge, edgecolor);
   }
 }
 
@@ -351,9 +375,9 @@ function drawPins(canvas, layer) {
   var padHoleColor = style.getPropertyValue('--pad-hole-color');
   var ctx = canvas.getContext("2d");
 
-  var pin = pindict[highlightedPin];
+  var pin = pindict[highlighted_pin];
   if (pin == undefined) {
-    console.log(`Error: highlighted pin ${highlightedPin} is not in pindict`);
+    logerr(`highlighted pin ${highlighted_pin} is not in pindict`);
     return;
   }
   for (var footprint of pcbdata.footprints) {
@@ -391,7 +415,7 @@ function drawFootprints(canvas, layer, scalefactor, highlight) {
   for (var i = 0; i < pcbdata.footprints.length; i++) {
     var mod = pcbdata.footprints[i];
     var outline = ibom_settings.renderDnpOutline && pcbdata.bom.skipped.includes(i);
-    if (!highlight || highlightedComponent == i) {
+    if (!highlight || highlighted_component == i) {
       drawFootprint(ctx, layer, scalefactor, mod, padColor, padHoleColor, outlineColor, highlight, outline);
     }
   }
@@ -401,7 +425,7 @@ function drawBgLayer(layername, canvas, layer, scalefactor, edgeColor, polygonCo
   var ctx = canvas.getContext("2d");
   for (var d of pcbdata.drawings[layername][layer]) {
     if (["segment", "arc", "circle", "curve", "rect"].includes(d.type)) {
-      drawedge(ctx, scalefactor, d, edgeColor);
+      drawEdge(ctx, scalefactor, d, edgeColor);
     } else if (d.type == "polygon") {
       drawPolygonShape(ctx, d, polygonColor);
     } else {
@@ -415,7 +439,7 @@ function drawTracks(canvas, layer, color, highlight) {
   ctx.strokeStyle = color;
   ctx.lineCap = "round";
   for (var track of pcbdata.tracks[layer]) {
-    if (highlight && highlightedNet != track.net) continue;
+    if (highlight && highlighted_net != track.net) continue;
     ctx.lineWidth = track.width;
     ctx.beginPath();
     if ('radius' in track) {
@@ -441,7 +465,7 @@ function drawZones(canvas, layer, color, highlight) {
     if (!zone.path2d) {
       zone.path2d = getPolygonsPath(zone);
     }
-    if (highlight && highlightedNet != zone.net) continue;
+    if (highlight && highlighted_net != zone.net) continue;
     ctx.fill(zone.path2d);
     if (zone.width > 0) {
       ctx.lineWidth = zone.width;
@@ -481,7 +505,7 @@ function drawNets(canvas, layer, highlight) {
       // draw pads
       var padDrawn = false;
       for (var pad of footprint.pads) {
-        if (highlightedNet != pad.net) continue;
+        if (highlighted_net != pad.net) continue;
         if (pad.layers.includes(layer)) {
           drawPad(ctx, pad, padColor, false);
           padDrawn = true;
@@ -501,14 +525,14 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
   if (clear) {
     clearCanvas(canvasdict.highlight);
   }
-  if (highlightedComponent != -1) {
+  if (highlighted_component != -1) {
     drawFootprints(canvasdict.highlight, canvasdict.layer,
       canvasdict.transform.s * canvasdict.transform.zoom, true);
   }
-  if (highlightedPin != -1) {
+  if (highlighted_pin != -1) {
     drawPins(canvasdict.highlight, canvasdict.layer);
   }
-  if (highlightedNet !== null) {
+  if (highlighted_net !== null) {
     drawNets(canvasdict.highlight, canvasdict.layer, true);
   }
   if (drawCrosshair) {
@@ -575,7 +599,7 @@ function prepareLayer(canvasdict) {
   var flip = (canvasdict.layer == "B");
   for (var c of ["bg", "fab", "silk", "highlight"]) {
     if (canvasdict[c]) {
-      prepareCanvas(canvasdict[c], flip, canvasdict.transform, canvasdict.layer != "S");
+      prepareCanvas(canvasdict[c], flip, canvasdict.transform, canvasdict.layer !== "S");
     }
   }
 }
@@ -637,6 +661,76 @@ function recalcLayerScale(layerdict, width, height, rotate) {
   }
 }
 
+function drawCanvasImg(layerdict, x = 0, y = 0, backgroundColor = null) {
+  var canvas = layerdict.bg;
+  prepareCanvas(canvas, false, layerdict.transform);
+  clearCanvas(canvas, backgroundColor);
+  canvas.getContext("2d").drawImage(layerdict.img, x, y);
+}
+
+function drawSchBox(ctx, box) {
+  var style = getComputedStyle(topmostdiv);
+
+  ctx.beginPath();
+  ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+  ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
+  ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
+  ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
+  ctx.fill();
+  ctx.stroke();
+}
+
+function pinBoxFromPos(pos) {
+    pos = pos.map((p) => parseInt(p));
+
+    return [
+        pos[0] - PIN_BBOX_SIZE,
+        pos[1] - PIN_BBOX_SIZE,
+        pos[0] + PIN_BBOX_SIZE,
+        pos[1] + PIN_BBOX_SIZE
+    ];
+}
+
+function drawSchematicHighlights() {
+  var canvas = schematic_canvas.highlight;
+  prepareCanvas(canvas, false, schematic_canvas.transform);
+  clearCanvas(canvas);
+  var ctx = canvas.getContext("2d");
+  if (highlighted_component !== -1) {
+    if (compdict[highlighted_component] == undefined) {
+      logerr(`highlighted refid ${highlighted_component} not in compdict`);
+      return;
+    }
+    for (var unitnum in compdict[highlighted_component].units) {
+      var unit = compdict[highlighted_component].units[unitnum];
+      if (unit.schid == current_schematic) {
+        var box = unit.bbox.map((b) => parseFloat(b));
+        drawSchBox(ctx, box);
+      }
+    }
+  }
+  if (highlighted_pin !== -1) {
+    if (pindict[highlighted_pin] == undefined) {
+      logerr(`highlighted pinidx ${highlighted_pin} not in pindict`);
+      return;
+    }
+    var pin = pindict[highlighted_pin];
+    if (pin.schid == current_schematic) {
+      drawSchBox(ctx, pinBoxFromPos(pin.pos));
+    } else {
+      logwarn(`current pin ${pin.ref} / ${pin.num} is on schid ${pin.schid},` +
+        `but we are on schid ${current_schematic}`);
+    }
+  }
+  if (highlighted_net !== null) {
+    for (var pin of pindict) {
+      if (pin.schid == current_schematic && pin.net == highlighted_net) {
+        drawSchBox(ctx, pinBoxFromPos(pin.pos));
+      }
+    }
+  }
+}
+
 function redrawCanvas(layerdict) {
   if (layerdict.layer === "S") {
     // schematic
@@ -668,157 +762,6 @@ function resizeAll() {
   resizeCanvas(schematic_canvas);
 }
 
-function pointWithinDistanceToSegment(x, y, x1, y1, x2, y2, d) {
-  var A = x - x1;
-  var B = y - y1;
-  var C = x2 - x1;
-  var D = y2 - y1;
-
-  var dot = A * C + B * D;
-  var len_sq = C * C + D * D;
-  var dx, dy;
-  if (len_sq == 0) {
-    // start and end of the segment coincide
-    dx = x - x1;
-    dy = y - y1;
-  } else {
-    var param = dot / len_sq;
-    var xx, yy;
-    if (param < 0) {
-      xx = x1;
-      yy = y1;
-    } else if (param > 1) {
-      xx = x2;
-      yy = y2;
-    } else {
-      xx = x1 + param * C;
-      yy = y1 + param * D;
-    }
-    dx = x - xx;
-    dy = y - yy;
-  }
-  return dx * dx + dy * dy <= d * d;
-}
-
-function modulo(n, mod) {
-  return ((n % mod) + mod) % mod;
-}
-
-function pointWithinDistanceToArc(x, y, xc, yc, radius, startangle, endangle, d) {
-  var dx = x - xc;
-  var dy = y - yc;
-  var r_sq = dx * dx + dy * dy;
-  var rmin = Math.max(0, radius - d);
-  var rmax = radius + d;
-
-  if (r_sq < rmin * rmin || r_sq > rmax * rmax)
-    return false;
-
-  var angle1 = modulo(deg2rad(startangle), 2 * Math.PI);
-  var dx1 = xc + radius * Math.cos(angle1) - x;
-  var dy1 = yc + radius * Math.sin(angle1) - y;
-  if (dx1 * dx1 + dy1 * dy1 <= d * d)
-    return true;
-
-  var angle2 = modulo(deg2rad(endangle), 2 * Math.PI);
-  var dx2 = xc + radius * Math.cos(angle2) - x;
-  var dy2 = yc + radius * Math.sin(angle2) - y;
-  if (dx2 * dx2 + dy2 * dy2 <= d * d)
-    return true;
-
-  var angle = modulo(Math.atan2(dy, dx), 2 * Math.PI);
-  if (angle1 > angle2)
-    return (angle >= angle2 || angle <= angle1);
-  else
-    return (angle >= angle1 && angle <= angle2);
-}
-
-function pointWithinPad(x, y, pad) {
-  var v = [x - pad.pos[0], y - pad.pos[1]];
-  v = rotateVector(v, -pad.angle);
-  if (pad.offset) {
-    v[0] -= pad.offset[0];
-    v[1] -= pad.offset[1];
-  }
-  return emptyContext2d.isPointInPath(getCachedPadPath(pad), ...v);
-}
-
-function netHitScan(layer, x, y) {
-  var netsHit = [];
-  // Check track segments
-  if (ibom_settings.renderTracks && pcbdata.tracks) {
-    for (var track of pcbdata.tracks[layer]) {
-      if ('radius' in track) {
-        if (pointWithinDistanceToArc(x, y, ...track.center, track.radius, track.startangle, track.endangle, track.width / 2)) {
-          // return track.net;
-          if (!netsHit.includes(track.net)) {
-            netsHit.push(track.net);
-          }
-        }
-      } else {
-        if (pointWithinDistanceToSegment(x, y, ...track.start, ...track.end, track.width / 2)) {
-          // return track.net;
-          if (!netsHit.includes(track.net)) {
-            netsHit.push(track.net);
-          }
-        }
-      }
-    }
-  }
-  // Check pads
-  if (ibom_settings.renderPads) {
-    for (var footprint of pcbdata.footprints) {
-      for (var pad of footprint.pads) {
-        if (pad.layers.includes(layer) && pointWithinPad(x, y, pad)) {
-          // return pad.net;
-          if (!netsHit.includes(pad.net)) {
-            netsHit.push(pad.net);
-          }
-        }
-      }
-    }
-  }
-  return netsHit;
-}
-
-function pinHitScan(layer, x, y) {
-  var pinsHit = [];
-  if (ibom_settings.renderPads) {
-    for (var footprint of pcbdata.footprints) {
-      for (var pad of footprint.pads) {
-        if (pad.layers.includes(layer) && pointWithinPad(x, y, pad)) {
-          let pin_name = `${footprint.ref}.${pad.padname}`;
-          let pinidx = pinref_to_idx[pin_name];
-          if (pinidx !== undefined && !pinsHit.includes(pinidx)) {
-            pinsHit.push(pinidx);
-          }
-        }
-      }
-    }
-  }
-  return pinsHit;
-}
-
-function pointWithinFootprintBbox(x, y, bbox) {
-  var v = [x - bbox.pos[0], y - bbox.pos[1]];
-  v = rotateVector(v, bbox.angle);
-  return bbox.relpos[0] <= v[0] && v[0] <= bbox.relpos[0] + bbox.size[0] &&
-    bbox.relpos[1] <= v[1] && v[1] <= bbox.relpos[1] + bbox.size[1];
-}
-
-function bboxHitScan(layer, x, y) {
-  var result = [];
-  for (var i = 0; i < pcbdata.footprints.length; i++) {
-    var footprint = pcbdata.footprints[i];
-    if (footprint.layer == layer) {
-      if (pointWithinFootprintBbox(x, y, footprint.bbox)) {
-        result.push(i);
-      }
-    }
-  }
-  return result;
-}
-
 function handlePointerDown(e, layerdict) {
   if (e.button != 0 && e.button != 1) {
     return;
@@ -840,336 +783,6 @@ function handlePointerDown(e, layerdict) {
   };
 }
 
-// Permitting only single selection
-function selectComponent(refid) {
-  var selected = parseInt(refid);
-  if (compdict[selected] == undefined) {
-    logerr(`selected refid ${selected} is not in compdict`);
-    return;
-  }
-  deselectAll(false);
-  highlightedComponent = selected;
-
-  /*
-  if (highlightedComponent !== -1 && !(compdict[selected].schids.includes(currentSchematic))) {
-    switchSchematic(compdict[selected].schids[0]);
-  }
-  */
-  document.querySelectorAll("#sch-selection>div").forEach((div) => {
-    div.classList.remove("has-selection");
-    for (let schid of compdict[selected].schids) {
-      if (div.innerText.startsWith(schid + ".")) {
-        div.classList.add("has-selection");
-        break;
-      }
-    }
-  });
-
-  searchInputField.value = `Component ${compdict[selected].ref}`;
-
-  let numunits = 0;
-  for (let _ in compdict[selected].units) {
-    numunits++;
-  }
-  searchNavCurrent = [1, numunits];
-  searchNavNum.innerText = `1 of ${searchNavCurrent[1]}`;
-
-  if (searchNavCurrent[1] > 1) {
-    searchNavText.innerText = `${compdict[selected].ref} ${Object.values(compdict[selected].units)[0].num}`;
-  } else {
-    searchNavText.innerText = "";
-  }
-
-  if (settings["find-activate"] === "auto") {
-    if (settings["find-type"] === "zoom") {
-      zoomToSelection(schematic_canvas);
-    } else {
-      drawCrosshair = true;
-    }
-  }
-
-  drawHighlights();
-  drawSchematicHighlights();
-}
-
-function selectPins(pin_hits) {
-  // Permitting only single selection, but likely to change
-  var selected = pin_hits[0];
-  if (pindict[selected] == undefined) {
-    logerr(`selected pinidx ${selected} is not in pindict`);
-    return;
-  }
-  deselectAll(false);
-  highlightedPin = selected;
-
-  /*
-  if (highlightedPin != -1 && pindict[selected].schid != currentSchematic) {
-    switchSchematic(pindict[selected].schid);
-  }
-  */
-  document.querySelectorAll("#sch-selection>div").forEach((div) => {
-    div.classList.remove("has-selection");
-    if (div.innerText.startsWith(pindict[selected].schid + ".")) {
-      div.classList.add("has-selection");
-    }
-  });
-
-  searchInputField.value = `Pin ${pindict[selected].ref}.${pindict[selected].num}`;
-  searchNavCurrent = [1, 1];
-  searchNavNum.innerText = "1 of 1";
-  searchNavText.innerText = "";
-
-  if (settings["find-activate"] === "auto") {
-    if (settings["find-type"] === "zoom") {
-      zoomToSelection(schematic_canvas);
-    } else {
-      drawCrosshair = true;
-    }
-  }
-
-  drawHighlights();
-  drawSchematicHighlights();
-}
-
-function selectNet(netname) {
-  if (!(netname in netdict)) {
-    logerr(`selected net ${netname} is not in netdict`);
-    return;
-  }
-  deselectAll(false);
-
-  highlightedNet = netname;
-  /*
-  if (!netdict[netname].includes(currentSchematic)) {
-    switchSchematic(netdict[netname][0]);
-  }
-  */
-
-  document.querySelectorAll("#sch-selection>div").forEach((div) => {
-    div.classList.remove("has-selection");
-    for (let schid of netdict[netname]["schids"]) {
-      if (div.innerText.startsWith(schid + ".")) {
-        div.classList.add("has-selection");
-        break;
-      }
-    }
-  });
-
-  searchInputField.value = `Net ${netname}`;
-
-  searchNavCurrent = [1, netdict[netname]["pins"].length];
-  searchNavNum.innerText = `${searchNavCurrent[0]} of ${searchNavCurrent[1]}`;
-
-  var pin1 = pindict[netdict[netname]["pins"][0]];
-  searchNavText.innerText = `${pin1.ref}.${pin1.num}`;
-
-  if (settings["find-activate"] === "auto") {
-    if (settings["find-type"] === "zoom") {
-      zoomToSelection(schematic_canvas);
-    } else {
-      drawCrosshair = true;
-    }
-  }
-
-  drawHighlights();
-  drawSchematicHighlights();
-}
-
-function deselectAll(redraw) {
-  highlightedComponent = -1;
-  highlightedPin = -1;
-  highlightedNet = null;
-  drawCrosshair = false;
-  if (redraw) {
-    document.querySelectorAll("#sch-selection>div").forEach((div) => {
-      div.classList.remove("has-selection");
-    });
-    searchInputField.value = "";
-    searchNavCurrent = [0, 0];
-    searchNavNum.innerText = "0 of 0";
-    searchNavText.innerText = "";
-
-    drawHighlights();
-    drawSchematicHighlights();
-  }
-}
-
-// Expects box to have format [x1, y1, x2, y2]
-function isClickInBox(coords, box) {
-  box = box.map((b) => parseFloat(b));
-  if (box[0] > box[2]) {
-    var tmp = box[0];
-    box[0] = box[2];
-    box[2] = tmp;
-  }
-  if (box[1] > box[3]) {
-    var tmp = box[1];
-    box[1] = box[3];
-    box[3] = tmp;
-  }
-
-  box[0] = box[0] - SCH_CLICK_BUFFER;
-  box[1] = box[1] - SCH_CLICK_BUFFER;
-  box[2] = box[2] + SCH_CLICK_BUFFER;
-  box[3] = box[3] + SCH_CLICK_BUFFER;
-
-  return box[0] <= coords.x && coords.x <= box[2] && box[1] <= coords.y && coords.y <= box[3];
-}
-
-function schematicHitScan(coords) {
-  var allhits = [];
-  for (var refid in compdict) {
-    if (!compdict[refid].schids.includes(currentSchematic)) continue;
-    for (var unitnum in compdict[refid].units) {
-      var unit = compdict[refid].units[unitnum];
-      if (unit.schid == currentSchematic && isClickInBox(coords, unit.bbox)) {
-        allhits.push({
-          "val": parseInt(refid),
-          "type": "comp"
-        });
-      }
-    }
-  }
-  for (var pinidx in pindict) {
-    if (pindict[pinidx].schid != currentSchematic) continue;
-    if (isClickInBox(coords, pinBoxFromPos(pindict[pinidx].pos))) {
-      allhits.push({
-        "val": pinidx,
-        "type": "pin"
-      });
-      if (pindict[pinidx].net) {
-        allhits.push({
-          "val": pindict[pinidx].net,
-          "type": "net"
-        });
-      }
-    }
-  }
-  return allhits;
-}
-
-function getMousePos(layerdict, evt) {
-  var canvas = layerdict.bg;
-  var transform = layerdict.transform;
-  var zoomFactor = 1 / transform.zoom;
-
-  var rect = canvas.getBoundingClientRect();  // abs. size of element
-  var scaleX = canvas.width / rect.width * zoomFactor;  // relationship bitmap vs. element for X
-  var scaleY = canvas.height / rect.height * zoomFactor;  // relationship bitmap vs. element for Y
-
-  // Take into account that we actually have two separate scale and transform variable sets
-  var x = ((evt.clientX - rect.left) * scaleX - transform.panx - transform.x) / transform.s;
-  var y = ((evt.clientY - rect.top) * scaleY - transform.pany - transform.y) / transform.s;
-
-  return { x: x, y: y };
-}
-
-// Normalized is (0,0) at top left corner and (1,1) at bottom right corner of edges
-function normalizedToLayoutCoords(normalPos) {
-  var xs = [];
-  var ys = [];
-  for (let edge of pcbdata.edges) {
-    xs.push(parseFloat(edge.start[0]));
-    ys.push(parseFloat(edge.start[1]));
-  }
-  var bounds = [
-    Math.min(...xs),
-    Math.min(...ys),
-    Math.max(...xs),
-    Math.max(...ys)
-  ];
-  var xscale = bounds[2] - bounds[0];
-  var yscale = bounds[3] - bounds[1];
-
-  return [(normalPos[0] * xscale) + bounds[0], (normalPos[1] * yscale) + bounds[1]];
-}
-function layoutToNormalizedCoords(layoutPos) {
-  var xs = [];
-  var ys = [];
-  for (let edge of pcbdata.edges) {
-    xs.push(parseFloat(edge.start[0]));
-    ys.push(parseFloat(edge.start[1]));
-  }
-  var bounds = [
-    Math.min(...xs),
-    Math.min(...ys),
-    Math.max(...xs),
-    Math.max(...ys)
-  ];
-  var xscale = bounds[2] - bounds[0];
-  var yscale = bounds[3] - bounds[1];
-
-  return [(layoutPos[0] - bounds[0]) / xscale, (layoutPos[1] - bounds[1]) / yscale];
-}
-
-function handleMouseClick(e, layerdict) {
-  if (!e.hasOwnProperty("offsetX")) {
-    // The polyfill doesn't set this properly
-    e.offsetX = e.pageX - e.currentTarget.offsetLeft;
-    e.offsetY = e.pageY - e.currentTarget.offsetTop;
-  }
-
-  var clickmenu = document.getElementById("sch-multi-click");
-  var hits;
-
-  if (layerdict.layer === "S") {
-    // Click in schematic
-    var coords = getMousePos(layerdict, e)
-    console.log(`click in sch at (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
-    let t = schematic_canvas.transform;
-    // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
-    // TODO menu to choose if multiple hits
-    hits = schematicHitScan(coords);
-  } else {
-    // Click in layout
-    var x = e.offsetX;
-    var y = e.offsetY;
-    var t = layerdict.transform;
-    if (layerdict.layer == "B") {
-      x = (devicePixelRatio * x / t.zoom - t.panx + t.x) / -t.s;
-    } else {
-      x = (devicePixelRatio * x / t.zoom - t.panx - t.x) / t.s;
-    }
-    y = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
-    var v = rotateVector([x, y], -ibom_settings.boardRotation);
-
-    console.log(`click in layer ${layerdict.layer} at (${x},${y})`);
-
-    hits = [];
-    for (let comp of bboxHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "comp", "val": comp });
-    }
-    for (let pin of pinHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "pin", "val": pin });
-    }
-    for (let net of netHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "net", "val": net });
-    }
-  }
-
-  if (hits.length == 1) {
-    // Single click, just select what was clicked
-    clickedType[hits[0].type](hits[0].val);
-  } else if (hits.length > 1) {
-    // Multi click
-    // Clear existing children and position menu at click
-    // TODO make sure menu can't go out of #display
-    clickmenu.innerHTML = "";
-    clickmenu.style.top = e.clientY + "px";
-    clickmenu.style.left = e.clientX + "px";
-
-    for (let hit of hits) {
-      appendSelectionDiv(clickmenu, hit.val, hit.type);
-    }
-    clickmenu.classList.remove("hidden");
-  } else {
-    // Clicked on nothing
-    clickmenu.classList.add("hidden");
-    document.getElementById("search-content").classList.add("hidden");
-    deselectClicked();
-  }
-}
-
 function handlePointerLeave(e, layerdict) {
   e.preventDefault();
   e.stopPropagation();
@@ -1189,8 +802,8 @@ function resetTransform(layerdict) {
     var vw = layerdict.bg.width / (t.zoom * t.s);
     var vh = layerdict.bg.height / (t.zoom * t.s);
 
-    var centerx = schdata.schematics[schid_to_idx[currentSchematic]].dimensions.x / 2;
-    var centery = schdata.schematics[schid_to_idx[currentSchematic]].dimensions.y / 2;
+    var centerx = schdata.schematics[schid_to_idx[current_schematic]].dimensions.x / 2;
+    var centery = schdata.schematics[schid_to_idx[current_schematic]].dimensions.y / 2;
 
     layerdict.transform.panx = ((vw / 2) - centerx) * t.s - t.x;
     layerdict.transform.pany = ((vh / 2) - centery) * t.s - t.y;
@@ -1343,9 +956,11 @@ function addMouseHandlers(div, layerdict) {
     handleMouseWheel(e, layerdict);
   }
   for (var element of [div, layerdict.bg, layerdict.fab, layerdict.silk, layerdict.highlight]) {
-    element.addEventListener("contextmenu", function (e) {
-      e.preventDefault();
-    }, false);
+    if (element) {
+      element.addEventListener("contextmenu", function (e) {
+        e.preventDefault();
+      }, false);
+    }
   }
 }
 
@@ -1400,4 +1015,36 @@ function initRender() {
   };
   addMouseHandlers(document.getElementById("front-canvas"), allcanvas.front);
   addMouseHandlers(document.getElementById("back-canvas"), allcanvas.back);
+
+  schematic_canvas = {
+    transform: {
+      x: 0,
+      y: 0,
+      s: 1,
+      panx: 0,
+      pany: 0,
+      zoom: 0.1 // Overridden on load
+    },
+    pointerStates: {},
+    anotherPointerTapped: false,
+    layer: "S",
+    bg: document.getElementById("sch_bg"),
+    highlight: document.getElementById("sch_hl"),
+    img: new Image()
+  }
+
+  // Increase the canvas dimensions by the pixel ratio (display size controlled by CSS)
+  let ratio = window.devicePixelRatio || 1;
+  schematic_canvas.bg.width *= ratio;
+  schematic_canvas.bg.height *= ratio;
+  schematic_canvas.highlight.width *= ratio;
+  schematic_canvas.highlight.height *= ratio;
+
+  schematic_canvas.img.onload = function () {
+    drawCanvasImg(schematic_canvas, 0, 0);
+    resetTransform(schematic_canvas);
+  };
+  switchSchematic(1);
+
+  addMouseHandlers(document.getElementById("schematic-canvas"), schematic_canvas);
 }
