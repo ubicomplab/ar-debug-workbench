@@ -3,7 +3,7 @@
     --pad-color: #878787;
     --pad-hole-color: #CCCCCC;
     --pad-color-highlight: #D04040;
-    /* --pad-color-highlight: rgba(0, 123, 255, 1); */
+    --pad-color-highlight-weak: rgba(208, 64, 64, 0.5);
     --pin1-outline-color: #ffb629;
     --pin1-outline-color-highlight: #b4ff03;
     --silkscreen-edge-color: #aa4;
@@ -16,18 +16,15 @@
     --track-color-highlight: #D04040;
     --zone-color: #def5f1;
     --zone-color-highlight: #d0404080;
-    /* Style for schematic */
-    /* --schematic-highlight-fill-color: rgba(208, 64, 64, 0.25); */
     --schematic-highlight-fill-color: rgba(0, 123, 255, 0.25);
-    /* --schematic-highlight-line-color: rgba(208, 64, 64, 1); */
     --schematic-highlight-line-color: rgba(0, 123, 255, 1);
+    --schematic-highlight-fill-color-weak: rgba(0, 123, 255, 0.1);
+    --schematic-highlight-line-color-weak: rgba(0, 123, 255, 0.5);
     --schematic-highlight-line-width: 12;
-    --test1-fill: rgba(0, 255, 0, 0.25);
-    --test1-line: rgba(0, 255, 0, 1);
-    --test2-fill: rgba(255, 128, 0, 0.25);
-    --test2-line: rgba(255, 128, 0, 1);
     --pcb-crosshair-line-color: rgba(208, 64, 64, 0.3);
-    --pcb-crosshair-line-width: 0.5;
+    --pcb-crosshair-line-width: 4;
+    --schematic-crosshair-line-color: rgba(0, 123, 255, 0.3);
+    --schematic-crosshair-line-width: 4;
 }
 
 html, body {

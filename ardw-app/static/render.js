@@ -536,7 +536,7 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
     drawNets(canvasdict.highlight, canvasdict.layer, true);
   }
   if (draw_crosshair) {
-    crosshairOnSelection(canvasdict.highlight, canvasdict.layer);
+    drawCrosshair(canvasdict);
   }
 }
 
@@ -729,6 +729,10 @@ function drawSchematicHighlights() {
       }
     }
   }
+  if (draw_crosshair) {
+    console.log("draw sch x")
+    drawCrosshair(schematic_canvas);
+  }
 }
 
 function redrawCanvas(layerdict) {
@@ -795,6 +799,7 @@ function handlePointerLeave(e, layerdict) {
 }
 
 function resetTransform(layerdict) {
+  console.log(`reset transform ${layerdict.layer}`)
   if (layerdict.layer === "S") {
     layerdict.transform.zoom = sch_zoom_default;
     var t = layerdict.transform;

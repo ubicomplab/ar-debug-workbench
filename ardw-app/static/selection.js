@@ -13,6 +13,74 @@ var highlighted_net = null; // netname
 var sch_zoom_default; // different for each schematic sheet
 
 
+function updateTargetBoxes() {
+    // Reset everything
+    target_boxes["S"] = null;
+    target_boxes["F"] = null;
+    target_boxes["B"] = null;
+
+    if (highlighted_component !== -1) {
+        var comp = compdict[highlighted_component];
+        if (comp.schids.includes(current_schematic)) {
+            var bounds = [Infinity, Infinity, -Infinity, -Infinity];
+            for (let unitnum in comp.units) {
+                let unit = comp.units[unitnum];
+                if (unit.schid == current_schematic) {
+                    bounds[0] = Math.min(bounds[0], unit.bbox[0], unit.bbox[2]);
+                    bounds[1] = Math.min(bounds[1], unit.bbox[1], unit.bbox[3]);
+                    bounds[2] = Math.max(bounds[2], unit.bbox[0], unit.bbox[2]);
+                    bounds[3] = Math.max(bounds[3], unit.bbox[1], unit.bbox[3]);
+                }
+            }
+            target_boxes["S"] = bounds;
+        }
+
+        var footprint = pcbdata.footprints[highlighted_component];
+        for (let layer of ["F", "B"]) {
+            // Do nothing to layer that doesn't have the component
+            target_boxes[layer] = layer == footprint.layer ? bboxPcbnewToList(footprint.bbox) : null;
+        }
+    }
+    if (highlighted_pin !== -1) {
+        var pin = pindict[highlighted_pin];
+        if (pin.schid == current_schematic) {
+            target_boxes["S"] = pinBoxFromPos(pin.pos);
+        }
+
+        for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
+            if (pad.padname == pin.num) {
+                let box = bboxPcbnewToList(pad);
+                for (let layer of ["F", "B"]) {
+                    // Do nothing to layer that doesn't have the pin
+                    target_boxes[layer] = pad.layers.includes(layer) ? box : null;
+                }
+                break;
+            }
+        }
+    }
+    if (highlighted_net !== null) {
+        /*
+        var bounds = [Infinity, Infinity, -Infinity, -Infinity];
+        for (let pinidx of netdict[highlighted_net].pins) {
+            let pin = pindict[pinidx];
+            if (pin.schid == current_schematic && pin.net == highlighted_net) {
+                let box = pinBoxFromPos(pin.pos);
+                bounds[0] = Math.min(bounds[0], box[0], box[2]);
+                bounds[1] = Math.min(bounds[1], box[1], box[3]);
+                bounds[2] = Math.max(bounds[2], box[0], box[2]);
+                bounds[3] = Math.max(bounds[3], box[1], box[3]);
+            }
+        }
+        target_boxes["S"] = bounds;
+        */
+        // no zoom or crosshair for whole net on schematic
+        target_boxes["S"] = null;
+        // reset transform of F and B, rather than just doing nothing
+        target_boxes["F"] = [];
+        target_boxes["B"] = [];
+    }
+}
+
 // Permitting only single selection
 function selectComponent(refid) {
     var selected = parseInt(refid);
@@ -23,14 +91,15 @@ function selectComponent(refid) {
     deselectAll(false);
     highlighted_component = selected;
 
+    var comp = compdict[selected];
     /*
-    if (highlightedComponent !== -1 && !(compdict[selected].schids.includes(current_schematic))) {
-      switchSchematic(compdict[selected].schids[0]);
+    if (highlightedComponent !== -1 && !(comp.schids.includes(current_schematic))) {
+      switchSchematic(comp.schids[0]);
     }
     */
     document.querySelectorAll("#sch-selection>div").forEach((div) => {
         div.classList.remove("has-selection");
-        for (let schid of compdict[selected].schids) {
+        for (let schid of comp.schids) {
             if (div.innerText.startsWith(schid + ".")) {
                 div.classList.add("has-selection");
                 break;
@@ -38,24 +107,28 @@ function selectComponent(refid) {
         }
     });
 
-    searchInputField.value = `Component ${compdict[selected].ref}`;
+    search_input_field.value = `Component ${comp.ref}`;
 
     let numunits = 0;
-    for (let _ in compdict[selected].units) {
+    for (let _ in comp.units) {
         numunits++;
     }
     search_nav_current = [1, numunits];
-    searchNavNum.innerText = `1 of ${search_nav_current[1]}`;
+    search_nav_num.innerText = `1 of ${search_nav_current[1]}`;
 
     if (search_nav_current[1] > 1) {
-        searchNavText.innerText = `${compdict[selected].ref} ${Object.values(compdict[selected].units)[0].num}`;
+        search_nav_text.innerText = `${comp.ref} ${Object.values(comp.units)[0].num}`;
     } else {
-        searchNavText.innerText = "";
+        search_nav_text.innerText = "";
     }
+
+    updateTargetBoxes();
 
     if (settings["find-activate"] === "auto") {
         if (settings["find-type"] === "zoom") {
             zoomToSelection(schematic_canvas);
+            zoomToSelection(allcanvas.front);
+            zoomToSelection(allcanvas.back);
         } else {
             draw_crosshair = true;
         }
@@ -75,6 +148,7 @@ function selectPins(pin_hits) {
     deselectAll(false);
     highlighted_pin = selected;
 
+    var pin = pindict[selected];
     /*
     if (highlightedPin != -1 && pindict[selected].schid != current_schematic) {
       switchSchematic(pindict[selected].schid);
@@ -82,19 +156,23 @@ function selectPins(pin_hits) {
     */
     document.querySelectorAll("#sch-selection>div").forEach((div) => {
         div.classList.remove("has-selection");
-        if (div.innerText.startsWith(pindict[selected].schid + ".")) {
+        if (div.innerText.startsWith(pin.schid + ".")) {
             div.classList.add("has-selection");
         }
     });
 
-    searchInputField.value = `Pin ${pindict[selected].ref}.${pindict[selected].num}`;
+    search_input_field.value = `Pin ${pin.ref}.${pin.num}`;
     search_nav_current = [1, 1];
-    searchNavNum.innerText = "1 of 1";
-    searchNavText.innerText = "";
+    search_nav_num.innerText = "1 of 1";
+    search_nav_text.innerText = "";
+
+    updateTargetBoxes();
 
     if (settings["find-activate"] === "auto") {
         if (settings["find-type"] === "zoom") {
             zoomToSelection(schematic_canvas);
+            zoomToSelection(allcanvas.front);
+            zoomToSelection(allcanvas.back);
         } else {
             draw_crosshair = true;
         }
@@ -128,17 +206,21 @@ function selectNet(netname) {
         }
     });
 
-    searchInputField.value = `Net ${netname}`;
+    search_input_field.value = `Net ${netname}`;
 
     search_nav_current = [1, netdict[netname]["pins"].length];
-    searchNavNum.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
+    search_nav_num.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
 
     var pin1 = pindict[netdict[netname]["pins"][0]];
-    searchNavText.innerText = `${pin1.ref}.${pin1.num}`;
+    search_nav_text.innerText = `${pin1.ref}.${pin1.num}`;
+
+    updateTargetBoxes();
 
     if (settings["find-activate"] === "auto") {
         if (settings["find-type"] === "zoom") {
             zoomToSelection(schematic_canvas);
+            zoomToSelection(allcanvas.front);
+            zoomToSelection(allcanvas.back);
         } else {
             draw_crosshair = true;
         }
@@ -153,14 +235,18 @@ function deselectAll(redraw) {
     highlighted_pin = -1;
     highlighted_net = null;
     draw_crosshair = false;
+    target_boxes["S"] = null;
+    target_boxes["F"] = null;
+    target_boxes["B"] = null;
+
     if (redraw) {
         document.querySelectorAll("#sch-selection>div").forEach((div) => {
             div.classList.remove("has-selection");
         });
-        searchInputField.value = "";
+        search_input_field.value = "";
         search_nav_current = [0, 0];
-        searchNavNum.innerText = "0 of 0";
-        searchNavText.innerText = "";
+        search_nav_num.innerText = "0 of 0";
+        search_nav_text.innerText = "";
 
         drawHighlights();
         drawSchematicHighlights();
@@ -353,7 +439,12 @@ function bboxHitScan(layer, x, y) {
     return result;
 }
 
-// Expects box to have format [x1, y1, x2, y2]
+/**
+ * Checks if the coords lie within the given box plus SCH_CLICK_BUFFER in all directions
+ * @param {*} coords 
+ * @param {*} box Must be in list format (see util.js)
+ * @returns boolean
+ */
 function isClickInBox(coords, box) {
     box = box.map((b) => parseFloat(b));
     if (box[0] > box[2]) {
@@ -480,7 +571,10 @@ function handleMouseClick(e, layerdict) {
         y = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
         var v = rotateVector([x, y], -ibom_settings.boardRotation);
 
-        // console.log(`click in layer ${layerdict.layer} at (${x},${y})`);
+        if (DEBUG_LAYOUT_CLICK) {
+            console.log(`click in layer ${layerdict.layer} at (${x},${y})`);
+            return;
+        }
 
         for (let comp of bboxHitScan(layerdict.layer, ...v)) {
             hits.push({ "type": "comp", "val": comp });
@@ -518,6 +612,8 @@ function handleMouseClick(e, layerdict) {
 
 function switchSchematic(schid) {
     current_schematic = schid;
+
+    updateTargetBoxes();
 
     document.querySelectorAll("#sch-selection>div").forEach((div) => {
         div.classList.remove("current");

@@ -3,12 +3,19 @@
 var schdata;
 var pcbdata;
 
-var schid_to_idx = {};  // schid : index in schdata.schematics
-var ref_to_id = {};     // ref : refid
-var pinref_to_idx = {}; // 'ref.pinnum' : pinidx
-var compdict = {};  // refid : comp data (sch + bomentry)
-var netdict = {};   // netname : schids
-var pindict = [];   // pinidx : pin data (ref, name, num, pos, schid, net)
+/** schid : index in schdata.schematics */
+var schid_to_idx = {};
+/** ref : refid */
+var ref_to_id = {};
+/** 'ref.pinnum' : pinidx */
+var pinref_to_idx = {};
+
+/** refid : ref, schids, units={unitnum : schid, bbox, pins=[pinidx]} */
+var compdict = {};  
+/** netname : schids, pins=[pinidx] */
+var netdict = {};
+/** pinidx : pin = {ref, name, num, pos, schid, net} */
+var pindict = [];
 
 var num_schematics;
 var current_schematic; // schid (starts at 1)
@@ -282,6 +289,14 @@ function initData() {
 //      list: [x1, y1, x2, y2]
 //      obj: {"minx", "miny", "maxx", "maxy"}
 //      pcbnew: {"pos", "relpos", "angle", "size"}
+function bboxListSort(bbox) {
+    return [
+        Math.min(bbox[0], bbox[2]),
+        Math.min(bbox[1], bbox[3]),
+        Math.max(bbox[0], bbox[2]),
+        Math.max(bbox[1], bbox[3])
+    ];
+}
 function bboxListToObj(bbox) {
     return {
         "minx": Math.min(bbox[0], bbox[2]),
@@ -294,13 +309,20 @@ function bboxObjToList(bbox) {
     return [bbox.minx, bbox.miny, bbox.maxx, bbox.maxy];
 }
 function bboxPcbnewToList(bbox) {
-    // footprint.bbox or .pad
-    var relpos = bbox.relpos !== undefined ? bbox.relpos : [0, 0];
+    var corner1;
+    var corner2;
+    if (bbox.relpos === undefined) {
+        // footprint.pad
+        corner1 = [-bbox.size[0] / 2, -bbox.size[1] / 2];
+        corner2 = [bbox.size[1] / 2, bbox.size[1] / 2];
+    } else {
+        // footprint.bbox
+        corner1 = [bbox.relpos[0], bbox.relpos[1]];
+        corner2 = [bbox.relpos[0] + bbox.size[0], bbox.relpos[1] + bbox.size[1]];
+        corner1 = rotateVector(corner1, bbox.angle);
+        corner2 = rotateVector(corner2, bbox.angle);
+    }
 
-    var corner1 = [relpos[0], relpos[1]];
-    var corner2 = [relpos[0] + bbox.size[0], relpos[1] + bbox.size[1]];
-    corner1 = rotateVector(corner1, bbox.angle);
-    corner2 = rotateVector(corner2, bbox.angle);
     return [
         Math.min(corner1[0], corner2[0]) + bbox.pos[0],
         Math.min(corner1[1], corner2[1]) + bbox.pos[1],

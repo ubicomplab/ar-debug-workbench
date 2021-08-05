@@ -1,9 +1,12 @@
 // Main page stuff plus whatever else is wip (like tools)
 
+// DEBUG
+var DEBUG_LAYOUT_CLICK = false;
+
 // document elements
-var searchInputField = null;
-var searchNavNum = null;
-var searchNavText = null;
+var search_input_field = null;
+var search_nav_num = null;
+var search_nav_text = null;
 
 var search_nav_current = [0, 0];
 
@@ -14,7 +17,8 @@ var target_boxes = {
     "B": null
 };
 
-var view_minimums = {
+// zoom and crosshair constants
+var VIEW_MINIMUMS = {
     "sch": {
         "comp": 0.1,
         "pin": 0.04,
@@ -25,7 +29,9 @@ var view_minimums = {
         "pad": 0.02
     }
 };
-var view_maximum = 0.8;
+var VIEW_MAXIMUM = 0.8;
+var CROSSHAIR_LENGTH = 100000;
+
 
 var sidebar_shown = false;
 sidebar_split = Split(["#display", "#sidebar"], {
@@ -54,8 +60,12 @@ var tools = {
     "osc": false
 }
 
-// Expects bbox in obj form (see util.js)
-// bbox should not be rotated to match layout rotation
+/**
+ * Zooms layerdict to match given bbox and targetsize, rotating appropriately for layout
+ * @param {*} layerdict Any layerdict
+ * @param {*} bbox Must be in obj format (see util.js)
+ * @param {*} targetsize From VIEW_MINIMUMS
+ */
 function zoomToBox(layerdict, bbox, targetsize) {
     if (layerdict.layer !== "S") {
         bbox = applyRotation(bbox);
@@ -76,16 +86,18 @@ function zoomToBox(layerdict, bbox, targetsize) {
     var maxrat = Math.max(xrat, yrat);
 
     // Only zoom if the target will be too small or too large
-    if (maxrat < targetsize || maxrat > view_maximum) {
-        if (maxrat > view_maximum) {
-            targetsize = view_maximum;
+    if (maxrat < targetsize || maxrat > VIEW_MAXIMUM) {
+        if (maxrat > VIEW_MAXIMUM) {
+            targetsize = VIEW_MAXIMUM;
         }
         var schdim = schdata.schematics[schid_to_idx[current_schematic]].dimensions;
         var xzoom = schdim.x * sch_zoom_default * targetsize / minwidth;
         var yzoom = schdim.y * sch_zoom_default * targetsize / minheight;
 
         var newzoom = Math.min(xzoom, yzoom);
+        // console.log(`zoom ${layerdict.transform.zoom} => ${newzoom} (def. ${sch_zoom_default})`)
         newzoom = Math.max(newzoom, sch_zoom_default);
+
 
         layerdict.transform.zoom = newzoom;
     }
@@ -100,117 +112,127 @@ function zoomToBox(layerdict, bbox, targetsize) {
         newpx = -newpx + (layerdict.bg.width / layerdict.transform.zoom);
     }
     var newpy = ((newvh / 2) - centery) * layerdict.transform.s - layerdict.transform.y;
+    // console.log(`pan (${layerdict.transform.panx},${layerdict.transform.pany}) => (${newpx},${newpy})`);
     layerdict.transform.panx = newpx;
     layerdict.transform.pany = newpy;
 
     redrawCanvas(layerdict);
 }
 
-function zoomToSelection(layerdict) {
-    // console.log(`Finding selection for layer ${layerdict.layer}`);
-    // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
+function zoomToTargetBoxes(schmin, layoutmin) {
+    var layerdicts = {
+        "S": schematic_canvas,
+        "F": allcanvas.front,
+        "B": allcanvas.back
+    };
 
-    var boxes = [];
-    var targetsize;
-
-    if (layerdict.layer === "S") {
-        if (highlighted_component !== -1) {
-            targetsize = view_minimums["sch"]["comp"];
-            var comp = compdict[highlighted_component];
-            for (let unitnum in comp.units) {
-                let unit = comp.units[unitnum];
-                if (unit.schid == current_schematic) {
-                    boxes.push(unit.bbox);
-                }
+    for (let layer in target_boxes) {
+        if (target_boxes[layer] !== null) {
+            if (target_boxes[layer].length > 0) {
+                let targetsize = layer === "S" ? schmin : layoutmin;
+                // console.log(`finding ${target_boxes[layer]} on ${layer}`)
+                zoomToBox(layerdicts[layer], bboxListToObj(target_boxes[layer]), targetsize);
+            } else {
+                // console.log(`resetting ${layer}`)
+                resetTransform(layerdicts[layer]);
             }
-        }
-        if (highlighted_pin !== -1) {
-            targetsize = view_minimums["sch"]["pin"];
-            var pin = pindict[highlighted_pin];
-            if (pin.schid == current_schematic) {
-                boxes.push(pinBoxFromPos(pin.pos));
-            }
-        }
-        if (highlighted_net !== null) {
-            targetsize = view_minimums["sch"]["net"];
-            for (let pinidx in pindict) {
-                let pin = pindict[pinidx];
-                if (pin.schid == current_schematic && pin.net == highlighted_net) {
-                    boxes.push(pinBoxFromPos(pin.pos));
-                }
-            }
-        }
-    } else {
-        // layout canvas F or B
-        if (highlighted_component !== -1) {
-            targetsize = view_minimums["sch"]["comp"];
-            var footprint = pcbdata.footprints[highlighted_component];
-            if (layerdict.layer == footprint.layer) {
-                boxes = [bboxPcbnewToList(footprint.bbox)];
-            }
-        }
-        if (highlighted_pin !== -1) {
-            let pin = pindict[highlighted_pin];
-            for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
-                if (pad.padname == pin.num) {
-                    if (pad.layers.includes(layerdict.layer)) {
-                        zoomToBox(layerdict, bboxPcbnewToObj(pad), view_minimums["layout"]["pad"]);
-                    }
-                    break;
-                }
-            }
-        }
-        if (highlighted_net !== null) {
-            console.log("Net zooming is WIP");
-            resetTransform(layerdict);
         }
     }
+}
 
-    if (boxes.length == 0) {
+function zoomToSelection(layerdict) {
+    var targetsize = null;
+    if (highlighted_component !== -1) {
+        targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["comp"] : VIEW_MINIMUMS["layout"]["footprint"];
+    }
+    if (highlighted_pin !== -1) {
+        targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["pin"] : VIEW_MINIMUMS["layout"]["pad"];
+    }
+    if (highlighted_net !== null) {
+        targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["net"] : null;
+    }
+
+    if (targetsize === null || target_boxes[layerdict.layer] === null) {
         return;
     }
 
-    var extremes = [Infinity, Infinity, -Infinity, -Infinity];
-    for (let box of boxes) {
-        extremes[0] = Math.min(extremes[0], box[0], box[2]);
-        extremes[1] = Math.min(extremes[1], box[1], box[3]);
-        extremes[2] = Math.max(extremes[2], box[0], box[2]);
-        extremes[3] = Math.max(extremes[3], box[1], box[3]);
-    }
-
-    zoomToBox(layerdict, bboxListToObj(extremes), targetsize);
+    zoomToBox(layerdict, bboxListToObj(target_boxes[layerdict.layer]), targetsize);
 }
 
-function crosshairOnPos(canvas, pos) {
+function crosshairOnPos(layerdict, pos) {
+    var canvas = layerdict.highlight;
     if (pos.length > 0) {
         var style = getComputedStyle(topmostdiv);
         var ctx = canvas.getContext("2d");
-        ctx.strokeStyle = style.getPropertyValue("--pcb-crosshair-line-color");
-        ctx.lineWidth = style.getPropertyValue("--pcb-crosshair-line-width");
+
+        var line_width;
+        var stroke_style;
+        if (layerdict.layer === "S") {
+            stroke_style = style.getPropertyValue("--schematic-crosshair-line-color");
+            line_width = style.getPropertyValue("--schematic-crosshair-line-width");
+        } else {
+            stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
+            line_width = style.getPropertyValue("--pcb-crosshair-line-width");
+        }
+        // scale line_width based on effective zoom
+        line_width /= layerdict.transform.s * layerdict.transform.zoom;
+
+        ctx.strokeStyle = stroke_style;
+        ctx.lineWidth = line_width;
         ctx.beginPath();
-        ctx.moveTo(-100000, pos[1]);
-        ctx.lineTo(100000, pos[1]);
+        ctx.moveTo(pos[0], -CROSSHAIR_LENGTH);
+        ctx.lineTo(pos[0], CROSSHAIR_LENGTH);
         ctx.stroke();
-        ctx.moveTo(pos[0], -100000);
-        ctx.lineTo(pos[0], 100000);
+        ctx.beginPath();
+        ctx.moveTo(-CROSSHAIR_LENGTH, pos[1]);
+        ctx.lineTo(CROSSHAIR_LENGTH, pos[1]);
         ctx.stroke();
     }
 }
 
-function crosshairOnSelection(canvas, layer) {
-    var pos = [];
-    if (highlighted_component !== -1) {
-        pos = pcbdata.footprints[highlighted_component].bbox.pos;
-        if (pcbdata.footprints[highlighted_component].layer == layer) {
-            crosshairOnPos(canvas, pos);
-        }
+function crosshairOnBox(layerdict, box) {
+    var canvas = layerdict.highlight;
+    var style = getComputedStyle(topmostdiv);
+    var ctx = canvas.getContext("2d");
+    var line_width;
+    var stroke_style;
+    if (layerdict.layer === "S") {
+        stroke_style = style.getPropertyValue("--schematic-crosshair-line-color");
+        line_width = style.getPropertyValue("--schematic-crosshair-line-width");
+    } else {
+        stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
+        line_width = style.getPropertyValue("--pcb-crosshair-line-width");
     }
-    if (highlighted_pin !== -1) {
-        console.log("Crosshair for pins WIP");
+    // scale line_width based on effective zoom
+    line_width /= layerdict.transform.s * layerdict.transform.zoom;
+
+    ctx.strokeStyle = stroke_style;
+    ctx.lineWidth = line_width;
+    ctx.beginPath();
+    ctx.moveTo((box[0] + box[2]) / 2, -CROSSHAIR_LENGTH);
+    ctx.lineTo((box[0] + box[2]) / 2, box[1]);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo((box[0] + box[2]) / 2, box[3]);
+    ctx.lineTo((box[0] + box[2]) / 2, CROSSHAIR_LENGTH);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
+    ctx.lineTo(box[0], (box[1] + box[3]) / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(box[2], (box[1] + box[3]) / 2);
+    ctx.lineTo(CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
+    ctx.stroke();
+}
+
+function drawCrosshair(layerdict) {
+    var box = target_boxes[layerdict.layer];
+    if (box === null || box.length === 0) {
+        return;
     }
-    if (highlighted_net !== null) {
-        console.log("Crosshair not available for nets");
-    }
+
+    crosshairOnBox(layerdict, bboxListSort(box));
 }
 
 function initPage() {
@@ -219,24 +241,24 @@ function initPage() {
     document.getElementById("projtitle").textContent = projtitle
 
     // Search field
-    searchInputField = document.getElementById("search-input");
+    search_input_field = document.getElementById("search-input");
     var searchlist = document.getElementById("search-content");
 
-    searchInputField.value = "";
-    searchInputField.addEventListener("focusin", () => {
+    search_input_field.value = "";
+    search_input_field.addEventListener("focusin", () => {
         searchlist.classList.remove("hidden");
     });
-    searchInputField.addEventListener("click", () => {
+    search_input_field.addEventListener("click", () => {
         searchlist.classList.remove("hidden");
     });
-    searchInputField.addEventListener("input", () => {
+    search_input_field.addEventListener("input", () => {
         searchlist.classList.remove("hidden");
     });
 
-    searchNavNum = document.getElementById("search-nav-num");
-    searchNavText = document.getElementById("search-nav-text");
-    searchNavNum.innerText = "0 of 0";
-    searchNavText.innerText = "";
+    search_nav_num = document.getElementById("search-nav-num");
+    search_nav_text = document.getElementById("search-nav-text");
+    search_nav_num.innerText = "0 of 0";
+    search_nav_text.innerText = "";
 
     for (let refid in compdict) {
         appendSelectionDiv(searchlist, refid, "comp");
@@ -337,7 +359,7 @@ function initPage() {
     findToggle.addEventListener("click", () => {
         if (findToggle.checked) {
             settings["find-activate"] = "auto";
-            console.log("AUTO ZOOM IS WIP")
+            // console.log("AUTO ZOOM IS WIP")
         } else {
             settings["find-activate"] = "key";
         }
@@ -354,6 +376,7 @@ function initPage() {
                 } else {
                     draw_crosshair = !draw_crosshair;
                     drawHighlights();
+                    drawSchematicHighlights();
                 }
             }
         }
@@ -421,51 +444,62 @@ function searchNav(dir) {
             }
         }
 
-        searchNavNum.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
+        search_nav_num.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
 
         if (highlighted_component !== -1) {
             let comp = compdict[highlighted_component];
             let unit = Object.values(comp.units)[search_nav_current[0] - 1];
-            searchNavText.innerText = `${comp.ref} ${unit.num}`;
-
-            if (settings["find-type"] === "zoom") {
-                zoomToBox(schematic_canvas, bboxListToObj(unit.bbox), view_minimums["sch"]["comp"]);
-
-                let footprint = pcbdata.footprints[ref_to_id[highlighted_component]];
-                let layerdict = footprint.layer == "F" ? allcanvas.front : allcanvas.back;
-                zoomToBox(layerdict, bboxPcbnewToObj(footprint.bbox), view_minimums["layout"]["footprint"]);
-            } else {
-                console.log("TODO comp xhair")
-            }
+            search_nav_text.innerText = `${comp.ref} ${unit.num}`;
 
             if (unit.schid != current_schematic) {
                 switchSchematic(unit.schid);
+            }
+
+            target_boxes["S"] = unit.bbox.map((i) => parseFloat(i));
+            let footprint = pcbdata.footprints[highlighted_component];
+            for (let layer of ["F", "B"]) {
+                // Do nothing to layer that doesn't have the component
+                target_boxes[layer] = footprint.layer == layer ? bboxPcbnewToList(footprint.bbox) : null;
+            }
+
+            if (settings["find-type"] === "zoom") {
+                zoomToTargetBoxes(VIEW_MINIMUMS["sch"]["comp"], VIEW_MINIMUMS["layout"]["footprint"]);
+            } else {
+                console.log("TODO comp xhair")
+                draw_crosshair = true;
+                drawHighlights();
+                drawSchematicHighlights();
             }
             // TODO emphasize this unit somehow
         }
         if (highlighted_net !== null) {
             let pin = pindict[netdict[highlighted_net]["pins"][search_nav_current[0] - 1]];
-            searchNavText.innerText = `${pin.ref}.${pin.num}`;
-
-            if (settings["find-type"] === "zoom") {
-                zoomToBox(schematic_canvas, bboxListToObj(pinBoxFromPos(pin.pos)), view_minimums["sch"]["pin"]);
-
-                for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
-                    if (pad.padname == pin.num) {
-                        let layerdict = pad.layers[0] == "F" ? allcanvas.front : allcanvas.back;
-                        if (pad.layers.length > 1) {
-                            logwarn(`ref ${pin.ref} pad ${pad.padname} has several layers`)
-                        }
-                        zoomToBox(layerdict, bboxPcbnewToObj(pad), view_minimums["layout"]["pad"]);
-                        break;
-                    }
-                }
-            } else {
-                console.log("TODO net xhair")
-            }
+            search_nav_text.innerText = `${pin.ref}.${pin.num}`;
 
             if (pin.schid != current_schematic) {
                 switchSchematic(pin.schid);
+            }
+
+            target_boxes["S"] = pinBoxFromPos(pin.pos);
+            for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
+                if (pad.padname == pin.num) {
+                    if (pad.layers.length > 1) {
+                        logwarn(`ref ${pin.ref} pad ${pad.padname} has several layers`)
+                    }
+                    for (let layer of ["F", "B"]) {
+                        target_boxes[layer] = pad.layers.includes(layer) ? bboxPcbnewToList(pad) : null;
+                    }
+                    break;
+                }
+            }
+
+            if (settings["find-type"] === "zoom") {
+                zoomToTargetBoxes(VIEW_MINIMUMS["sch"]["pin"], VIEW_MINIMUMS["layout"]["pad"]);
+            } else {
+                console.log("TODO net xhair")
+                draw_crosshair = true;
+                drawHighlights();
+                drawSchematicHighlights();
             }
             // TODO emphasize this pin somehow
         }
