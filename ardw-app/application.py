@@ -184,4 +184,8 @@ def handle_tool_measure(tooltype):
         emit("tool-measure", { "status": "good", "type": tooltype, "val": val })
 
 if __name__=="__main__":
-    socketio.run(app, debug=True)
+    port = 5000
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+        
+    socketio.run(app, port=port, debug=True)
