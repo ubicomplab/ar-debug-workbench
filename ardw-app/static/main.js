@@ -10,12 +10,6 @@ var search_nav_text = null;
 
 var search_nav_current = [0, 0];
 
-var draw_crosshair = false;
-var target_boxes = {
-    "S": null,
-    "F": null,
-    "B": null
-};
 
 // zoom and crosshair constants
 var VIEW_MINIMUMS = {
@@ -157,82 +151,6 @@ function zoomToSelection(layerdict) {
     }
 
     zoomToBox(layerdict, bboxListToObj(target_boxes[layerdict.layer]), targetsize);
-}
-
-function crosshairOnPos(layerdict, pos) {
-    var canvas = layerdict.highlight;
-    if (pos.length > 0) {
-        var style = getComputedStyle(topmostdiv);
-        var ctx = canvas.getContext("2d");
-
-        var line_width;
-        var stroke_style;
-        if (layerdict.layer === "S") {
-            stroke_style = style.getPropertyValue("--schematic-crosshair-line-color");
-            line_width = style.getPropertyValue("--schematic-crosshair-line-width");
-        } else {
-            stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
-            line_width = style.getPropertyValue("--pcb-crosshair-line-width");
-        }
-        // scale line_width based on effective zoom
-        line_width /= layerdict.transform.s * layerdict.transform.zoom;
-
-        ctx.strokeStyle = stroke_style;
-        ctx.lineWidth = line_width;
-        ctx.beginPath();
-        ctx.moveTo(pos[0], -CROSSHAIR_LENGTH);
-        ctx.lineTo(pos[0], CROSSHAIR_LENGTH);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-CROSSHAIR_LENGTH, pos[1]);
-        ctx.lineTo(CROSSHAIR_LENGTH, pos[1]);
-        ctx.stroke();
-    }
-}
-
-function crosshairOnBox(layerdict, box) {
-    var canvas = layerdict.highlight;
-    var style = getComputedStyle(topmostdiv);
-    var ctx = canvas.getContext("2d");
-    var line_width;
-    var stroke_style;
-    if (layerdict.layer === "S") {
-        stroke_style = style.getPropertyValue("--schematic-crosshair-line-color");
-        line_width = style.getPropertyValue("--schematic-crosshair-line-width");
-    } else {
-        stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
-        line_width = style.getPropertyValue("--pcb-crosshair-line-width");
-    }
-    // scale line_width based on effective zoom
-    line_width /= layerdict.transform.s * layerdict.transform.zoom;
-
-    ctx.strokeStyle = stroke_style;
-    ctx.lineWidth = line_width;
-    ctx.beginPath();
-    ctx.moveTo((box[0] + box[2]) / 2, -CROSSHAIR_LENGTH);
-    ctx.lineTo((box[0] + box[2]) / 2, box[1]);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo((box[0] + box[2]) / 2, box[3]);
-    ctx.lineTo((box[0] + box[2]) / 2, CROSSHAIR_LENGTH);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
-    ctx.lineTo(box[0], (box[1] + box[3]) / 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(box[2], (box[1] + box[3]) / 2);
-    ctx.lineTo(CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
-    ctx.stroke();
-}
-
-function drawCrosshair(layerdict) {
-    var box = target_boxes[layerdict.layer];
-    if (box === null || box.length === 0) {
-        return;
-    }
-
-    crosshairOnBox(layerdict, bboxListSort(box));
 }
 
 function initPage() {
@@ -396,6 +314,55 @@ function initPage() {
         }
         schSelectionDisplay.appendChild(div);
     }
+
+    var projectorCalibrateToggle = document.getElementById("settings-projector-calibrate");
+    // Make sure we start in the correct state
+    projectorCalibrateToggle.checked = false;
+
+    projectorCalibrateToggle.addEventListener("click", () => {
+        if (projectorCalibrateToggle.checked) {
+            socket.emit("projectormode", "calibrate");
+        } else {
+            socket.emit("projectormode", "highlight");
+        }
+    });
+
+    var projectorTx = document.getElementById("settings-projector-tx");
+    projectorTx.value = 0;
+    projectorTx.addEventListener("input", () => {
+        let val = projectorTx.value;
+        document.getElementById("settings-projector-tx-label").innerHTML = val + "mm";
+        socket.emit("projector-adjust", { "type": "tx", "val": val });
+    });
+
+    var projectorTy = document.getElementById("settings-projector-ty");
+    projectorTy.value = 0;
+    projectorTy.addEventListener("input", () => {
+        let val = projectorTy.value;
+        document.getElementById("settings-projector-ty-label").innerHTML = val + "mm";
+        socket.emit("projector-adjust", { "type": "ty", "val": val });
+    });
+
+    var projectorRotation = document.getElementById("settings-projector-rotation");
+    projectorRotation.value = 0;
+    projectorRotation.addEventListener("input", () => {
+        let val = projectorRotation.value * 5;
+        document.getElementById("settings-projector-rotation-label").innerHTML = val + "&deg;";
+        socket.emit("projector-adjust", { "type": "r", "val": val });
+    });
+
+    var projectorZoom = document.getElementById("settings-projector-zoom");
+    projectorZoom.value = 0;
+    projectorZoom.addEventListener("input", () => {
+        let val = projectorZoom.value;
+        if (val < 0) {
+            val = 1 + val / 10;
+        } else {
+            val = 1 + val;
+        }
+        document.getElementById("settings-projector-zoom-label").innerHTML = val * 100 + "%";
+        socket.emit("projector-adjust", { "type": "z", "val": val });
+    });
 }
 
 function searchBarHandler() {
@@ -611,6 +578,13 @@ function initSocket() {
             toolMeasurement(data["type"], data["val"]);
         }
     });
+    socket.on("projectormode", (mode) => {
+        if (mode === "calibrate") {
+            document.getElementById("settings-projector-calibrate").checked = true;
+        } else {
+            document.getElementById("settings-projector-calibrate").checked = false;
+        }
+    });
 }
 
 
@@ -626,12 +600,13 @@ window.onload = () => {
         pcbdata = datas[1];
 
         initUtils();
-
         initData();
 
         initPage();
 
-        initRender();
+        initLayout();
+        initSchematic();
+        initMouseHandlers();
 
         initSocket();
 

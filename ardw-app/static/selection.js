@@ -3,7 +3,6 @@
 var SCH_CLICK_BUFFER = 20; // how much of a buffer there is around the bbox of sch components
 var PIN_BBOX_SIZE = 50; // how big the bbox around a pin is
 
-
 var socket;
 
 var highlighted_component = -1; // refid
@@ -11,6 +10,13 @@ var highlighted_pin = -1; // pinidx
 var highlighted_net = null; // netname
 
 var sch_zoom_default; // different for each schematic sheet
+
+var draw_crosshair = false;
+var target_boxes = {
+    "S": null,
+    "F": null,
+    "B": null
+};
 
 
 function updateTargetBoxes() {

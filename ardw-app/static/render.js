@@ -26,6 +26,8 @@ var ibom_settings = {
   renderDnpOutline: false,
   renderTracks: false,
   renderZones: false,
+  renderDrawings: true,
+  renderEdgeCuts: true,
 }
 
 function deg2rad(deg) {
@@ -340,9 +342,11 @@ function drawFootprint(ctx, layer, scalefactor, footprint, padColor, padHoleColo
     }
   }
   // draw drawings
-  for (var drawing of footprint.drawings) {
-    if (drawing.layer == layer) {
-      drawDrawing(ctx, scalefactor, drawing.drawing, padColor);
+  if (ibom_settings.renderDrawings) {
+    for (var drawing of footprint.drawings) {
+      if (drawing.layer == layer) {
+        drawDrawing(ctx, scalefactor, drawing.drawing, padColor);
+      }
     }
   }
   // draw pads
@@ -392,7 +396,7 @@ function drawPins(canvas, layer) {
         padDrawn = true;
       }
     }
-    if (padDrawn) {
+    if (padDrawn && ibom_settings.renderPads) {
       // redraw all pad holes because some pads may overlap
       for (var pad of footprint.pads) {
         drawPadHole(ctx, pad, padHoleColor);
@@ -521,6 +525,51 @@ function drawNets(canvas, layer, highlight) {
   }
 }
 
+function crosshairOnBox(layerdict, box) {
+  var canvas = layerdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+  var line_width;
+  var stroke_style;
+  if (layerdict.layer === "S") {
+    stroke_style = style.getPropertyValue("--schematic-crosshair-line-color");
+    line_width = style.getPropertyValue("--schematic-crosshair-line-width");
+  } else {
+    stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
+    line_width = style.getPropertyValue("--pcb-crosshair-line-width");
+  }
+  // scale line_width based on effective zoom
+  line_width /= layerdict.transform.s * layerdict.transform.zoom;
+
+  ctx.strokeStyle = stroke_style;
+  ctx.lineWidth = line_width;
+  ctx.beginPath();
+  ctx.moveTo((box[0] + box[2]) / 2, -CROSSHAIR_LENGTH);
+  ctx.lineTo((box[0] + box[2]) / 2, box[1]);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo((box[0] + box[2]) / 2, box[3]);
+  ctx.lineTo((box[0] + box[2]) / 2, CROSSHAIR_LENGTH);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
+  ctx.lineTo(box[0], (box[1] + box[3]) / 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(box[2], (box[1] + box[3]) / 2);
+  ctx.lineTo(CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
+  ctx.stroke();
+}
+
+function drawCrosshair(layerdict) {
+  var box = target_boxes[layerdict.layer];
+  if (box === null || box.length === 0) {
+    return;
+  }
+
+  crosshairOnBox(layerdict, bboxListSort(box));
+}
+
 function drawHighlightsOnLayer(canvasdict, clear = true) {
   if (clear) {
     clearCanvas(canvasdict.highlight);
@@ -556,7 +605,9 @@ function drawBackground(canvasdict, clear = true) {
   drawFootprints(canvasdict.bg, canvasdict.layer,
     canvasdict.transform.s * canvasdict.transform.zoom, false);
 
-  drawEdgeCuts(canvasdict.bg, canvasdict.transform.s);
+  if (ibom_settings.renderEdgeCuts) {
+    drawEdgeCuts(canvasdict.bg, canvasdict.transform.s);
+  }
 
   var style = getComputedStyle(topmostdiv);
   var edgeColor = style.getPropertyValue('--silkscreen-edge-color');
@@ -681,14 +732,14 @@ function drawSchBox(ctx, box) {
 }
 
 function pinBoxFromPos(pos) {
-    pos = pos.map((p) => parseInt(p));
+  pos = pos.map((p) => parseInt(p));
 
-    return [
-        pos[0] - PIN_BBOX_SIZE,
-        pos[1] - PIN_BBOX_SIZE,
-        pos[0] + PIN_BBOX_SIZE,
-        pos[1] + PIN_BBOX_SIZE
-    ];
+  return [
+    pos[0] - PIN_BBOX_SIZE,
+    pos[1] - PIN_BBOX_SIZE,
+    pos[0] + PIN_BBOX_SIZE,
+    pos[1] + PIN_BBOX_SIZE
+  ];
 }
 
 function drawSchematicHighlights() {
@@ -749,6 +800,9 @@ function redrawCanvas(layerdict) {
 }
 
 function resizeCanvas(layerdict) {
+  if (layerdict === undefined) {
+    return;
+  }
   var canvasdivid = {
     "F": "front-canvas",
     "B": "back-canvas",
@@ -981,7 +1035,7 @@ function setBoardRotation(value) {
   resizeAll();
 }
 
-function initRender() {
+function initLayout() {
   allcanvas = {
     front: {
       transform: {
@@ -1018,9 +1072,9 @@ function initRender() {
       layer: "B",
     }
   };
-  addMouseHandlers(document.getElementById("front-canvas"), allcanvas.front);
-  addMouseHandlers(document.getElementById("back-canvas"), allcanvas.back);
+}
 
+function initSchematic() {
   schematic_canvas = {
     transform: {
       x: 0,
@@ -1052,6 +1106,10 @@ function initRender() {
     // resetTransform(schematic_canvas);
   };
   switchSchematic(1);
+}
 
+function initMouseHandlers() {
+  addMouseHandlers(document.getElementById("front-canvas"), allcanvas.front);
+  addMouseHandlers(document.getElementById("back-canvas"), allcanvas.back);
   addMouseHandlers(document.getElementById("schematic-canvas"), schematic_canvas);
 }

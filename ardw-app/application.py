@@ -64,11 +64,11 @@ def main_page():
         "main.html",
         css=url_for("static", filename="style.css"),
         icon=url_for("static", filename="favicon.ico"),
-        splitjs=url_for("static", filename="split.min.js"),
         socketiojs=url_for("static", filename="socket.io.min.js"),
+        splitjs=url_for("static", filename="split.min.js"),
         utiljs=url_for("static", filename="util.js"),
-        selectionjs=url_for("static", filename="selection.js"),
         renderjs=url_for("static", filename="render.js"),
+        selectionjs=url_for("static", filename="selection.js"),
         mainjs=url_for("static", filename="main.js")
     )
 
@@ -78,7 +78,10 @@ def projector_page():
         "projector.html",
         css=url_for("static", filename="style.css"),
         icon=url_for("static", filename="favicon.ico"),
+        socketiojs=url_for("static", filename="socket.io.min.js"),
+        utiljs=url_for("static", filename="util.js"),
         renderjs=url_for("static", filename="render.js"),
+        selectionjs=url_for("static", filename="selection.js"),
         projjs=url_for("static", filename="projector.js")
     )
 
@@ -124,7 +127,13 @@ selection = {
     "net": None
 }
 # for now keeping settings local
-app_settings = {}
+app_settings = {
+    "projectormode": "highlight",
+    "projector-tx": 0,
+    "projector-ty": 0,
+    "projector-r": 0,
+    "projector-z": 1
+}
 ibom_settings = {}
 # Server tracks connected tools
 tools = {
@@ -145,6 +154,9 @@ def handle_connect():
         emit("selection", { "type": "pin", "val": selection["pin"] })
     elif selection["net"] != None:
         emit("selection", { "type": "net", "val": selection["net"] })
+
+    for k, v in app_settings.items():
+        emit(k, v)
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -182,6 +194,21 @@ def handle_tool_measure(tooltype):
         val = tools[tooltype].measure()
         # only send back to client that requested it
         emit("tool-measure", { "status": "good", "type": tooltype, "val": val })
+
+@socketio.on("projectormode")
+def handle_projectormode(mode):
+    global app_settings
+    logging.info(f"Changing projector mode to {mode}")
+    app_settings["projectormode"] = mode
+    socketio.emit("projectormode", mode)
+
+@socketio.on("projector-adjust")
+def handle_projector_adjust(adjust):
+    global app_settings
+    logging.info(f"Received projector adjust {adjust}")
+    app_settings[adjust["type"]] = adjust["val"]
+    socketio.emit("projector-adjust", adjust)
+
 
 if __name__=="__main__":
     port = 5000

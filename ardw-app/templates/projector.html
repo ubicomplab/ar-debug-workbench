@@ -8,8 +8,32 @@
 </head>
 
 <body>
-    <div>Projector</div>
+    <div id="topmostdiv">
+        <div id="projector">
+            <div id="layout-div">
+                <div id="front-canvas" touch-action="none">
+                    <div class="canvas-container">
+                        <canvas id="F_bg" style="z-index: 10"></canvas>
+                        <canvas id="F_fab" style="z-index: 11"></canvas>
+                        <canvas id="F_slk" style="z-index: 12"></canvas>
+                        <canvas id="F_hl" style="z-index: 13"></canvas>
+                    </div>
+                </div>
+                <div id="back-canvas" class="hidden" touch-action="none">
+                    <div class="canvas-container">
+                        <canvas id="B_bg" style="z-index: 10"></canvas>
+                        <canvas id="B_fab" style="z-index: 11"></canvas>
+                        <canvas id="B_slk" style="z-index: 12"></canvas>
+                        <canvas id="B_hl" style="z-index: 13"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{socketiojs}}"></script>
+    <script src="{{utiljs}}"></script>
     <script src="{{renderjs}}"></script>
+    <script src="{{selectionjs}}"></script>
     <script src="{{projjs}}"></script>
 </body>
 

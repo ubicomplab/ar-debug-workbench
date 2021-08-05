@@ -105,6 +105,8 @@ html, body {
     z-index: 100;
     padding: 8px;
     text-align: center;
+    max-height: 85vh;
+    overflow-y: scroll;
 }
 
 #menubar #settings:hover #settings-btn {
@@ -329,6 +331,14 @@ div.canvas-container>canvas {
 }
 #sch-selection div.current.has-selection span {
     color: #007bff;
+}
+
+
+#projector #layout-div {
+    height: 100vh;
+}
+#projector #layout-div>div {
+    height: 100%;
 }
 
 /* split.js */
