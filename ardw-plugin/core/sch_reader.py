@@ -1,6 +1,7 @@
 # Reads in a .sch and a cache.lib file from EEschema and writes
 # components and their bounding boxes to a .json file
 
+import os
 import sys
 from .sexpdata import Symbol, loads, car, cdr
 
@@ -644,6 +645,8 @@ def getraw(s):
 
 
 def parseNetFile(filepath):
+    if not os.path.isfile(filepath):
+        return []
     nets = []
     with open(filepath) as file:
         data = loads(file.read())
