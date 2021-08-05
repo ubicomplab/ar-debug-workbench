@@ -535,7 +535,7 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
   if (highlighted_net !== null) {
     drawNets(canvasdict.highlight, canvasdict.layer, true);
   }
-  if (drawCrosshair) {
+  if (draw_crosshair) {
     crosshairOnSelection(canvasdict.highlight, canvasdict.layer);
   }
 }
@@ -1041,8 +1041,10 @@ function initRender() {
   schematic_canvas.highlight.height *= ratio;
 
   schematic_canvas.img.onload = function () {
-    drawCanvasImg(schematic_canvas, 0, 0);
-    resetTransform(schematic_canvas);
+    redrawCanvas(schematic_canvas);
+
+    // Smoother transition, but screws with auto zoom when switching sheets
+    // resetTransform(schematic_canvas);
   };
   switchSchematic(1);
 

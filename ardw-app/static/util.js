@@ -15,7 +15,7 @@ var current_schematic; // schid (starts at 1)
 
 var settings = {
     "log-error": true,
-    "log-warning": false,
+    "log-warning": true,
     "find-activate": "key", // 'key', 'auto'
     "find-type": "zoom"     // 'zoom', 'xhair'
 };
@@ -276,4 +276,38 @@ function initData() {
             }
         }
     }
+}
+
+// Functions to convert between different bbox formats
+//      list: [x1, y1, x2, y2]
+//      obj: {"minx", "miny", "maxx", "maxy"}
+//      pcbnew: {"pos", "relpos", "angle", "size"}
+function bboxListToObj(bbox) {
+    return {
+        "minx": Math.min(bbox[0], bbox[2]),
+        "miny": Math.min(bbox[1], bbox[3]),
+        "maxx": Math.max(bbox[0], bbox[2]),
+        "maxy": Math.max(bbox[1], bbox[3])
+    };
+}
+function bboxObjToList(bbox) {
+    return [bbox.minx, bbox.miny, bbox.maxx, bbox.maxy];
+}
+function bboxPcbnewToList(bbox) {
+    // footprint.bbox or .pad
+    var relpos = bbox.relpos !== undefined ? bbox.relpos : [0, 0];
+
+    var corner1 = [relpos[0], relpos[1]];
+    var corner2 = [relpos[0] + bbox.size[0], relpos[1] + bbox.size[1]];
+    corner1 = rotateVector(corner1, bbox.angle);
+    corner2 = rotateVector(corner2, bbox.angle);
+    return [
+        Math.min(corner1[0], corner2[0]) + bbox.pos[0],
+        Math.min(corner1[1], corner2[1]) + bbox.pos[1],
+        Math.max(corner1[0], corner2[0]) + bbox.pos[0],
+        Math.max(corner1[1], corner2[1]) + bbox.pos[1]
+    ];
+}
+function bboxPcbnewToObj(bbox) {
+    return bboxListToObj(bboxPcbnewToList(bbox));
 }

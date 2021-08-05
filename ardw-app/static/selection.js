@@ -44,10 +44,10 @@ function selectComponent(refid) {
     for (let _ in compdict[selected].units) {
         numunits++;
     }
-    searchNavCurrent = [1, numunits];
-    searchNavNum.innerText = `1 of ${searchNavCurrent[1]}`;
+    search_nav_current = [1, numunits];
+    searchNavNum.innerText = `1 of ${search_nav_current[1]}`;
 
-    if (searchNavCurrent[1] > 1) {
+    if (search_nav_current[1] > 1) {
         searchNavText.innerText = `${compdict[selected].ref} ${Object.values(compdict[selected].units)[0].num}`;
     } else {
         searchNavText.innerText = "";
@@ -57,7 +57,7 @@ function selectComponent(refid) {
         if (settings["find-type"] === "zoom") {
             zoomToSelection(schematic_canvas);
         } else {
-            drawCrosshair = true;
+            draw_crosshair = true;
         }
     }
 
@@ -88,7 +88,7 @@ function selectPins(pin_hits) {
     });
 
     searchInputField.value = `Pin ${pindict[selected].ref}.${pindict[selected].num}`;
-    searchNavCurrent = [1, 1];
+    search_nav_current = [1, 1];
     searchNavNum.innerText = "1 of 1";
     searchNavText.innerText = "";
 
@@ -96,7 +96,7 @@ function selectPins(pin_hits) {
         if (settings["find-type"] === "zoom") {
             zoomToSelection(schematic_canvas);
         } else {
-            drawCrosshair = true;
+            draw_crosshair = true;
         }
     }
 
@@ -130,8 +130,8 @@ function selectNet(netname) {
 
     searchInputField.value = `Net ${netname}`;
 
-    searchNavCurrent = [1, netdict[netname]["pins"].length];
-    searchNavNum.innerText = `${searchNavCurrent[0]} of ${searchNavCurrent[1]}`;
+    search_nav_current = [1, netdict[netname]["pins"].length];
+    searchNavNum.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
 
     var pin1 = pindict[netdict[netname]["pins"][0]];
     searchNavText.innerText = `${pin1.ref}.${pin1.num}`;
@@ -140,7 +140,7 @@ function selectNet(netname) {
         if (settings["find-type"] === "zoom") {
             zoomToSelection(schematic_canvas);
         } else {
-            drawCrosshair = true;
+            draw_crosshair = true;
         }
     }
 
@@ -152,13 +152,13 @@ function deselectAll(redraw) {
     highlighted_component = -1;
     highlighted_pin = -1;
     highlighted_net = null;
-    drawCrosshair = false;
+    draw_crosshair = false;
     if (redraw) {
         document.querySelectorAll("#sch-selection>div").forEach((div) => {
             div.classList.remove("has-selection");
         });
         searchInputField.value = "";
-        searchNavCurrent = [0, 0];
+        search_nav_current = [0, 0];
         searchNavNum.innerText = "0 of 0";
         searchNavText.innerText = "";
 
@@ -537,5 +537,10 @@ function switchSchematic(schid) {
 
     sch_zoom_default = Math.min(xfactor, yfactor) / schematic_canvas.transform.s;
 
+    // Triggers redraw
     schematic_canvas.img.src = `http://${window.location.host}/sch${schid}`;
+
+    clearCanvas(schematic_canvas.bg);
+    clearCanvas(schematic_canvas.highlight);
+    resetTransform(schematic_canvas);
 }

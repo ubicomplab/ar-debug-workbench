@@ -5,18 +5,29 @@ var searchInputField = null;
 var searchNavNum = null;
 var searchNavText = null;
 
-var searchNavCurrent = [0, 0];
+var search_nav_current = [0, 0];
 
-var drawCrosshair = false;
-
-var sch_view_minimums = {
-    "comp": 0.1,
-    "pin": 0.04,
-    "net": 0.5
+var draw_crosshair = false;
+var target_boxes = {
+    "S": null,
+    "F": null,
+    "B": null
 };
-var sch_view_maximum = 0.8;
 
-var sidebarShown = false;
+var view_minimums = {
+    "sch": {
+        "comp": 0.1,
+        "pin": 0.04,
+        "net": 0.5
+    },
+    "layout": {
+        "footprint": 0.1,
+        "pad": 0.02
+    }
+};
+var view_maximum = 0.8;
+
+var sidebar_shown = false;
 sidebar_split = Split(["#display", "#sidebar"], {
     sizes: [100, 0],
     minSize: 0,
@@ -43,92 +54,21 @@ var tools = {
     "osc": false
 }
 
-
-function rawBoxFromFootprint(footprint) {
-    var bbox = footprint.bbox;
-    var corner1 = [bbox.relpos[0], bbox.relpos[1]];
-    var corner2 = [bbox.relpos[0] + bbox.size[0], bbox.relpos[1] + bbox.size[1]];
-    corner1 = rotateVector(corner1, bbox.angle);
-    corner2 = rotateVector(corner2, bbox.angle);
-    return [
-        Math.min(corner1[0], corner2[0]) + bbox.pos[0],
-        Math.min(corner1[1], corner2[1]) + bbox.pos[1],
-        Math.max(corner1[0], corner2[0]) + bbox.pos[0],
-        Math.max(corner1[1], corner2[1]) + bbox.pos[1]
-    ];
-}
-
-function zoomToSelection(layerdict) {
-    console.log(`Finding selection for layer ${layerdict.layer}`);
-    var t = layerdict.transform;
-    // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
-
-    var boxes = [];
-    var targetsize;
-
-    if (layerdict.layer === "S") {
-        if (highlighted_component !== -1) {
-            var comp = compdict[highlighted_component];
-            for (let unitnum in comp.units) {
-                let unit = comp.units[unitnum];
-                if (unit.schid == current_schematic) {
-                    boxes.push(unit.bbox);
-                }
-            }
-            targetsize = sch_view_minimums["comp"];
-        }
-        if (highlighted_pin !== -1) {
-            var pin = pindict[highlighted_pin];
-            if (pin.schid == current_schematic) {
-                boxes.push(pinBoxFromPos(pin.pos));
-            }
-            targetsize = sch_view_minimums["pin"];
-        }
-        if (highlighted_net !== null) {
-            for (let pinidx in pindict) {
-                let pin = pindict[pinidx];
-                if (pin.schid == current_schematic && pin.net == highlighted_net) {
-                    boxes.push(pinBoxFromPos(pin.pos));
-                }
-            }
-            targetsize = sch_view_minimums["net"];
-        }
-    } else {
-        // layout canvas F or B
-        if (highlighted_component !== -1) {
-            var footprint = pcbdata.footprints[highlighted_component];
-            if (layerdict.layer == footprint.layer) {
-                boxes = [rawBoxFromFootprint(footprint)];
-                targetsize = sch_view_minimums["comp"];
-            }
-        }
-        if (highlighted_pin !== -1) {
-            console.log("Pin zooming is WIP");
-        }
-        if (highlighted_net !== null) {
-            console.log("Net zooming is WIP");
-        }
+// Expects bbox in obj form (see util.js)
+// bbox should not be rotated to match layout rotation
+function zoomToBox(layerdict, bbox, targetsize) {
+    if (layerdict.layer !== "S") {
+        bbox = applyRotation(bbox);
     }
 
-    if (boxes.length == 0) {
-        return;
-    }
+    var minwidth = bbox["maxx"] - bbox["minx"];
+    var minheight = bbox["maxy"] - bbox["miny"];
+    var centerx = (bbox["minx"] + bbox["maxx"]) / 2;
+    var centery = (bbox["miny"] + bbox["maxy"]) / 2;
+    // console.log(`min window is ${minwidth}x${minheight} at (${centerx},${centery})`);
 
-    var extremes = [1000000, 1000000, 0, 0];
-    for (let box of boxes) {
-        extremes[0] = Math.min(extremes[0], box[0], box[2]);
-        extremes[1] = Math.min(extremes[1], box[1], box[3]);
-        extremes[2] = Math.max(extremes[2], box[0], box[2]);
-        extremes[3] = Math.max(extremes[3], box[1], box[3]);
-    }
-    var minwidth = extremes[2] - extremes[0];
-    var minheight = extremes[3] - extremes[1];
-    var centerx = (extremes[0] + extremes[2]) / 2;
-    var centery = (extremes[1] + extremes[3]) / 2;
-    console.log(`min window is ${minwidth}x${minheight} at (${centerx},${centery})`);
-
-    var viewwidth = layerdict.bg.width / (t.zoom * t.s);
-    var viewheight = layerdict.bg.height / (t.zoom * t.s);
+    var viewwidth = layerdict.bg.width / (layerdict.transform.zoom * layerdict.transform.s);
+    var viewheight = layerdict.bg.height / (layerdict.transform.zoom * layerdict.transform.s);
 
     var xrat = minwidth / viewwidth;
     var yrat = minheight / viewheight;
@@ -136,9 +76,9 @@ function zoomToSelection(layerdict) {
     var maxrat = Math.max(xrat, yrat);
 
     // Only zoom if the target will be too small or too large
-    if (maxrat < targetsize || maxrat > sch_view_maximum) {
-        if (maxrat > sch_view_maximum) {
-            targetsize = sch_view_maximum;
+    if (maxrat < targetsize || maxrat > view_maximum) {
+        if (maxrat > view_maximum) {
+            targetsize = view_maximum;
         }
         var schdim = schdata.schematics[schid_to_idx[current_schematic]].dimensions;
         var xzoom = schdim.x * sch_zoom_default * targetsize / minwidth;
@@ -151,19 +91,94 @@ function zoomToSelection(layerdict) {
     }
 
     // Always pan
-    var newvw = layerdict.bg.width / (layerdict.transform.zoom * t.s);
-    var newvh = layerdict.bg.height / (layerdict.transform.zoom * t.s);
+    var newvw = layerdict.bg.width / (layerdict.transform.zoom * layerdict.transform.s);
+    var newvh = layerdict.bg.height / (layerdict.transform.zoom * layerdict.transform.s);
 
-    var newpx = ((newvw / 2) - centerx) * t.s - t.x;
+    var newpx = ((newvw / 2) - centerx) * layerdict.transform.s - layerdict.transform.x;
     var flip = (layerdict.layer == "B")
     if (flip) {
         newpx = -newpx + (layerdict.bg.width / layerdict.transform.zoom);
     }
-    var newpy = ((newvh / 2) - centery) * t.s - t.y;
+    var newpy = ((newvh / 2) - centery) * layerdict.transform.s - layerdict.transform.y;
     layerdict.transform.panx = newpx;
     layerdict.transform.pany = newpy;
 
-    resizeAll();
+    redrawCanvas(layerdict);
+}
+
+function zoomToSelection(layerdict) {
+    // console.log(`Finding selection for layer ${layerdict.layer}`);
+    // console.log(`current transform px / py / z is ${t.panx} / ${t.pany} / ${t.zoom}`);
+
+    var boxes = [];
+    var targetsize;
+
+    if (layerdict.layer === "S") {
+        if (highlighted_component !== -1) {
+            targetsize = view_minimums["sch"]["comp"];
+            var comp = compdict[highlighted_component];
+            for (let unitnum in comp.units) {
+                let unit = comp.units[unitnum];
+                if (unit.schid == current_schematic) {
+                    boxes.push(unit.bbox);
+                }
+            }
+        }
+        if (highlighted_pin !== -1) {
+            targetsize = view_minimums["sch"]["pin"];
+            var pin = pindict[highlighted_pin];
+            if (pin.schid == current_schematic) {
+                boxes.push(pinBoxFromPos(pin.pos));
+            }
+        }
+        if (highlighted_net !== null) {
+            targetsize = view_minimums["sch"]["net"];
+            for (let pinidx in pindict) {
+                let pin = pindict[pinidx];
+                if (pin.schid == current_schematic && pin.net == highlighted_net) {
+                    boxes.push(pinBoxFromPos(pin.pos));
+                }
+            }
+        }
+    } else {
+        // layout canvas F or B
+        if (highlighted_component !== -1) {
+            targetsize = view_minimums["sch"]["comp"];
+            var footprint = pcbdata.footprints[highlighted_component];
+            if (layerdict.layer == footprint.layer) {
+                boxes = [bboxPcbnewToList(footprint.bbox)];
+            }
+        }
+        if (highlighted_pin !== -1) {
+            let pin = pindict[highlighted_pin];
+            for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
+                if (pad.padname == pin.num) {
+                    if (pad.layers.includes(layerdict.layer)) {
+                        zoomToBox(layerdict, bboxPcbnewToObj(pad), view_minimums["layout"]["pad"]);
+                    }
+                    break;
+                }
+            }
+        }
+        if (highlighted_net !== null) {
+            console.log("Net zooming is WIP");
+            resetTransform(layerdict);
+        }
+    }
+
+    if (boxes.length == 0) {
+        return;
+    }
+
+    var extremes = [Infinity, Infinity, -Infinity, -Infinity];
+    for (let box of boxes) {
+        extremes[0] = Math.min(extremes[0], box[0], box[2]);
+        extremes[1] = Math.min(extremes[1], box[1], box[3]);
+        extremes[2] = Math.max(extremes[2], box[0], box[2]);
+        extremes[3] = Math.max(extremes[3], box[1], box[3]);
+    }
+
+    zoomToBox(layerdict, bboxListToObj(extremes), targetsize);
 }
 
 function crosshairOnPos(canvas, pos) {
@@ -337,7 +352,7 @@ function initPage() {
                     zoomToSelection(allcanvas.front);
                     zoomToSelection(allcanvas.back);
                 } else {
-                    drawCrosshair = !drawCrosshair;
+                    draw_crosshair = !draw_crosshair;
                     drawHighlights();
                 }
             }
@@ -392,32 +407,63 @@ function searchBarX() {
 }
 
 function searchNav(dir) {
-    if (searchNavCurrent[1] > 1) {
+    if (search_nav_current[1] > 1) {
         // We have a multi-part selection
         if (dir === "L") {
-            searchNavCurrent[0] -= 1;
+            search_nav_current[0] -= 1;
+            if (search_nav_current[0] === 0) {
+                search_nav_current[0] = search_nav_current[1];
+            }
         } else {
-            searchNavCurrent[0] += 1;
+            search_nav_current[0] += 1;
+            if (search_nav_current[0] > search_nav_current[1]) {
+                search_nav_current[0] = 1;
+            }
         }
-        if (searchNavCurrent[0] === 0) {
-            searchNavCurrent[0] = searchNavCurrent[1];
-        } else if (searchNavCurrent[0] > searchNavCurrent[1]) {
-            searchNavCurrent[0] = 1;
-        }
-        searchNavNum.innerText = `${searchNavCurrent[0]} of ${searchNavCurrent[1]}`;
+
+        searchNavNum.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
 
         if (highlighted_component !== -1) {
             let comp = compdict[highlighted_component];
-            let unit = Object.values(comp.units)[searchNavCurrent[0] - 1];
+            let unit = Object.values(comp.units)[search_nav_current[0] - 1];
             searchNavText.innerText = `${comp.ref} ${unit.num}`;
+
+            if (settings["find-type"] === "zoom") {
+                zoomToBox(schematic_canvas, bboxListToObj(unit.bbox), view_minimums["sch"]["comp"]);
+
+                let footprint = pcbdata.footprints[ref_to_id[highlighted_component]];
+                let layerdict = footprint.layer == "F" ? allcanvas.front : allcanvas.back;
+                zoomToBox(layerdict, bboxPcbnewToObj(footprint.bbox), view_minimums["layout"]["footprint"]);
+            } else {
+                console.log("TODO comp xhair")
+            }
+
             if (unit.schid != current_schematic) {
                 switchSchematic(unit.schid);
             }
             // TODO emphasize this unit somehow
         }
         if (highlighted_net !== null) {
-            let pin = pindict[netdict[highlighted_net]["pins"][searchNavCurrent[0] - 1]];
+            let pin = pindict[netdict[highlighted_net]["pins"][search_nav_current[0] - 1]];
             searchNavText.innerText = `${pin.ref}.${pin.num}`;
+
+            if (settings["find-type"] === "zoom") {
+                zoomToBox(schematic_canvas, bboxListToObj(pinBoxFromPos(pin.pos)), view_minimums["sch"]["pin"]);
+
+                for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
+                    if (pad.padname == pin.num) {
+                        let layerdict = pad.layers[0] == "F" ? allcanvas.front : allcanvas.back;
+                        if (pad.layers.length > 1) {
+                            logwarn(`ref ${pin.ref} pad ${pad.padname} has several layers`)
+                        }
+                        zoomToBox(layerdict, bboxPcbnewToObj(pad), view_minimums["layout"]["pad"]);
+                        break;
+                    }
+                }
+            } else {
+                console.log("TODO net xhair")
+            }
+
             if (pin.schid != current_schematic) {
                 switchSchematic(pin.schid);
             }
@@ -451,7 +497,7 @@ function addTool(type) {
         case "dmm":
             text = "Multimeter";
             div.addEventListener("click", () => {
-                if (sidebarShown) {
+                if (sidebar_shown) {
                     sidebar_split.collapse(1);
                 } else {
                     sidebar_split.setSizes([80, 20]);
@@ -459,13 +505,13 @@ function addTool(type) {
                 document.getElementById("sidebar-dmm").classList.remove("hidden");
                 document.getElementById("sidebar-osc").classList.add("hidden");
                 resizeAll();
-                sidebarShown = !sidebarShown;
+                sidebar_shown = !sidebar_shown;
             })
             break;
         case "osc":
             text = "Oscilloscope";
             div.addEventListener("click", () => {
-                if (sidebarShown) {
+                if (sidebar_shown) {
                     sidebar_split.collapse(1);
                 } else {
                     sidebar_split.setSizes([80, 20]);
@@ -473,7 +519,7 @@ function addTool(type) {
                 document.getElementById("sidebar-dmm").classList.add("hidden");
                 document.getElementById("sidebar-osc").classList.remove("hidden");
                 resizeAll();
-                sidebarShown = !sidebarShown;
+                sidebar_shown = !sidebar_shown;
             })
             break;
     }
