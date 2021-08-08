@@ -72,9 +72,10 @@
                             Zones
                             <input type="checkbox" name="settings-render" value="renderZones" />
                         </div>
-                        <div class="settings-item">
-                            <span style="float:left">Rotation</span>
-                            <span id="settings-rotation-label" style="float:right">0&deg;</span>
+                        <div class="settings-item slider-item">
+                            <span>Board Rotation</span>
+                            <input type="text" id="settings-rotation-label" value="0"/>&deg;
+                            <br />
                             <input type="range" id="settings-rotation" value="0" min="-36" max="36" />
                         </div>
                         <div class="settings-label">Find Selection Options</div>
@@ -92,10 +93,6 @@
                             <input type="radio" name="settings-find" value="xhair">
                             <label for="settings-find-xhair">Crosshair</label>
                         </div>
-                        <div class="settings-label">Add Tool</div>
-                        <div class="settings-item button" onclick="requestTool('ptr')">Pointer</div>
-                        <div class="settings-item button" onclick="requestTool('dmm')">DMM</div>
-                        <div class="settings-item button" onclick="requestTool('osc')">Oscilloscope</div>
                         <div class="settings-label">Projector</div>
                         <div class="settings-item">
                             Calibrate
@@ -104,25 +101,32 @@
                                 <span class="slider"></span>
                             </label>
                         </div>
-                        <div class="settings-item">
-                            <span style="float:left">Translate X</span>
-                            <span id="settings-projector-tx-label" style="float:right">0mm</span>
-                            <input type="range" id="settings-projector-tx" value="0" min="-100" max="100" />
+                        <div class="settings-item button" id="settings-projector-reset">
+                            Reset All
                         </div>
-                        <div class="settings-item">
-                            <span style="float:left">Translate Y</span>
-                            <span id="settings-projector-ty-label" style="float:right">0mm</span>
-                            <input type="range" id="settings-projector-ty" value="0" min="-100" max="100" />
+                        <div class="settings-item slider-item">
+                            <span>Translate X</span>
+                            <input type="text" id="settings-projector-tx-label" value="0" />mm
+                            <br />
+                            <input type="range" id="settings-projector-tx" value="0" min="-200" max="200" />
                         </div>
-                        <div class="settings-item">
-                            <span style="float:left">Rotation</span>
-                            <span id="settings-projector-rotation-label" style="float:right">0&deg;</span>
-                            <input type="range" id="settings-projector-rotation" value="0" min="-36" max="36" />
+                        <div class="settings-item slider-item">
+                            <span>Translate Y</span>
+                            <input type="text" id="settings-projector-ty-label" value="0" />mm
+                            <br />
+                            <input type="range" id="settings-projector-ty" value="0" min="-200" max="200" />
                         </div>
-                        <div class="settings-item">
-                            <span style="float:left">Zoom</span>
-                            <span id="settings-projector-zoom-label" style="float:right">100%</span>
-                            <input type="range" id="settings-projector-zoom" value="0" min="-9" max="9" />
+                        <div class="settings-item slider-item">
+                            <span>Rotation</span>
+                            <input type="text" id="settings-projector-rotation-label" value="0" />&deg;
+                            <br />
+                            <input type="range" id="settings-projector-rotation" value="0" min="-180" max="180" />
+                        </div>
+                        <div class="settings-item slider-item">
+                            <span>Scale</span>
+                            <input type="text" id="settings-projector-zoom-label" value="100">%
+                            <br />
+                            <input type="range" id="settings-projector-zoom" value="100" min="10" max="1000" />
                         </div>
                     </div>
                 </div>

@@ -86,7 +86,7 @@ function initSocket() {
                 break;
         }
     });
-    socket.on("projectormode", (mode) => {
+    socket.on("projector-mode", (mode) => {
         if (mode === "calibrate") {
             ibom_settings["renderDrawings"] = true;
             ibom_settings["renderEdgeCuts"] = true;

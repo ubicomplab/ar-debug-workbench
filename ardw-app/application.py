@@ -126,13 +126,13 @@ selection = {
     "pin": -1,
     "net": None
 }
-# for now keeping settings local
-app_settings = {
-    "projectormode": "highlight",
-    "projector-tx": 0,
-    "projector-ty": 0,
-    "projector-r": 0,
-    "projector-z": 1
+app_settings = {}
+projector_mode = "calibrate"
+projector_calibration = {
+    "tx": 0,
+    "ty": 0,
+    "r": 0,
+    "z": 1
 }
 ibom_settings = {}
 # Server tracks connected tools
@@ -144,7 +144,8 @@ tools = {
 
 @socketio.on("connect")
 def handle_connect():
-    global active_connections, selection
+    global active_connections, selection, projector_mode, projector_calibration
+
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
 
@@ -155,8 +156,9 @@ def handle_connect():
     elif selection["net"] != None:
         emit("selection", { "type": "net", "val": selection["net"] })
 
-    for k, v in app_settings.items():
-        emit(k, v)
+    emit("projector-mode", projector_mode)
+    for k, v in projector_calibration.items():
+        emit("projector-adjust", { "type": k, "val": v })
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -195,18 +197,18 @@ def handle_tool_measure(tooltype):
         # only send back to client that requested it
         emit("tool-measure", { "status": "good", "type": tooltype, "val": val })
 
-@socketio.on("projectormode")
+@socketio.on("projector-mode")
 def handle_projectormode(mode):
-    global app_settings
+    global projector_mode
     logging.info(f"Changing projector mode to {mode}")
-    app_settings["projectormode"] = mode
-    socketio.emit("projectormode", mode)
+    projector_mode = mode
+    socketio.emit("projector-mode", mode)
 
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
-    global app_settings
+    global projector_calibration
     logging.info(f"Received projector adjust {adjust}")
-    app_settings[adjust["type"]] = adjust["val"]
+    projector_calibration[adjust["type"]] = adjust["val"]
     socketio.emit("projector-adjust", adjust)
 
 

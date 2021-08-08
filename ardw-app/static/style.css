@@ -130,12 +130,35 @@ html, body {
     margin-bottom: 2px;
 }
 
-#menubar .settings-item.button {
+#menubar .button {
     cursor: pointer;
+    user-select: none;
+    padding: 2px;
 }
 
-#menubar .settings-item.button:hover {
+#menubar .button:hover {
     background-color: #eee;
+}
+
+#menubar .slider-item {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: right;
+    font-size: 10pt;
+}
+
+#menubar .slider-item>span {
+    float: left;
+    font-size: 12pt;
+}
+
+#menubar .slider-item>input[type=range] {
+    width: 100%;
+}
+
+#menubar .slider-item>input[type=text] {
+    width: 30px;
+    text-align: right;
 }
 
 .toggle {
@@ -242,14 +265,8 @@ input:checked+.slider:before {
 }
 
 #menubar #search-nav span.button {
-    padding: 1px 4px;
-    cursor: pointer;
     font-size: 12pt;
-    user-select: none;
-}
-
-#menubar #search-nav span.button:hover {
-    background-color: #eee;
+    padding: 1px 4px;
 }
 
 #display {
