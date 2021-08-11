@@ -71,10 +71,14 @@ html, body {
     display: flex;
 }
 
-#menubar #tools>div {
-    padding: 2px;
-    border: 1px solid #eee;
-    margin: 0 2px;
+.button.tool-button {
+    margin: 0 4px;
+    padding: 4px;
+    border: 2px solid #eee;
+    border-radius: 8px;
+    box-sizing: border-box;
+    /* width: 70px; */
+    text-align: center;
 }
 
 #menubar #search, #menubar #settings {
@@ -130,14 +134,18 @@ html, body {
     margin-bottom: 2px;
 }
 
-#menubar .button {
+.button {
     cursor: pointer;
     user-select: none;
     padding: 2px;
 }
 
-#menubar .button:hover {
+.button:hover {
     background-color: #eee;
+}
+
+.button.ready, button.tool-button.ready {
+    border-color: #007bff;
 }
 
 #menubar .slider-item {
@@ -267,6 +275,7 @@ input:checked+.slider:before {
 #menubar #search-nav span.button {
     font-size: 12pt;
     padding: 1px 4px;
+    border: none;
 }
 
 #display {
@@ -350,6 +359,36 @@ div.canvas-container>canvas {
     color: #007bff;
 }
 
+#tool-popup {
+    position: absolute;
+    border: 2px solid #eee;
+    border-radius: 8px;
+    background-color: white;
+    z-index: 100;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 16px 20px;
+}
+
+#tool-popup>span {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+#tool-popup #tool-popup-title {
+    margin-bottom: 10px;
+    font-size: 14pt;
+}
+
+#tool-popup #tool-popup-buttons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
 
 #projector #layout-div {
     height: 100vh;

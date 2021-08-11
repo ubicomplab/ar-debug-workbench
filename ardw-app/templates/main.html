@@ -14,7 +14,11 @@
                 <h1 id="projtitle"></h1>
             </div>
             <div id="menubar-right">
-                <div id="tools"></div>
+                <div id="tools">
+                    <div id="tools-ptr" class="button tool-button" onclick="toolButton('ptr')">+ PTR</div>
+                    <div id="tools-dmm" class="button tool-button" onclick="toolButton('dmm')">+ DMM</div>
+                    <div id="tools-osc" class="button tool-button" onclick="toolButton('osc')">+ OSC</div>
+                </div>
                 <div id="search">
                     <div id="search-field">
                         <input type="text" id="search-input" placeholder="Search..." onkeyup="searchBarHandler()" />
@@ -173,6 +177,17 @@
                     <h2>Oscilloscope</h2>
                 </div>
             </div>
+        </div>
+        <div id="tool-popup" class="">
+            <span onclick="toolPopupX()">X</span>
+            <div id="tool-popup-title">Adding Selection Probe</div>
+            <div id="tool-popup-text">
+                1. bake cookie<br />
+                2. eat cookie<br />
+                3. ???? <br />
+                4. profit
+            </div>
+            <div id="tool-popup-buttons"></div>
         </div>
     </div>
     <script src="{{socketiojs}}"></script>

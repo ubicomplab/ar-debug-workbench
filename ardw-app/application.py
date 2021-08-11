@@ -117,6 +117,14 @@ def get_schematic_svg(schid):
             return send_from_directory(dirpath, filename)
     return ""
 
+@app.route("/tool-debug")
+def tool_debug_page():
+    return render_template(
+        "tool-test.html",
+        js=url_for("static", filename="tool-test.js"),
+        socketiojs=url_for("static", filename="socket.io.min.js")
+    )
+
 
 active_connections = 0
 
@@ -135,11 +143,36 @@ projector_calibration = {
     "z": 1
 }
 ibom_settings = {}
+
 # Server tracks connected tools
 tools = {
-    "ptr": None,
-    "dmm": None,
-    "osc": None
+    "ptr": {
+        "ready": False,
+        "thread": None,
+        "ready-elements": {
+            "probe": False
+        }
+    },
+    "dmm": {
+        "ready": False,
+        "thread": None,
+        "ready-elements": {
+            "device": False,
+            "probe-pos": False,
+            "probe-neg": False
+        }
+    },
+    "osc": {
+        "ready": False,
+        "thread": None,
+        "ready-elements": {
+            "device": False,
+            "probe-1": False,
+            "probe-2": False,
+            "probe-3": False,
+            "probe-4": False
+        }
+    }
 }
 
 @socketio.on("connect")
@@ -177,26 +210,6 @@ def handle_selection(new_selection):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
 
-@socketio.on("tool-add")
-def handle_tool_req(tooltype):
-    logging.info(f"Received request for tool type {tooltype}")
-    if tooltype not in tools:
-        emit("tool-add", { "status": "invalid", "type": None })
-    elif tools[tooltype] is not None:
-        emit("tool-add", { "status": "exists", "type": tooltype })
-    else:
-        tools[tooltype] = ExampleTool()
-        emit("tool-add", { "status": "added", "type": tooltype })
-
-@socketio.on("tool-measure")
-def handle_tool_measure(tooltype):
-    global tools
-    logging.info(f"Measure tool {tooltype}")
-    if tooltype in tools and tools[tooltype] is not None:
-        val = tools[tooltype].measure()
-        # only send back to client that requested it
-        emit("tool-measure", { "status": "good", "type": tooltype, "val": val })
-
 @socketio.on("projector-mode")
 def handle_projectormode(mode):
     global projector_mode
@@ -210,6 +223,26 @@ def handle_projector_adjust(adjust):
     logging.info(f"Received projector adjust {adjust}")
     projector_calibration[adjust["type"]] = adjust["val"]
     socketio.emit("projector-adjust", adjust)
+
+@socketio.on("tool-request")
+def handle_tool_request(data):
+    global tools
+    logging.info(f"Received tool request {data}")
+    if tools[data.type]["ready"]:
+        logging.info(f"Tool is already active")
+        # TODO maybe send connection information back to client
+        # TODO note that tool doesn't need to be ready, just needs to have already been requested
+    else:
+        logging.info(f"Adding tool; TODO")
+        tools[data.type]["ready"] = True
+        # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
+        socketio.emit("tool-request", data.type)
+
+@socketio.on("tool-debug")
+def handle_tool_debug(data):
+    logging.info(f"Received tool debug msg {data}")
+    name = data.pop("name")
+    socketio.emit(name, data)
 
 
 if __name__=="__main__":

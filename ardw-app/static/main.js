@@ -18,6 +18,8 @@ var VIEW_MINIMUMS = {
 var VIEW_MAXIMUM = 0.8;
 var CROSSHAIR_LENGTH = 100000;
 
+var POPUP_AUTO_CLOSE = 3000;
+
 // document elements
 var search_input_field = null;
 var search_nav_num = null;
@@ -32,6 +34,42 @@ var projector_sliders = {
     "z": {}
 };
 
+/*
+name: display name of device
+ready: true when device is fully set up
+device?: true when measurement device is connected
+selection: {probe: null when not connected, false when connected,
+            and true (WIP) when it's the source of the last selection}
+*/
+var tools = {
+    "ptr": {
+        "name": "Selection Probe",
+        "ready": false,
+        "selection": null,
+    },
+    "dmm": {
+        "name": "DMM",
+        "ready": false,
+        "device": false,
+        "selection": {
+            "pos": null, // red
+            "neg": null, // black
+        }
+    },
+    "osc": {
+        "name": "Oscilloscope",
+        "ready": false,
+        "device": false,
+        "selection": {
+            1: null, // yellow
+            2: null, // green
+            3: null, // blue
+            4: null, // pink
+        }
+    }
+};
+//
+var active_tool_request = false;
 
 var sidebar_shown = false;
 sidebar_split = Split(["#display", "#sidebar"], {
@@ -53,12 +91,6 @@ canvas_split = Split(["#front-canvas", "#back-canvas"], {
     direction: "vertical",
     onDragEnd: resizeAll
 });
-
-var tools = {
-    "ptr": false,
-    "dmm": false,
-    "osc": false
-}
 
 /**
  * Zooms layerdict to match given bbox and targetsize, rotating appropriately for layout
@@ -159,6 +191,14 @@ function zoomToSelection(layerdict) {
     zoomToBox(layerdict, bboxListToObj(target_boxes[layerdict.layer]), targetsize);
 }
 
+/**
+ * Parses a text value (eg. from an input[type=text]) into a bounded integer
+ * @param {*} val text value
+ * @param {*} lo lower bound (inclusive)
+ * @param {*} hi upper bound (inclusive)
+ * @param {*} def default value if val is NaN
+ * @returns integer value
+ */
 function intFromText(val, lo, hi, def = 0) {
     val = parseInt(val);
     if (isNaN(val)) {
@@ -172,6 +212,9 @@ function intFromText(val, lo, hi, def = 0) {
     }
 }
 
+/**
+ * Initializes various page elements, such as the menu bar and popups
+ */
 function initPage() {
     // Assume for now that 1st schematic shares title with project
     var projtitle = schdata.schematics[schid_to_idx[1]].name
@@ -547,75 +590,189 @@ function searchNav(dir) {
     }
 }
 
-function requestTool(type) {
-    console.log(`requesting tool ${type}`)
-    socket.emit("tool-add", type);
+function toolPopupX() {
+    document.getElementById("tool-popup").classList.add("hidden");
 }
 
-function addTool(type) {
-    console.log(`received tool ${type}, adding to menubar`);
-
-    if (tools[type]) {
-        console.log("We already have it");
-        return;
+function toolButton(type) {
+    if (!tools[type].ready && !active_tool_request) {
+        console.log(`Requesting ${type} tool`);
+        socket.emit("tool-request", { "type": type, "val": "device" });
+    } else if (tools[type].ready) {
+        switch (type) {
+            case "ptr":
+                // Perhaps recalibrate or something
+                console.log("TODO pointer menu maybe");
+                break;
+            case "dmm":
+                // Start debug session
+                console.log("TODO activate debug session");
+                break;
+            case "osc":
+                // Start debug session?
+                console.log("TODO oscilloscope");
+                break;
+        }
+    } else {
+        // Show active tool request
+        document.getElementById("tool-popup").classList.remove("hidden");
     }
+}
 
-    var div = document.createElement("div");
-    let text = "";
-    switch (type) {
+function toolRequest(data) {
+    var popup = document.getElementById("tool-popup");
+    var popup_title = document.getElementById("tool-popup-title");
+    var popup_text = document.getElementById("tool-popup-text");
+    var popup_buttons = document.getElementById("tool-popup-buttons");
+
+    if (tools[data.type].ready) {
+        // This should never happen
+        logerr(`Received ${data.type} tool request from server that was already ready`);
+        popup_title.innerText = tools[data.type].name;
+        popup_text.innerText = "Already connected, closing...";
+        popup_buttons.innerHTML = "";
+        popup.classList.remove("hidden");
+        setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+    } else {
+        popup_title.innerText = `Connecting ${tools[data.type].name}`;
+        switch (data.type) {
+            case "ptr":
+                popup_text.innerHTML = "Blah blah pointer instructions";
+                popup_buttons.innerHTML = "";
+                break;
+            case "dmm":
+                popup_text.innerHTML = "Something dmm instructions<br />connecting to device";
+                popup_buttons.innerHTML = "";
+                for (let dir in tools.dmm.selection) {
+                    var div = document.createElement("div");
+                    div.classList.add("button");
+                    div.classList.add(`dmm-probe-${dir}`);
+                    if (tools.dmm.selection[dir] === null) {
+                        // has not yet been added
+                        div.innerHTML = `+ ${dir.toUpperCase()}`;
+                        div.addEventListener("click", () => {
+                            console.log(`TODO request dmm ${dir} probe`);
+                        });
+                    } else {
+                        // has already been added
+                        div.innerHTML = `${dir.toUpperCase()}`;
+                        div.classList.add("ready");
+                    }
+                    popup_buttons.appendChild(div);
+                }
+                break;
+            case "osc":
+                console.log("TODO osc connection");
+                break;
+        }
+
+        popup.classList.remove("hidden");
+    }
+}
+
+function toolConnect(data) {
+    var popup = document.getElementById("tool-popup");
+    var popup_title = document.getElementById("tool-popup-title");
+    var popup_text = document.getElementById("tool-popup-text");
+    var popup_buttons = document.getElementById("tool-popup-buttons");
+
+    popup_title.innerText = `Connecting ${tools[data.type].name}`;
+    switch (data.type) {
         case "ptr":
-            text = "Cursor";
-            div.addEventListener("click", () => {
-                socket.emit("tool-measure", "ptr");
-            })
+            console.log("ptr connected and ready to use");
+            tools.ptr.ready = true;
+            tools.ptr.selection = false;
+
+            popup_text.innerHTML = "Probe connected! Closing..."
+            popup_buttons.innerHTML = "";
+            popup.classList.remove("hidden");
+            setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+
+            var toolbutton = document.getElementById("tools-ptr");
+            toolbutton.classList.add("ready");
+            toolbutton.innerHTML = "PTR";
             break;
         case "dmm":
-            text = "Multimeter";
-            div.addEventListener("click", () => {
-                if (sidebar_shown) {
-                    sidebar_split.collapse(1);
+            if (data.val == "pos") {
+                console.log("dmm pos probe connected");
+                tools.dmm.selection.pos = false;
+                popup_text.innerHTML = "Positive probe connected.";
+            } else if (data.val == "neg") {
+                console.log("dmm neg probe connected");
+                tools.dmm.selection.neg = false;
+                popup_text.innerHTML = "Negative probe connected.";
+            } else {
+                console.log("dmm connected");
+                tools.dmm.device = true;
+                popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
+            }
+
+            popup_buttons.innerHTML = "";
+            for (let dir in tools.dmm.selection) {
+                var div = document.createElement("div");
+                div.classList.add("button");
+                div.classList.add(`dmm-probe-${dir}`);
+                if (tools.dmm.selection[dir] === null) {
+                    // has not yet been added
+                    div.innerHTML = `+ ${dir.toUpperCase()}`;
+                    div.addEventListener("click", () => {
+                        console.log(`TODO request dmm ${dir} probe`);
+                    });
                 } else {
-                    sidebar_split.setSizes([80, 20]);
+                    // has already been added
+                    div.innerHTML = `${dir.toUpperCase()}`;
+                    div.classList.add("ready");
                 }
-                document.getElementById("sidebar-dmm").classList.remove("hidden");
-                document.getElementById("sidebar-osc").classList.add("hidden");
-                resizeAll();
-                sidebar_shown = !sidebar_shown;
-            })
+                popup_buttons.appendChild(div);
+            }
+
+            if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
+                console.log("dmm ready to use")
+                tools.dmm.ready = true;
+
+                popup_text.innerHTML += `<br />${tools.dmm.name} ready to use, closing...`
+                popup.classList.remove("hidden");
+                setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+
+                var toolbutton = document.getElementById("tools-dmm");
+                toolbutton.classList.add("ready");
+                toolbutton.innerHTML = "DMM";
+            }
             break;
         case "osc":
-            text = "Oscilloscope";
-            div.addEventListener("click", () => {
-                if (sidebar_shown) {
-                    sidebar_split.collapse(1);
-                } else {
-                    sidebar_split.setSizes([80, 20]);
+            if (data.val == "osc") {
+                console.log("osc connected");
+                tools.osc.device = true;
+                popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
+
+            } else {
+                console.log(`osc chan ${data.val} probe connected`);
+                tools.osc.selection[data.val] = false;
+            }
+            if (tools.osc.device) {
+                let channels_ready = 0;
+                for (let chan in tools.osc.selection) {
+                    if (tools.osc.selection[chan] !== null) {
+                        channels_ready += 1;
+                    }
                 }
-                document.getElementById("sidebar-dmm").classList.add("hidden");
-                document.getElementById("sidebar-osc").classList.remove("hidden");
-                resizeAll();
-                sidebar_shown = !sidebar_shown;
-            })
+                if (channels_ready > 1) {
+                    console.log("osc ready to use");
+                    tools.osc.ready = true;
+
+                    popup_text.innerHTML += `<br />${tools.osc.name} ready to use`;
+                    if (channels_ready == 4) {
+                        popup_text.innerHTML += ", closing...";
+                        setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+                    }
+                    popup.classList.remove("hidden");
+
+                    var toolbutton = document.getElementById("tools-soc");
+                    toolbutton.classList.add("ready");
+                    toolbutton.innerHTML = "OSC";
+                }
+            }
             break;
-    }
-    div.innerText = text;
-    document.getElementById("tools").appendChild(div);
-
-    tools[type] = true;
-}
-
-function toolMeasurement(type, val) {
-    console.log(`tool ${type} measurement = ${val}`)
-
-    if (!tools[type]) {
-        console.log("Measurement for tool we don't have yet");
-        return;
-    }
-
-    if (type == "ptr") {
-        // val is coordinates
-        // only clicking front for now
-        console.log("Nothing, TODO")
     }
 }
 
@@ -640,18 +797,6 @@ function initSocket() {
                 break;
         }
     });
-    socket.on("tool-add", (data) => {
-        console.log(`tool-add: status '${data["status"]}', type '${data["type"]}'`);
-        if (data["status"] == "exists" || data["status"] == "added") {
-            addTool(data["type"]);
-        }
-    });
-    socket.on("tool-measure", (data) => {
-        console.log(`tool-measure: status '${data["status"]}', type '${data["type"]}', val '${data["val"]}'`);
-        if (data["status"] == "good") {
-            toolMeasurement(data["type"], data["val"]);
-        }
-    });
     socket.on("projector-mode", (mode) => {
         if (mode === "calibrate") {
             document.getElementById("settings-projector-calibrate").checked = true;
@@ -663,6 +808,35 @@ function initSocket() {
         let val = adjust.type === "z" ? adjust.val * 100 : adjust.val;
         projector_sliders[adjust.type].slider.value = val;
         projector_sliders[adjust.type].label.value = val;
+    });
+
+    // tools
+    socket.on("tool-request", (data) => {
+        // Any tool requests by the client are echoed back by the server if valid,
+        // ie. if the tool had not already been requested
+        toolRequest(data);
+    })
+
+    socket.on("tool-connect", (data) => {
+        toolConnect(data);
+    });
+
+    socket.on("tool-measure", (data) => {
+        if (!tools[data.type].ready) {
+            console.log(`${data.type} tool received measurement but is not fully set up`);
+        }
+        switch (data.type) {
+            case "ptr":
+                console.log(`received ptr selection at (${data.coords.x},${data.coords.y})`);
+                break;
+            case "dmm":
+                console.log(`measured ${data.val} ${data.unit} with pos at (${data.pos_coords.x},${data.pos_coords.y})
+                and neg probe at (${data.neg_coords.x},${data.neg_coords.y})`);
+                break;
+            case "osc":
+                console.log("I don't know what the oscilloscope should do");
+                break;
+        }
     });
 }
 

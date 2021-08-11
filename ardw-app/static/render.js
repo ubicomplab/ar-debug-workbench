@@ -893,6 +893,10 @@ function handlePointerUp(e, layerdict) {
 
   // We haven't necessarily had a pointermove event since the interaction started, so make sure we update this now
   var ptr = layerdict.pointerStates[e.pointerId];
+  if (ptr === undefined) {
+    // This is just here to suppress the console error when you click and drag out of the canvas
+    return;
+  }
   ptr.distanceTravelled += Math.abs(e.offsetX - ptr.lastX) + Math.abs(e.offsetY - ptr.lastY);
 
   if (e.button == 0 && ptr.distanceTravelled < 10 && Date.now() - ptr.downTime <= 500) {
