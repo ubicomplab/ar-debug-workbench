@@ -74,11 +74,9 @@ html, body {
 .button.tool-button {
     margin: 0 4px;
     padding: 4px;
-    border: 2px solid #eee;
     border-radius: 8px;
     box-sizing: border-box;
     /* width: 70px; */
-    text-align: center;
 }
 
 #menubar #search, #menubar #settings {
@@ -138,6 +136,9 @@ html, body {
     cursor: pointer;
     user-select: none;
     padding: 2px;
+    border: 2px solid #eee;
+    border-radius: 4px;
+    text-align: center;
 }
 
 .button:hover {
@@ -146,6 +147,21 @@ html, body {
 
 .button.ready, button.tool-button.ready {
     border-color: #007bff;
+}
+
+.button.disabled {
+    color: #ccc;
+    background-color: #eee;
+    cursor: not-allowed;
+}
+
+.button.ready.disabled {
+    color: unset;
+    background-color: unset;
+    cursor: default;
+}
+.button.ready.disabled:hover {
+    background-color: unset;
 }
 
 #menubar .slider-item {
@@ -224,10 +240,12 @@ input:checked+.slider:before {
 
 #menubar #search-input {
     font-size: 12pt;
-    width: 300px; /* arbitrary */
+    width: 300px;
+    /* arbitrary */
 }
 
 /* X Button */
+
 #menubar #search-field>span {
     position: absolute;
     right: 2px;
@@ -344,17 +362,21 @@ div.canvas-container>canvas {
     align-items: center;
     justify-content: space-between;
 }
+
 #sch-selection div.current {
     border-color: #007bff;
     border-width: 2px;
 }
+
 #sch-selection div span {
     display: none;
 }
+
 #sch-selection div.has-selection span {
     display: initial;
     margin-left: 4px;
 }
+
 #sch-selection div.current.has-selection span {
     color: #007bff;
 }
@@ -390,9 +412,131 @@ div.canvas-container>canvas {
     align-items: center;
 }
 
+#sidebar {
+    display: flex;
+    flex-direction: column;
+    padding: 5px;
+    font-size: 10pt;
+    background: white;
+    position: relative;
+    z-index: 50;
+}
+
+#sidebar-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#sidebar h2 {
+    /* margin-left: 5px; */
+    margin: 0;
+}
+
+#sidebar-help {
+    font-weight: bold;
+    padding: 5px;
+    border: 1px solid black;
+    border-radius: 20px;
+    width: 28px;
+    box-sizing: border-box;
+    height: 28px;
+    text-align: center;
+}
+
+#sidebar-help-content {
+    display: none;
+    font-weight: initial;
+    text-align: left;
+    position: absolute;
+    right: 10px;
+    top: 40px;
+    background: white;
+    border: 1px solid #ccc;
+    width: calc(100% - 20px);
+    box-sizing: border-box;
+    padding: 5px;
+}
+
+#sidebar-help:first-child {
+    text-align: center;
+}
+
+#sidebar-help:hover {
+    background: #eee;
+}
+
+#sidebar-help:hover #sidebar-help-content {
+    display: initial;
+}
+
+#sidebar-name {
+    display: flex;
+    align-items: center;
+}
+
+#sidebar-name>input {
+    width: 1px;
+    /* this width is overridden by flex-grow, but necessary */
+    flex-grow: 1;
+}
+
+#sidebar-notes {
+    display: flex;
+    flex-direction: column;
+}
+
+#sidebar-notes>textarea {
+    margin-top: 4px;
+}
+
+#sidebar-cards {
+    flex-grow: 1;
+    overflow-y: scroll;
+    /* overflow-x: hidden; */
+}
+
+.sidebar-card>form {
+    display: grid;
+    grid-template-columns: min-content auto min-content min-content min-content min-content;
+    grid-template-rows: 1fr 1fr;
+}
+
+.sidebar-card>form>* {
+    margin: 0 2px 2px;
+}
+
+.sidebar-card-search {
+    min-width: 30px;
+}
+
+.sidebar-card-bound {
+    width: 30px;
+    text-align: right;
+}
+
+#sidebar-add-button {
+    margin: 0 2px;
+}
+
+#sidebar-buttons {
+    display: flex;
+}
+
+#sidebar-buttons>div {
+    flex-grow: 1;
+    text-align: center;
+    margin: 2px;
+}
+
+#sidebar>div {
+    padding: 5px;
+}
+
 #projector #layout-div {
     height: 100vh;
 }
+
 #projector #layout-div>div {
     height: 100%;
 }

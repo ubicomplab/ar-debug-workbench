@@ -61,10 +61,10 @@ var tools = {
         "ready": false,
         "device": false,
         "selection": {
-            1: null, // yellow
-            2: null, // green
-            3: null, // blue
-            4: null, // pink
+            "1": null, // yellow
+            "2": null, // green
+            "3": null, // blue
+            "4": null, // pink
         }
     }
 };
@@ -73,7 +73,7 @@ var active_tool_request = false;
 
 var sidebar_shown = false;
 sidebar_split = Split(["#display", "#sidebar"], {
-    sizes: [100, 0],
+    sizes: [80, 20],
     minSize: 0,
     gutterSize: 5,
     onDragEnd: resizeAll
@@ -599,20 +599,7 @@ function toolButton(type) {
         console.log(`Requesting ${type} tool`);
         socket.emit("tool-request", { "type": type, "val": "device" });
     } else if (tools[type].ready) {
-        switch (type) {
-            case "ptr":
-                // Perhaps recalibrate or something
-                console.log("TODO pointer menu maybe");
-                break;
-            case "dmm":
-                // Start debug session
-                console.log("TODO activate debug session");
-                break;
-            case "osc":
-                // Start debug session?
-                console.log("TODO oscilloscope");
-                break;
-        }
+        console.log(`tool ${type} is already ready`);
     } else {
         // Show active tool request
         document.getElementById("tool-popup").classList.remove("hidden");
@@ -624,6 +611,8 @@ function toolRequest(data) {
     var popup_title = document.getElementById("tool-popup-title");
     var popup_text = document.getElementById("tool-popup-text");
     var popup_buttons = document.getElementById("tool-popup-buttons");
+
+    console.log(data)
 
     if (tools[data.type].ready) {
         // This should never happen
@@ -637,28 +626,16 @@ function toolRequest(data) {
         popup_title.innerText = `Connecting ${tools[data.type].name}`;
         switch (data.type) {
             case "ptr":
-                popup_text.innerHTML = "Blah blah pointer instructions";
+                popup_text.innerHTML = `Connecting ${tools.ptr.name.toLowerCase()} with Optitrack<br />{optitrack instructions}`;
                 popup_buttons.innerHTML = "";
                 break;
             case "dmm":
-                popup_text.innerHTML = "Something dmm instructions<br />connecting to device";
                 popup_buttons.innerHTML = "";
-                for (let dir in tools.dmm.selection) {
-                    var div = document.createElement("div");
-                    div.classList.add("button");
-                    div.classList.add(`dmm-probe-${dir}`);
-                    if (tools.dmm.selection[dir] === null) {
-                        // has not yet been added
-                        div.innerHTML = `+ ${dir.toUpperCase()}`;
-                        div.addEventListener("click", () => {
-                            console.log(`TODO request dmm ${dir} probe`);
-                        });
-                    } else {
-                        // has already been added
-                        div.innerHTML = `${dir.toUpperCase()}`;
-                        div.classList.add("ready");
-                    }
-                    popup_buttons.appendChild(div);
+                if (data.val === "device") {
+                    popup_text.innerHTML = "Trying to find DMM. Ensure device is properly connected.";
+                } else {
+                    popup_text.innerHTML = `Connecting ${data.val} probe with Optitrack<br />{optitrack instructions}`;
+                    // TODO loading icon or something
                 }
                 break;
             case "osc":
@@ -677,102 +654,150 @@ function toolConnect(data) {
     var popup_buttons = document.getElementById("tool-popup-buttons");
 
     popup_title.innerText = `Connecting ${tools[data.type].name}`;
-    switch (data.type) {
-        case "ptr":
-            console.log("ptr connected and ready to use");
-            tools.ptr.ready = true;
-            tools.ptr.selection = false;
 
-            popup_text.innerHTML = "Probe connected! Closing..."
+    if (data.status === "success") {
+        switch (data.type) {
+            case "ptr":
+                console.log("ptr connected and ready to use");
+                tools.ptr.ready = true;
+                tools.ptr.selection = false;
+
+                popup_text.innerHTML = "Probe connected! Closing..."
+                popup_buttons.innerHTML = "";
+                setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+
+                var toolbutton = document.getElementById("tools-ptr");
+                toolbutton.classList.add("ready");
+                toolbutton.innerHTML = "PTR";
+
+                break;
+            case "dmm":
+                if (data.val == "pos") {
+                    console.log("dmm pos probe connected");
+                    tools.dmm.selection.pos = false;
+                    popup_text.innerHTML = "Positive probe connected.";
+                } else if (data.val == "neg") {
+                    console.log("dmm neg probe connected");
+                    tools.dmm.selection.neg = false;
+                    popup_text.innerHTML = "Negative probe connected.";
+                } else {
+                    console.log("dmm connected");
+                    tools.dmm.device = true;
+                    popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
+                }
+
+                popup_buttons.innerHTML = "";
+                for (let dir in tools.dmm.selection) {
+                    let div = document.createElement("div");
+                    div.classList.add("button");
+                    div.classList.add(`dmm-probe-${dir}`);
+                    if (tools.dmm.selection[dir] === null) {
+                        // has not yet been added
+                        div.innerHTML = `+ ${dir.toUpperCase()}`;
+                        div.addEventListener("click", () => {
+                            socket.emit("tool-request", { "type": data.type, "val": dir });
+                        });
+                    } else {
+                        // has already been added
+                        div.innerHTML = `${dir.toUpperCase()}`;
+                        div.classList.add("ready");
+                        div.classList.add("disabled");
+                    }
+                    popup_buttons.appendChild(div);
+                }
+
+                if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
+                    console.log("dmm ready to use")
+                    tools.dmm.ready = true;
+
+                    popup_text.innerHTML += `<br />${tools.dmm.name} ready to use, closing...`
+                    setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+
+                    var toolbutton = document.getElementById("tools-dmm");
+                    toolbutton.classList.add("ready");
+                    toolbutton.innerHTML = "DMM";
+                }
+                break;
+            case "osc":
+                if (data.val == "osc") {
+                    console.log("osc connected");
+                    tools.osc.device = true;
+                    popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
+
+                } else {
+                    console.log(`osc chan ${data.val} probe connected`);
+                    tools.osc.selection[data.val] = false;
+                }
+                if (tools.osc.device) {
+                    let channels_ready = 0;
+                    for (let chan in tools.osc.selection) {
+                        if (tools.osc.selection[chan] !== null) {
+                            channels_ready += 1;
+                        }
+                    }
+                    if (channels_ready > 1) {
+                        console.log("osc ready to use");
+                        tools.osc.ready = true;
+
+                        popup_text.innerHTML += `<br />${tools.osc.name} ready to use`;
+                        if (channels_ready == 4) {
+                            popup_text.innerHTML += ", closing...";
+                            setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+                        }
+
+                        var toolbutton = document.getElementById("tools-soc");
+                        toolbutton.classList.add("ready");
+                        toolbutton.innerHTML = "OSC";
+                    }
+                }
+                break;
+        }
+        popup.classList.remove("hidden");
+    } else {
+        console.log(`${data.type} ${data.val} failed to connect`);
+
+        if (data.val === "device") {
+            // Device connection failed
+            popup_text.innerHTML = `${tools[data.type].name} was not found or failed to connect.`;
             popup_buttons.innerHTML = "";
-            popup.classList.remove("hidden");
-            setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
 
-            var toolbutton = document.getElementById("tools-ptr");
-            toolbutton.classList.add("ready");
-            toolbutton.innerHTML = "PTR";
-            break;
-        case "dmm":
-            if (data.val == "pos") {
-                console.log("dmm pos probe connected");
-                tools.dmm.selection.pos = false;
-                popup_text.innerHTML = "Positive probe connected.";
-            } else if (data.val == "neg") {
-                console.log("dmm neg probe connected");
-                tools.dmm.selection.neg = false;
-                popup_text.innerHTML = "Negative probe connected.";
-            } else {
-                console.log("dmm connected");
-                tools.dmm.device = true;
-                popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
-            }
+            let retry_button = document.createElement("div");
+            retry_button.innerHTML = "Retry";
+            retry_button.classList.add("button");
+            retry_button.addEventListener("click", () => {
+                socket.emit("tool-request", { "type": data.type, "val": data.val });
+            });
+            popup_buttons.appendChild(retry_button);
 
+            let exit_button = document.createElement("div");
+            exit_button.innerHTML = "Cancel";
+            exit_button.classList.add("button");
+            exit_button.addEventListener("click", toolPopupX);
+            popup_buttons.appendChild(exit_button);
+        } else {
+            // Probe connection failed
+            popup_text.innerHTML = `Probe ${data.val} failed to connect. Ensure Optitrack is working and try again.`;
             popup_buttons.innerHTML = "";
             for (let dir in tools.dmm.selection) {
-                var div = document.createElement("div");
+                let div = document.createElement("div");
                 div.classList.add("button");
                 div.classList.add(`dmm-probe-${dir}`);
                 if (tools.dmm.selection[dir] === null) {
                     // has not yet been added
                     div.innerHTML = `+ ${dir.toUpperCase()}`;
                     div.addEventListener("click", () => {
-                        console.log(`TODO request dmm ${dir} probe`);
+                        socket.emit("tool-request", { "type": data.type, "val": dir });
                     });
                 } else {
                     // has already been added
                     div.innerHTML = `${dir.toUpperCase()}`;
                     div.classList.add("ready");
+                    div.classList.add("disabled");
                 }
                 popup_buttons.appendChild(div);
             }
-
-            if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
-                console.log("dmm ready to use")
-                tools.dmm.ready = true;
-
-                popup_text.innerHTML += `<br />${tools.dmm.name} ready to use, closing...`
-                popup.classList.remove("hidden");
-                setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
-
-                var toolbutton = document.getElementById("tools-dmm");
-                toolbutton.classList.add("ready");
-                toolbutton.innerHTML = "DMM";
-            }
-            break;
-        case "osc":
-            if (data.val == "osc") {
-                console.log("osc connected");
-                tools.osc.device = true;
-                popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
-
-            } else {
-                console.log(`osc chan ${data.val} probe connected`);
-                tools.osc.selection[data.val] = false;
-            }
-            if (tools.osc.device) {
-                let channels_ready = 0;
-                for (let chan in tools.osc.selection) {
-                    if (tools.osc.selection[chan] !== null) {
-                        channels_ready += 1;
-                    }
-                }
-                if (channels_ready > 1) {
-                    console.log("osc ready to use");
-                    tools.osc.ready = true;
-
-                    popup_text.innerHTML += `<br />${tools.osc.name} ready to use`;
-                    if (channels_ready == 4) {
-                        popup_text.innerHTML += ", closing...";
-                        setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
-                    }
-                    popup.classList.remove("hidden");
-
-                    var toolbutton = document.getElementById("tools-soc");
-                    toolbutton.classList.add("ready");
-                    toolbutton.innerHTML = "OSC";
-                }
-            }
-            break;
+        }
+        popup.classList.remove("hidden");
     }
 }
 

@@ -150,7 +150,7 @@ tools = {
         "ready": False,
         "thread": None,
         "ready-elements": {
-            "probe": False
+            "device": False
         }
     },
     "dmm": {
@@ -158,8 +158,8 @@ tools = {
         "thread": None,
         "ready-elements": {
             "device": False,
-            "probe-pos": False,
-            "probe-neg": False
+            "pos": False,
+            "neg": False
         }
     },
     "osc": {
@@ -167,10 +167,10 @@ tools = {
         "thread": None,
         "ready-elements": {
             "device": False,
-            "probe-1": False,
-            "probe-2": False,
-            "probe-3": False,
-            "probe-4": False
+            "1": False,
+            "2": False,
+            "3": False,
+            "4": False
         }
     }
 }
@@ -192,6 +192,11 @@ def handle_connect():
     emit("projector-mode", projector_mode)
     for k, v in projector_calibration.items():
         emit("projector-adjust", { "type": k, "val": v })
+
+    for tool in tools:
+        for val, ready in tools[tool]["ready-elements"].items():
+            if ready:
+                emit("tool-connect", { "type": tool, "val": val, "status": "success" })
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -228,21 +233,34 @@ def handle_projector_adjust(adjust):
 def handle_tool_request(data):
     global tools
     logging.info(f"Received tool request {data}")
-    if tools[data.type]["ready"]:
+    if tools[data["type"]]["ready"]:
         logging.info(f"Tool is already active")
         # TODO maybe send connection information back to client
         # TODO note that tool doesn't need to be ready, just needs to have already been requested
     else:
         logging.info(f"Adding tool; TODO")
-        tools[data.type]["ready"] = True
+        # tools[data["type"]]["ready"] = True
         # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
-        socketio.emit("tool-request", data.type)
+        socketio.emit("tool-request", data)
 
 @socketio.on("tool-debug")
 def handle_tool_debug(data):
+    global tools
     logging.info(f"Received tool debug msg {data}")
     name = data.pop("name")
-    socketio.emit(name, data)
+    if name == "log":
+        logging.info(str(tools))
+    else:
+        if data["status"] == "success":
+            tools[data["type"]]["ready-elements"][data["val"]] = True
+            allready = True
+            for ready in tools[data["type"]]["ready-elements"].values():
+                if not ready:
+                    allready = False
+                    break
+            tools[data["type"]]["ready"] = allready
+            
+        socketio.emit(name, data)
 
 
 if __name__=="__main__":

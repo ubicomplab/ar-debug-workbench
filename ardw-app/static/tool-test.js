@@ -2,10 +2,24 @@
 var socket = io();
 
 window.onload = () => {
+    document.getElementById("log").addEventListener("click", () => {
+        socket.emit("tool-debug", { "name": "log" });
+    });
     document.getElementById("ptr-conn").addEventListener("click", () => {
         var data = {
             "name": "tool-connect",
-            "type": "ptr"
+            "type": "ptr",
+            "val": "device",
+            "status": "success"
+        };
+        socket.emit("tool-debug", data);
+    });
+    document.getElementById("ptr-conn-fail").addEventListener("click", () => {
+        var data = {
+            "name": "tool-connect",
+            "type": "ptr",
+            "val": "device",
+            "status": "fail"
         };
         socket.emit("tool-debug", data);
     });
@@ -18,14 +32,14 @@ window.onload = () => {
                 "y": 100,
             }
         };
-        console.log(data);
         socket.emit("tool-debug", data);
     });
     document.getElementById("dmm-conn").addEventListener("click", () => {
         var data = {
             "name": "tool-connect",
             "type": "dmm",
-            "val": "dmm"
+            "val": "device",
+            "status": "success"
         };
         socket.emit("tool-debug", data);
     });
@@ -33,18 +47,45 @@ window.onload = () => {
         var data = {
             "name": "tool-connect",
             "type": "dmm",
-            "val": "pos"
+            "val": "pos",
+            "status": "success"
         };
-        console.log(data);
         socket.emit("tool-debug", data);
     });
     document.getElementById("dmm-black-conn").addEventListener("click", () => {
         var data = {
             "name": "tool-connect",
             "type": "dmm",
-            "val": "neg"
+            "val": "neg",
+            "status": "success"
         };
-        console.log(data);
+        socket.emit("tool-debug", data);
+    });
+    document.getElementById("dmm-conn-fail").addEventListener("click", () => {
+        var data = {
+            "name": "tool-connect",
+            "type": "dmm",
+            "val": "device",
+            "status": "fail"
+        };
+        socket.emit("tool-debug", data);
+    });
+    document.getElementById("dmm-red-conn-fail").addEventListener("click", () => {
+        var data = {
+            "name": "tool-connect",
+            "type": "dmm",
+            "val": "pos",
+            "status": "fail"
+        };
+        socket.emit("tool-debug", data);
+    });
+    document.getElementById("dmm-black-conn-fail").addEventListener("click", () => {
+        var data = {
+            "name": "tool-connect",
+            "type": "dmm",
+            "val": "neg",
+            "status": "fail"
+        };
         socket.emit("tool-debug", data);
     });
     document.getElementById("dmm-measure").addEventListener("click", () => {
