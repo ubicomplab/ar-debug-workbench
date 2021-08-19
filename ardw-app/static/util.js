@@ -40,6 +40,40 @@ function logwarn(msg) {
     }
 }
 
+/**
+ * Returns the display name for the element, based on type
+ * @param {*} element Must be {type, val}
+ */
+function getElementName(element) {
+    switch (element.type) {
+        case "comp":
+            return `Component ${compdict[element.val].ref}`;
+        case "pin":
+            return `Pin ${pindict[element.val].ref}.${pindict[element.val].num}`;
+        case "net":
+            return `Net ${element.val}`;
+    }
+}
+
+/**
+ * Forces the given input field to only accept numeric input
+ * @param {*} input Expects input[type="text"]
+ */
+function forceNumericInput(input) {
+    input.addEventListener("input", () => {
+        if (/^-?\d*.?\d*$/.test(input.value)) {
+            // all good
+            input.oldValue = input.value;
+        } else {
+            if (input.hasOwnProperty("oldValue")) {
+                input.value = input.oldValue;
+            } else {
+                input.value = "";
+            }
+        }
+    });
+}
+
 // ---- From IBOM web/util.js ---- //
 var units = {
     prefixes: {

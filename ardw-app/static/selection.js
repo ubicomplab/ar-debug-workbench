@@ -113,7 +113,7 @@ function selectComponent(refid) {
         }
     });
 
-    search_input_field.value = `Component ${comp.ref}`;
+    document.getElementById("search-input").value = getElementName({ "type": "comp", "val": selected });
 
     let numunits = 0;
     for (let _ in comp.units) {
@@ -167,7 +167,7 @@ function selectPins(pin_hits) {
         }
     });
 
-    search_input_field.value = `Pin ${pin.ref}.${pin.num}`;
+    document.getElementById("search-input").value = getElementName({ "type": "pin", "val": selected });
     search_nav_current = [1, 1];
     search_nav_num.innerText = "1 of 1";
     search_nav_text.innerText = "";
@@ -188,23 +188,23 @@ function selectPins(pin_hits) {
     drawSchematicHighlights();
 }
 
-function selectNet(netname) {
-    if (!(netname in netdict)) {
-        logerr(`selected net ${netname} is not in netdict`);
+function selectNet(selected) {
+    if (!(selected in netdict)) {
+        logerr(`selected net ${selected} is not in netdict`);
         return;
     }
     deselectAll(false);
 
-    highlighted_net = netname;
+    highlighted_net = selected;
     /*
-    if (!netdict[netname].includes(current_schematic)) {
-      switchSchematic(netdict[netname][0]);
+    if (!netdict[selected].includes(current_schematic)) {
+      switchSchematic(netdict[selected][0]);
     }
     */
 
     document.querySelectorAll("#sch-selection>div").forEach((div) => {
         div.classList.remove("has-selection");
-        for (let schid of netdict[netname]["schids"]) {
+        for (let schid of netdict[selected]["schids"]) {
             if (div.innerText.startsWith(schid + ".")) {
                 div.classList.add("has-selection");
                 break;
@@ -212,12 +212,12 @@ function selectNet(netname) {
         }
     });
 
-    search_input_field.value = `Net ${netname}`;
+    document.getElementById("search-input").value = getElementName({ "type": "net", "val": selected });
 
-    search_nav_current = [1, netdict[netname]["pins"].length];
+    search_nav_current = [1, netdict[selected]["pins"].length];
     search_nav_num.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
 
-    var pin1 = pindict[netdict[netname]["pins"][0]];
+    var pin1 = pindict[netdict[selected]["pins"][0]];
     search_nav_text.innerText = `${pin1.ref}.${pin1.num}`;
 
     updateTargetBoxes();
@@ -249,7 +249,8 @@ function deselectAll(redraw) {
         document.querySelectorAll("#sch-selection>div").forEach((div) => {
             div.classList.remove("has-selection");
         });
-        search_input_field.value = "";
+        
+        document.getElementById("search-input").value = "";
         search_nav_current = [0, 0];
         search_nav_num.innerText = "0 of 0";
         search_nav_text.innerText = "";
@@ -494,28 +495,11 @@ function appendSelectionDiv(parent, val, type) {
         clickedType[type](val);
         parent.classList.add("hidden");
     });
-    if (type === "comp") {
-        if (compdict[val] === undefined) {
-            logwarn(`ref ${val} not in compdict`);
-            return;
-        }
-        div.innerHTML = `Component ${compdict[val].ref}`;
-    } else if (type === "pin") {
-        if (pindict[val] === undefined) {
-            logwarn(`pinidx ${val} not in pindict`);
-            return;
-        }
-        div.innerHTML = `Pin ${pindict[val].ref}.${pindict[val].num}`;
-    } else {
-        if (netdict[val] === undefined) {
-            logwarn(`net ${val} not in netdict`);
-        }
-        div.innerHTML = `Net ${val}`;
-    }
+    div.innerHTML = getElementName({ "type": type, "val": val });
     parent.appendChild(div);
 }
 
-function handleMouseClick(e, layerdict) {
+function handleMouseClick(layerdict, e = null) {
     if (e === null) {
         // This click is from an external device
         // It must be a "layout" click

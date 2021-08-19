@@ -21,7 +21,6 @@ var CROSSHAIR_LENGTH = 100000;
 var POPUP_AUTO_CLOSE = 3000;
 
 // document elements
-var search_input_field = null;
 var search_nav_num = null;
 var search_nav_text = null;
 
@@ -33,6 +32,27 @@ var projector_sliders = {
     "r": {},
     "z": {}
 };
+
+var sidebar_custom_selection = {
+    "pos": {
+        "type": null,
+        "val": null
+    },
+    "neg": {
+        "type": null,
+        "val": null
+    }
+};
+
+/** list of { name, timestamp, notes, cards=[] } */
+var debug_sessions = [];
+
+var current_debug_session = {
+    "name": null,
+    "timestamp": null,
+    "notes": null,
+    "cards": []
+}
 
 /*
 name: display name of device
@@ -73,7 +93,7 @@ var active_tool_request = false;
 
 var sidebar_shown = false;
 sidebar_split = Split(["#display", "#sidebar"], {
-    sizes: [80, 20],
+    sizes: [100, 0],
     minSize: 0,
     gutterSize: 5,
     onDragEnd: resizeAll
@@ -221,7 +241,7 @@ function initPage() {
     document.getElementById("projtitle").textContent = projtitle
 
     // Search field
-    search_input_field = document.getElementById("search-input");
+    var search_input_field = document.getElementById("search-input");
     var searchlist = document.getElementById("search-content");
 
     search_input_field.value = "";
@@ -233,6 +253,11 @@ function initPage() {
     });
     search_input_field.addEventListener("input", () => {
         searchlist.classList.remove("hidden");
+    });
+    document.addEventListener("click", (e) => {
+        if (!search_input_field.contains(e.target) && !searchlist.contains(e.target)) {
+            searchlist.classList.add("hidden");
+        }
     });
 
     search_nav_num = document.getElementById("search-nav-num");
@@ -480,14 +505,89 @@ function initPage() {
             projector_sliders[t]["label"].value = "";
         });
     }
+
+    // Populate debug session search bar content and set up fields
+    var sidebar_custom = document.getElementById("sidebar-custom-dmm");
+    var pos_input = sidebar_custom.querySelector('*[name="pos"]');
+    var neg_input = sidebar_custom.querySelector('*[name="neg"]');
+    var pos_content = sidebar_custom.querySelector('*[name="pos-content"]');
+    var neg_content = sidebar_custom.querySelector('*[name="neg-content"]');
+
+    for (let netname in netdict) {
+        let posdiv = document.createElement("div");
+        let negdiv = document.createElement("div");
+        let name = getElementName({ "type": "net", "val": netname });
+        posdiv.innerHTML = name;
+        negdiv.innerHTML = name;
+        posdiv.addEventListener("click", () => {
+            sidebar_custom_selection.pos.type = "net";
+            sidebar_custom_selection.pos.val = netname;
+            pos_input.value = name;
+            pos_content.classList.add("hidden");
+        });
+        negdiv.addEventListener("click", () => {
+            sidebar_custom_selection.neg.type = "net";
+            sidebar_custom_selection.neg.val = netname;
+            neg_input.value = name;
+            neg_content.classList.add("hidden");
+        });
+        pos_content.appendChild(posdiv);
+        neg_content.appendChild(negdiv);
+    }
+    for (let pinidx in pindict) {
+        let posdiv = document.createElement("div");
+        let negdiv = document.createElement("div");
+        let name = getElementName({ "type": "pin", "val": pinidx });
+        posdiv.innerHTML = name;
+        negdiv.innerHTML = name;
+        posdiv.addEventListener("click", () => {
+            sidebar_custom_selection.pos.type = "pin";
+            sidebar_custom_selection.pos.val = pinidx;
+            pos_input.value = name;
+            pos_content.classList.add("hidden");
+        });
+        negdiv.addEventListener("click", () => {
+            sidebar_custom_selection.neg.type = "pin";
+            sidebar_custom_selection.neg.val = pinidx;
+            neg_input.value = name;
+            neg_content.classList.add("hidden");
+        });
+        pos_content.appendChild(posdiv);
+        neg_content.appendChild(negdiv);
+    }
+
+    pos_input.addEventListener("focusin", () => { pos_content.classList.remove("hidden") });
+    neg_input.addEventListener("focusin", () => { neg_content.classList.remove("hidden") });
+
+    forceNumericInput(sidebar_custom.querySelector('*[name="lo"]'));
+    forceNumericInput(sidebar_custom.querySelector('*[name="hi"]'));
+
+    var custom_save_button = sidebar_custom.querySelector('*[name="save"]');
+    custom_save_button.addEventListener("click", () => {
+        if (sidebar_custom_selection.pos.type !== null) {
+            // A positive rail is all we need
+            addDebugCard(from_user = true);
+
+            sidebar_custom.classList.add("hidden");
+        } else {
+            // TODO maybe pulse positive rail input field
+        }
+    });
+
+    resetSidebarCustom();
+
+    document.getElementById("sidebar-add-button").addEventListener("click", () => {
+        sidebar_custom.classList.remove("hidden");
+    });
+
+    document.getElementById("sidebar-save-button").addEventListener("click", () => {
+        console.log("Saving session is WIP, closing sidebar");
+        sidebar_split.collapse(1);
+        resizeAll();
+    })
 }
 
-function searchBarHandler() {
-    var input = document.getElementById("search-input");
-    var filter = input.value.toLowerCase();
-    var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
-
-    var divs = document.getElementById("search-content").getElementsByTagName("div");
+function searchHandler(tokens, divs) {
     for (var i = 0; i < divs.length; i++) {
         let val = divs[i].innerText.toLowerCase();
         let match = true;
@@ -503,6 +603,241 @@ function searchBarHandler() {
             divs[i].classList.add("hidden");
         }
     }
+}
+
+function resetSidebarCustom() {
+    sidebar_custom_selection.pos.type = null;
+    sidebar_custom_selection.pos.val = null;
+    sidebar_custom_selection.neg.type = null;
+    sidebar_custom_selection.neg.val = null;
+
+    var sidebar_custom = document.getElementById("sidebar-custom-dmm");
+    sidebar_custom.querySelector('*[name="pos"]').value = "";
+    sidebar_custom.querySelector('*[name="neg"]').value = "";
+    sidebar_custom.querySelector('*[name="lo"]').value = "";
+    sidebar_custom.querySelector('*[name="hi"]').value = "";
+    sidebar_custom.querySelector('*[name="unit-prefix"]').value = "none";
+    sidebar_custom.querySelector('*[name="unit"]').value = "none";
+}
+
+function addDebugCard(from_user, measurement = null) {
+    var new_card = {
+        "pos": {
+            "type": null,
+            "val": null
+        },
+        "neg": {
+            "type": null,
+            "val": null
+        },
+        "bounds": {
+            "lo": null,
+            "hi": null
+        },
+        "value": null,
+        "unit": null
+    };
+
+    if (from_user) {
+        // User specified custom card and hit save
+
+        new_card.pos.type = sidebar_custom_selection.pos.type;
+        new_card.pos.val = sidebar_custom_selection.pos.val;
+
+        if (sidebar_custom_selection.neg.type === null) {
+            new_card.neg.type = "net";
+            new_card.neg.val = "GND";
+        } else {
+            new_card.neg.type = sidebar_custom_selection.neg.type;
+            new_card.neg.val = sidebar_custom_selection.neg.val;
+        }
+
+        // Rest of info can be taken straight from form
+        var sidebar_custom = document.getElementById("sidebar-custom-dmm");
+
+        let multiplier = units.getMultiplier(sidebar_custom.querySelector('*[name="unit-prefix"]').value);
+        let lo = parseFloat(sidebar_custom.querySelector('*[name="lo"]').value);
+        let hi = parseFloat(sidebar_custom.querySelector('*[name="hi"]').value);
+        if (!isNaN(lo)) {
+            new_card.bounds.lo = lo * multiplier;
+        }
+        if (!isNaN(hi)) {
+            new_card.bounds.hi = hi * multiplier;
+        }
+
+        let unit = sidebar_custom.querySelector('*[name="unit"]').value;
+        if (unit !== "none") {
+            new_card.unit = unit;
+        }
+
+        resetSidebarCustom();
+    } else {
+        // A measurement was taken during a session without a corresponding card
+        console.log("Measurement cards are WIP");
+        new_card.pos = measurement.pos;
+        new_card.neg = measurement.neg;
+        new_card.value = measurement.value;
+        new_card.unit = measurement.unit;
+    }
+
+    // No duplicate cards in session
+    let found_duplicate = false;
+    for (let card of current_debug_session.cards) {
+        if (card.pos.type == new_card.pos.type &&
+            card.pos.val == new_card.pos.val &&
+            card.neg.type == new_card.neg.type &&
+            card.neg.val == new_card.neg.val &&
+            card.unit == new_card.unit) {
+            found_duplicate = true;
+            break;
+        }
+    }
+    if (found_duplicate) {
+        return;
+    }
+
+    current_debug_session.cards.push(new_card);
+
+    let div = document.createElement("div");
+    div.classList.add("sidebar-card");
+    let valtext = new_card.value !== null ? String(new_card.value) : "--";
+    if (new_card.unit !== null) {
+        valtext += new_card.unit;
+    }
+    div.innerHTML =
+        `<div class="card-row">
+        <span style="background: red;">&nbsp;</span>
+        <span class="sidebar-card-search">${getElementName(new_card.pos)}</span>
+    </div>
+    <div class="card-row">
+        <span style="background: black;">&nbsp;</span>
+        <span class="sidebar-card-search">${getElementName(new_card.neg)}</span>
+    </div>
+    <div class="card-row">
+        <span class="sidebar-result">${valtext}</span>
+    </div>`;
+
+    if (new_card.bounds.lo !== null || new_card.bounds.hi !== null) {
+        let lospan = document.createElement("span");
+        lospan.classList.add("bound");
+        if (new_card.bounds.lo !== null) {
+            lospan.innerHTML = new_card.bounds.lo;
+            if (new_card.value !== null) {
+                lospan.classList.add(new_card.value >= new_card.bounds.lo ? "good" : "bad");
+            }
+        } else {
+            lospan.innerHTML = "n/a";
+        }
+        let hispan = document.createElement("span");
+        hispan.classList.add("bound");
+        if (new_card.bounds.hi !== null) {
+            hispan.innerHTML = new_card.bounds.hi;
+            if (new_card.value !== null) {
+                hispan.classList.add(new_card.value <= new_card.bounds.hi ? "good" : "bad");
+            }
+        } else {
+            hispan.innerHTML = "n/a";
+        }
+
+        let bounddiv = document.createElement("div");
+        bounddiv.innerHTML = "(";
+        bounddiv.appendChild(lospan);
+        bounddiv.innerHTML += "-";
+        bounddiv.appendChild(hispan);
+        if (new_card.unit !== null) {
+            bounddiv.innerHTML += new_card.unit;
+        }
+        bounddiv.innerHTML += " )";
+
+        div.querySelector(".card-row:last-child").appendChild(bounddiv);
+    }
+
+    document.getElementById("sidebar-cards").appendChild(div);
+}
+
+function openDebug() {
+    // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
+    var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
+    sidebar_split.setSizes([100 - min_percent, min_percent]);
+    resizeAll();
+}
+
+function sidebarSearchHandler(dir) {
+    // TODO query selector name stuff is in case we want multiple customs at once
+    var input = document.getElementById("sidebar-custom-dmm").querySelector(`input[name="${dir}"]`);
+    var filter = input.value.toLowerCase();
+    var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
+
+    var divs = document.getElementById("sidebar-custom-dmm").querySelector(`div[name="${dir}-content"]`).getElementsByTagName("div");
+
+    searchHandler(tokens, divs);
+
+    // We only want to allow selections by clicking on a list item, so typing erases saved value
+    sidebar_custom_selection[dir].type = null;
+    sidebar_custom_selection[dir].val = null;
+}
+
+function searchBarHandler() {
+    var input = document.getElementById("search-input");
+    var filter = input.value.toLowerCase();
+    var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
+
+    var divs = document.getElementById("search-content").getElementsByTagName("div");
+
+    searchHandler(tokens, divs);
+}
+
+function dmmMeasurement(data) {
+    let pos_selection = null;
+    let neg_selection = null;
+    let poshits = [];
+    let neghits = [];
+
+    let layer = data.side; // F or B
+
+    for (let pin of pinHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
+        // poshits.push({ "type": "pin", "val": pin });
+    }
+    for (let net of netHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
+        poshits.push({ "type": "net", "val": net });
+    }
+    if (poshits.length == 0) {
+        logerr("Positive probe measured unknown pad/net");
+        return;
+    } else if (poshits.length > 1) {
+        console.log("Positive probe hit several components. Selection disambiguation is still WIP");
+        return;
+    } else {
+        pos_selection = poshits[0];
+    }
+
+    for (let pin of pinHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
+        // neghits.push({ "type": "pin", "val": pin });
+    }
+    for (let net of netHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
+        neghits.push({ "type": "net", "val": net });
+    }
+    if (neghits.length == 0) {
+        logerr("Negative probe measured unknown pad/net");
+        return;
+    } else if (neghits.length > 1) {
+        console.log("Negative probe hit several components. Selection disambiguation is still WIP");
+        return;
+    } else {
+        neg_selection = neghits[0];
+    }
+
+    let measurement = {
+        "pos": pos_selection,
+        "neg": neg_selection,
+        "value": data.val,
+        "unit": data.unit
+    };
+
+    // TODO show probes actually selecting
+
+    // TODO check for existence
+    addDebugCard(from_user=false, measurement);
 }
 
 function searchBarX() {
@@ -849,6 +1184,7 @@ function initSocket() {
     socket.on("tool-measure", (data) => {
         if (!tools[data.type].ready) {
             console.log(`${data.type} tool received measurement but is not fully set up`);
+            return;
         }
         switch (data.type) {
             case "ptr":
@@ -857,6 +1193,7 @@ function initSocket() {
             case "dmm":
                 console.log(`measured ${data.val} ${data.unit} with pos at (${data.pos_coords.x},${data.pos_coords.y})
                 and neg probe at (${data.neg_coords.x},${data.neg_coords.y})`);
+                dmmMeasurement(data);
                 break;
             case "osc":
                 console.log("I don't know what the oscilloscope should do");

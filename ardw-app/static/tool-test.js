@@ -95,13 +95,15 @@ window.onload = () => {
             "val": 5.2,
             "unit": "V",
             "pos_coords": {
-                "x": 100,
-                "y": 100,
+                "x": 179,
+                "y": 86,
             },
             "neg_coords": {
-                "x": 50,
-                "y": 200
-            }
+                "x": 168,
+                "y": 86
+            },
+            "side": "F",
+            "status": "debug"
         };
         console.log(data);
         socket.emit("tool-debug", data);

@@ -18,13 +18,14 @@
                     <div id="tools-ptr" class="button tool-button" onclick="toolButton('ptr')">+ PTR</div>
                     <div id="tools-dmm" class="button tool-button" onclick="toolButton('dmm')">+ DMM</div>
                     <div id="tools-osc" class="button tool-button" onclick="toolButton('osc')">+ OSC</div>
+                    <div id="open-debug" class="button tool-button" onclick="openDebug()">Open Debug Panel</div>
                 </div>
                 <div id="search">
                     <div id="search-field">
                         <input type="text" id="search-input" placeholder="Search..." onkeyup="searchBarHandler()" />
                         <span onclick="searchBarX()">X</span>
                     </div>
-                    <div id="search-content" class="hidden"></div>
+                    <div id="search-content" class="search-content hidden"></div>
                     <div id="search-nav">
                         <span id="search-nav-num">0 of 0</span>
                         <span id="search-nav-text">
@@ -78,7 +79,7 @@
                         </div>
                         <div class="settings-item slider-item">
                             <span>Board Rotation</span>
-                            <input type="text" id="settings-rotation-label" value="0"/>&deg;
+                            <input type="text" id="settings-rotation-label" value="0" />&deg;
                             <br />
                             <input type="range" id="settings-rotation" value="0" min="-36" max="36" />
                         </div>
@@ -170,15 +171,79 @@
                 </div>
             </div>
             <div id="sidebar">
-                <div id="sidebar-dmm">
-                    <h2>Multimeter</h2>
-                </div>
-                <div id="sidebar-osc" class="hidden">
-                    <h2>Oscilloscope</h2>
+                <div>
+                    <div id="sidebar-title">
+                        <h2>Debug Session</h2>
+                        <div id="sidebar-help">
+                            <div>?</div>
+                            <div id="sidebar-help-content">
+                                To add measurements to the session, either directly probe the board
+                                to have them automatically recorded, or specify a guided measurement below.
+                            </div>
+                        </div>
+                    </div>
+                    <div id="sidebar-name">
+                        Name:&nbsp;
+                        <input type="text" id="sidebar-name" placeholder="Debug Session #1" />
+                    </div>
+                    <div id="sidebar-timestamp">
+                        Timestamp:&nbsp;00:00:00
+                    </div>
+                    <div id="sidebar-notes">
+                        Notes:&nbsp;
+                        <textarea id="sidebar-notes" rows="3"></textarea>
+                    </div>
+                    <div id="sidebar-cards">
+                        <div id="sidebar-custom-dmm" class="sidebar-card hidden">
+                            <div class="card-row">
+                                <span style="background: red;">&nbsp;</span>
+                                <input type="text" name="pos" class="sidebar-card-search"
+                                    onkeyup="sidebarSearchHandler('pos')" />
+                                <div name="pos-content" class="search-content hidden"></div>
+                            </div>
+                            <div class="card-row">
+                                <span style="background: black;">&nbsp;</span>
+                                <input type="text" name="neg" class="sidebar-card-search"
+                                    onkeyup="sidebarSearchHandler('neg')" placeholder="Net GND" />
+                                <div name="neg-content" class="search-content hidden"></div>
+                            </div>
+                            <div class="card-row">
+                                <div class="card-row">
+                                    Bounds:
+                                    <input type="text" name="lo" class="sidebar-card-bound" />
+                                    -
+                                    <input type="text" name="hi" class="sidebar-card-bound" />
+                                    <select name="unit-prefix">
+                                        <option value="nano">n</option>
+                                        <option value="micro">&mu;</option>
+                                        <option value="milli">m</option>
+                                        <option value="none" selected></option>
+                                        <option value="kilo">K</option>
+                                        <option value="mega">M</option>
+                                    </select>
+                                    <select name="unit">
+                                        <option value="none"></option>
+                                        <option value="V">V</option>
+                                        <option value="I">A</option>
+                                        <option value="R">&Omega;</option>
+                                        <option value="C">F</option>
+                                    </select>
+                                </div>
+                                <div name="save" class="button">Save</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div id="sidebar-add-button" class="button">Add Guided Measurement</div>
+                    </div>
+                    <div id="sidebar-buttons">
+                        <div id="sidebar-save-button" class="button">Save and close</div>
+                        <div id="sidebar-export-button" class="button">Export to file</div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div id="tool-popup" class="">
+        <div id="tool-popup" class="hidden">
             <span onclick="toolPopupX()">X</span>
             <div id="tool-popup-title">Adding Selection Probe</div>
             <div id="tool-popup-text">

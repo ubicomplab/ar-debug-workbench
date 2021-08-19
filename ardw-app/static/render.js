@@ -2,7 +2,9 @@
 // Layout rendering taken from Interactive HTML BOM /web/ibom.js, /web/render.js, /web/util.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
 
+/** front: layerdict, back: layerdict */
 var allcanvas;
+/** layerdict */
 var schematic_canvas;
 
 var topmostdiv = document.getElementById("topmostdiv");
@@ -906,7 +908,7 @@ function handlePointerUp(e, layerdict) {
         resetTransform(layerdict);
       } else {
         // This is just a regular tap
-        handleMouseClick(e, layerdict);
+        handleMouseClick(layerdict, e);
       }
       layerdict.anotherPointerTapped = false;
     } else {

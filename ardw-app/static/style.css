@@ -160,6 +160,7 @@ html, body {
     background-color: unset;
     cursor: default;
 }
+
 .button.ready.disabled:hover {
     background-color: unset;
 }
@@ -254,28 +255,34 @@ input:checked+.slider:before {
     user-select: none;
 }
 
-#menubar #search-content {
-    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-    z-index: 100;
-    position: absolute;
-    background-color: white;
-    left: 0;
-    width: 100%;
-    box-sizing: border-box;
-    max-height: 90vh;
-    overflow-y: scroll;
-    font-size: 10pt;
-    overflow-x: hidden;
-}
 
-#menubar #search-content>div {
+.search-content {
+    position: absolute;
+    background: white;
+    z-index: 10;
+    border: 1px solid #ccc;
+    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+    box-sizing: border-box;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    font-size: 10pt;
+}
+.search-content>div {
     border: 1px solid #eee;
     box-sizing: border-box;
     padding: 3px;
     cursor: pointer;
 }
 
-#menubar #search-nav {
+#search-content.search-content {
+    z-index: 100;
+    left: 0;
+    width: 100%;
+    max-height: 90vh;
+}
+
+#search-nav {
     display: flex;
     align-items: center;
     font-size: 10pt;
@@ -412,7 +419,7 @@ div.canvas-container>canvas {
     align-items: center;
 }
 
-#sidebar {
+#sidebar>div {
     display: flex;
     flex-direction: column;
     padding: 5px;
@@ -420,6 +427,8 @@ div.canvas-container>canvas {
     background: white;
     position: relative;
     z-index: 50;
+    height: 100%;
+    box-sizing: border-box;
 }
 
 #sidebar-title {
@@ -477,7 +486,7 @@ div.canvas-container>canvas {
 
 #sidebar-name>input {
     width: 1px;
-    /* this width is overridden by flex-grow, but necessary */
+    /* this width is overridden by flex-grow, but necessary for it to work */
     flex-grow: 1;
 }
 
@@ -491,28 +500,86 @@ div.canvas-container>canvas {
 }
 
 #sidebar-cards {
+    height: 1px;
+    /* this height is overridden by flex-grow, but necessary for it to work */
     flex-grow: 1;
     overflow-y: scroll;
     /* overflow-x: hidden; */
+    display: flex;
+    flex-direction: column;
 }
 
-.sidebar-card>form {
-    display: grid;
-    grid-template-columns: min-content auto min-content min-content min-content min-content;
-    grid-template-rows: 1fr 1fr;
+.sidebar-card {
+    border: 1px solid #ccc;
+    padding: 4px;
+    border-radius: 6px;
+    margin-bottom: 4px;
 }
 
-.sidebar-card>form>* {
-    margin: 0 2px 2px;
+.sidebar-card:last-child {
+    /* margin-bottom: 0; */
 }
 
-.sidebar-card-search {
+.card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+    position: relative;
+}
+
+.card-row:last-child, .card-row>.card-row {
+    margin-bottom: 0;
+}
+
+.card-row .sidebar-card-search {
     min-width: 30px;
+    flex-grow: 1;
+    margin-left: 4px;
 }
 
-.sidebar-card-bound {
-    width: 30px;
+.card-row .sidebar-card-bound {
+    width: 36px;
     text-align: right;
+}
+
+.card-row .button {
+    margin-left: 2px;
+}
+
+.card-row .sidebar-result {
+    font-size: 12pt;
+    font-weight: bold;
+}
+
+.card-row .bound {
+    padding: 2px;
+    border: 1px solid white;
+    border-radius: 4px;
+}
+
+.card-row .bound.good {
+    border-color: green;
+}
+
+.card-row .bound.bad {
+    border-color: red;
+}
+
+#sidebar-custom-dmm {
+    order: 1;
+}
+
+.card-row .search-content {
+    top: 21px;
+    left: 9px;
+    width: calc(100% - 9px);
+    max-height: 200px;
+}
+
+.card-row .search-content>div {
+    font-size: 9pt;
 }
 
 #sidebar-add-button {
@@ -529,7 +596,7 @@ div.canvas-container>canvas {
     margin: 2px;
 }
 
-#sidebar>div {
+#sidebar>div>div {
     padding: 5px;
 }
 
