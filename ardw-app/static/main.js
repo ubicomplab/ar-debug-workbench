@@ -47,12 +47,15 @@ var sidebar_custom_selection = {
 /** list of { name, timestamp, notes, cards=[] } */
 var debug_sessions = [];
 
+/** cards is list of {pos, neg, bounds, value, unit, DOM element} */
 var current_debug_session = {
     "name": null,
     "timestamp": null,
     "notes": null,
     "cards": []
 }
+
+var active_debug_session = false;
 
 /*
 name: display name of device
@@ -559,8 +562,10 @@ function initPage() {
     pos_input.addEventListener("focusin", () => { pos_content.classList.remove("hidden") });
     neg_input.addEventListener("focusin", () => { neg_content.classList.remove("hidden") });
 
-    forceNumericInput(sidebar_custom.querySelector('*[name="lo"]'));
-    forceNumericInput(sidebar_custom.querySelector('*[name="hi"]'));
+    var lo_input = sidebar_custom.querySelector('*[name="lo"]');
+    var hi_input = sidebar_custom.querySelector('*[name="hi"]');
+    forceNumericInput(lo_input);
+    forceNumericInput(hi_input);
 
     var custom_save_button = sidebar_custom.querySelector('*[name="save"]');
     custom_save_button.addEventListener("click", () => {
@@ -569,6 +574,7 @@ function initPage() {
             addDebugCard(from_user = true);
 
             sidebar_custom.classList.add("hidden");
+
         } else {
             // TODO maybe pulse positive rail input field
         }
@@ -582,27 +588,14 @@ function initPage() {
 
     document.getElementById("sidebar-save-button").addEventListener("click", () => {
         console.log("Saving session is WIP, closing sidebar");
-        sidebar_split.collapse(1);
-        resizeAll();
-    })
-}
 
-function searchHandler(tokens, divs) {
-    for (var i = 0; i < divs.length; i++) {
-        let val = divs[i].innerText.toLowerCase();
-        let match = true;
-        for (let token of tokens) {
-            if (val.indexOf(token) == -1) {
-                match = false;
-                break;
-            }
-        }
-        if (match) {
-            divs[i].classList.remove("hidden");
-        } else {
-            divs[i].classList.add("hidden");
-        }
-    }
+        saveDebug();
+    });
+
+    document.getElementById("sidebar-export-button").addEventListener("click", () => {
+        console.log("Export function is WIP, doing nothing");
+        alert("Export function WIP");
+    })
 }
 
 function resetSidebarCustom() {
@@ -618,6 +611,19 @@ function resetSidebarCustom() {
     sidebar_custom.querySelector('*[name="hi"]').value = "";
     sidebar_custom.querySelector('*[name="unit-prefix"]').value = "none";
     sidebar_custom.querySelector('*[name="unit"]').value = "none";
+
+    // Refresh the search bar contents
+    sidebarSearchHandler("pos");
+    sidebarSearchHandler("neg");
+}
+
+/** Returns true if the cards have the same pos, neg, and unit */
+function doCardsMatch(card1, card2) {
+    return card1.pos.type == card2.pos.type &&
+        card1.pos.val == card2.pos.val &&
+        card1.neg.type == card2.neg.type &&
+        card1.neg.val == card2.neg.val &&
+        card1.unit == card2.unit;
 }
 
 function addDebugCard(from_user, measurement = null) {
@@ -635,7 +641,8 @@ function addDebugCard(from_user, measurement = null) {
             "hi": null
         },
         "value": null,
-        "unit": null
+        "unit": null,
+        "element": null
     };
 
     if (from_user) {
@@ -696,8 +703,6 @@ function addDebugCard(from_user, measurement = null) {
         return;
     }
 
-    current_debug_session.cards.push(new_card);
-
     let div = document.createElement("div");
     div.classList.add("sidebar-card");
     let valtext = new_card.value !== null ? String(new_card.value) : "--";
@@ -753,6 +758,9 @@ function addDebugCard(from_user, measurement = null) {
     }
 
     document.getElementById("sidebar-cards").appendChild(div);
+
+    new_card.element = div;
+    current_debug_session.cards.push(new_card);
 }
 
 function openDebug() {
@@ -760,6 +768,68 @@ function openDebug() {
     var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
     sidebar_split.setSizes([100 - min_percent, min_percent]);
     resizeAll();
+
+    if (active_debug_session) {
+        // We already have the sidebar open, so we're done
+        return;
+    }
+
+    active_debug_session = true;
+
+    // For now, just create a new session when we open the panel
+    var now = new Date();
+    current_debug_session = {
+        "name": "",
+        "timestamp": now.toLocaleTimeString(),
+        "notes": "",
+        "cards": []
+    }
+
+    var sidebar = document.getElementById("sidebar");
+    var name_input = sidebar.querySelector('*[name="sidebar-name"]');
+    var timestamp = sidebar.querySelector('*[name="sidebar-timestamp"]');
+    var notes_input = sidebar.querySelector('*[name="sidebar-notes"]');
+    name_input.value = "";
+    name_input.placeholder = `Debug Session #${debug_sessions.length + 1}`;
+    timestamp.innerHTML = current_debug_session.timestamp;
+    notes_input.value = "";
+}
+
+function saveDebug() {
+    if (current_debug_session.cards.length > 0) {
+        let name_input = document.querySelector("#sidebar-name > input");
+        current_debug_session.name = name_input.value !== "" ? name_input.value : name_input.placeholder;
+        current_debug_session.notes = document.querySelector("#sidebar-notes > textarea").value;
+        debug_sessions.push(current_debug_session);
+
+        let custom_card = document.getElementById("sidebar-custom-dmm");
+        let sidebar_cards = document.getElementById("sidebar-cards");
+        sidebar_cards.innerHTML = "";
+        sidebar_cards.appendChild(custom_card);
+    }
+
+    active_debug_session = false;
+
+    sidebar_split.collapse(1);
+    resizeAll();
+}
+
+function searchHandler(tokens, divs) {
+    for (var i = 0; i < divs.length; i++) {
+        let val = divs[i].innerText.toLowerCase();
+        let match = true;
+        for (let token of tokens) {
+            if (val.indexOf(token) == -1) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            divs[i].classList.remove("hidden");
+        } else {
+            divs[i].classList.add("hidden");
+        }
+    }
 }
 
 function sidebarSearchHandler(dir) {
@@ -788,6 +858,11 @@ function searchBarHandler() {
 }
 
 function dmmMeasurement(data) {
+    if (current_debug_session.name === null) {
+        console.log("Received measurement without an active debug session, ignoring");
+        return;
+    }
+
     let pos_selection = null;
     let neg_selection = null;
     let poshits = [];
@@ -836,8 +911,38 @@ function dmmMeasurement(data) {
 
     // TODO show probes actually selecting
 
-    // TODO check for existence
-    addDebugCard(from_user=false, measurement);
+    for (let card of current_debug_session.cards) {
+        if (doCardsMatch(card, measurement)) {
+            // update existing measurement instead
+            if (card.value !== null) {
+                console.log(`card ${card} already has a measurement but was measured again`);
+            } else {
+                card.value = measurement.value;
+                card.unit = measurement.unit;
+
+                card.element.querySelector('.sidebar-result').innerHTML = `${card.value}${card.unit}`;
+                let bounds = card.element.querySelectorAll('.bound');
+                if (card.bounds.lo !== null) {
+                    if (card.bounds.lo <= card.value) {
+                        bounds[0].classList.add("good");
+                    } else {
+                        bounds[0].classList.add("bad");
+                    }
+                }
+                if (card.bounds.hi !== null) {
+                    if (card.bounds.hi >= card.value) {
+                        bounds[1].classList.add("good");
+                    } else {
+                        bounds[1].classList.add("bad");
+                    }
+                }
+            }
+            return;
+        }
+    }
+
+    // No matching card found, just add one
+    addDebugCard(from_user = false, measurement);
 }
 
 function searchBarX() {
