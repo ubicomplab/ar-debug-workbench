@@ -5,15 +5,15 @@ var DEBUG_LAYOUT_CLICK = false;
 
 // zoom and crosshair constants
 var VIEW_MINIMUMS = {
-    "sch": {
-        "comp": 0.1,
-        "pin": 0.04,
-        "net": 0.5
-    },
-    "layout": {
-        "footprint": 0.1,
-        "pad": 0.02
-    }
+  "sch": {
+    "comp": 0.1,
+    "pin": 0.04,
+    "net": 0.5
+  },
+  "layout": {
+    "footprint": 0.1,
+    "pad": 0.02
+  }
 };
 var VIEW_MAXIMUM = 0.8;
 var CROSSHAIR_LENGTH = 100000;
@@ -27,21 +27,21 @@ var search_nav_text = null;
 var search_nav_current = [0, 0];
 
 var projector_sliders = {
-    "tx": {},
-    "ty": {},
-    "r": {},
-    "z": {}
+  "tx": {},
+  "ty": {},
+  "r": {},
+  "z": {}
 };
 
 var sidebar_custom_selection = {
-    "pos": {
-        "type": null,
-        "val": null
-    },
-    "neg": {
-        "type": null,
-        "val": null
-    }
+  "pos": {
+    "type": null,
+    "val": null
+  },
+  "neg": {
+    "type": null,
+    "val": null
+  }
 };
 
 /** list of { name, timestamp, notes, cards=[] } */
@@ -49,10 +49,10 @@ var debug_sessions = [];
 
 /** cards is list of {pos, neg, bounds, value, unit, DOM element} */
 var current_debug_session = {
-    "name": null,
-    "timestamp": null,
-    "notes": null,
-    "cards": []
+  "name": null,
+  "timestamp": null,
+  "notes": null,
+  "cards": []
 }
 
 var active_debug_session = false;
@@ -70,54 +70,54 @@ selection: {probe: null when not connected, false when connected,
             and true (WIP) when it's the source of the last selection}
 */
 var tools = {
-    "ptr": {
-        "name": "Selection Probe",
-        "ready": false,
-        "selection": null,
-    },
-    "dmm": {
-        "name": "DMM",
-        "ready": false,
-        "device": false,
-        "selection": {
-            "pos": null, // red
-            "neg": null, // black
-        }
-    },
-    "osc": {
-        "name": "Oscilloscope",
-        "ready": false,
-        "device": false,
-        "selection": {
-            "1": null, // yellow
-            "2": null, // green
-            "3": null, // blue
-            "4": null, // pink
-        }
+  "ptr": {
+    "name": "Selection Probe",
+    "ready": false,
+    "selection": null,
+  },
+  "dmm": {
+    "name": "DMM",
+    "ready": false,
+    "device": false,
+    "selection": {
+      "pos": null, // red
+      "neg": null, // black
     }
+  },
+  "osc": {
+    "name": "Oscilloscope",
+    "ready": false,
+    "device": false,
+    "selection": {
+      "1": null, // yellow
+      "2": null, // green
+      "3": null, // blue
+      "4": null, // pink
+    }
+  }
 };
 //
 var active_tool_request = false;
 
 var sidebar_shown = false;
 sidebar_split = Split(["#display", "#sidebar"], {
-    sizes: [100, 0],
-    minSize: 0,
-    gutterSize: 5,
-    onDragEnd: resizeAll
+  sizes: [100, 0],
+  minSize: 0,
+  gutterSize: 5,
+  onDragEnd: resizeAll
 });
 display_split = Split(["#schematic-div", "#layout-div"], {
-    sizes: [50, 50],
-    minSize: 0,
-    gutterSize: 5,
-    onDragEnd: resizeAll
+  sizes: [50, 50],
+  minSize: 0,
+  gutterSize: 5,
+  onDragEnd: resizeAll
 });
 canvas_split = Split(["#front-canvas", "#back-canvas"], {
-    sizes: [50, 50],
-    minSize: 0,
-    gutterSize: 5,
-    direction: "vertical",
-    onDragEnd: resizeAll
+  sizes: [50, 50],
+  minSize: 0,
+  gutterSize: 5,
+  direction: "vertical",
+  onDragEnd: resizeAll
 });
 
 /**
@@ -127,96 +127,96 @@ canvas_split = Split(["#front-canvas", "#back-canvas"], {
  * @param {*} targetsize From VIEW_MINIMUMS
  */
 function zoomToBox(layerdict, bbox, targetsize) {
-    if (layerdict.layer !== "S") {
-        bbox = applyRotation(bbox);
+  if (layerdict.layer !== "S") {
+    bbox = applyRotation(bbox);
+  }
+
+  var minwidth = bbox["maxx"] - bbox["minx"];
+  var minheight = bbox["maxy"] - bbox["miny"];
+  var centerx = (bbox["minx"] + bbox["maxx"]) / 2;
+  var centery = (bbox["miny"] + bbox["maxy"]) / 2;
+  // console.log(`min window is ${minwidth}x${minheight} at (${centerx},${centery})`);
+
+  var viewwidth = layerdict.bg.width / (layerdict.transform.zoom * layerdict.transform.s);
+  var viewheight = layerdict.bg.height / (layerdict.transform.zoom * layerdict.transform.s);
+
+  var xrat = minwidth / viewwidth;
+  var yrat = minheight / viewheight;
+
+  var maxrat = Math.max(xrat, yrat);
+
+  // Only zoom if the target will be too small or too large
+  if (maxrat < targetsize || maxrat > VIEW_MAXIMUM) {
+    if (maxrat > VIEW_MAXIMUM) {
+      targetsize = VIEW_MAXIMUM;
     }
+    var schdim = schdata.schematics[schid_to_idx[current_schematic]].dimensions;
+    var xzoom = schdim.x * sch_zoom_default * targetsize / minwidth;
+    var yzoom = schdim.y * sch_zoom_default * targetsize / minheight;
 
-    var minwidth = bbox["maxx"] - bbox["minx"];
-    var minheight = bbox["maxy"] - bbox["miny"];
-    var centerx = (bbox["minx"] + bbox["maxx"]) / 2;
-    var centery = (bbox["miny"] + bbox["maxy"]) / 2;
-    // console.log(`min window is ${minwidth}x${minheight} at (${centerx},${centery})`);
-
-    var viewwidth = layerdict.bg.width / (layerdict.transform.zoom * layerdict.transform.s);
-    var viewheight = layerdict.bg.height / (layerdict.transform.zoom * layerdict.transform.s);
-
-    var xrat = minwidth / viewwidth;
-    var yrat = minheight / viewheight;
-
-    var maxrat = Math.max(xrat, yrat);
-
-    // Only zoom if the target will be too small or too large
-    if (maxrat < targetsize || maxrat > VIEW_MAXIMUM) {
-        if (maxrat > VIEW_MAXIMUM) {
-            targetsize = VIEW_MAXIMUM;
-        }
-        var schdim = schdata.schematics[schid_to_idx[current_schematic]].dimensions;
-        var xzoom = schdim.x * sch_zoom_default * targetsize / minwidth;
-        var yzoom = schdim.y * sch_zoom_default * targetsize / minheight;
-
-        var newzoom = Math.min(xzoom, yzoom);
-        // console.log(`zoom ${layerdict.transform.zoom} => ${newzoom} (def. ${sch_zoom_default})`)
-        newzoom = Math.max(newzoom, sch_zoom_default);
+    var newzoom = Math.min(xzoom, yzoom);
+    // console.log(`zoom ${layerdict.transform.zoom} => ${newzoom} (def. ${sch_zoom_default})`)
+    newzoom = Math.max(newzoom, sch_zoom_default);
 
 
-        layerdict.transform.zoom = newzoom;
-    }
+    layerdict.transform.zoom = newzoom;
+  }
 
-    // Always pan
-    var newvw = layerdict.bg.width / (layerdict.transform.zoom * layerdict.transform.s);
-    var newvh = layerdict.bg.height / (layerdict.transform.zoom * layerdict.transform.s);
+  // Always pan
+  var newvw = layerdict.bg.width / (layerdict.transform.zoom * layerdict.transform.s);
+  var newvh = layerdict.bg.height / (layerdict.transform.zoom * layerdict.transform.s);
 
-    var newpx = ((newvw / 2) - centerx) * layerdict.transform.s - layerdict.transform.x;
-    var flip = (layerdict.layer == "B")
-    if (flip) {
-        newpx = -newpx + (layerdict.bg.width / layerdict.transform.zoom);
-    }
-    var newpy = ((newvh / 2) - centery) * layerdict.transform.s - layerdict.transform.y;
-    // console.log(`pan (${layerdict.transform.panx},${layerdict.transform.pany}) => (${newpx},${newpy})`);
-    layerdict.transform.panx = newpx;
-    layerdict.transform.pany = newpy;
+  var newpx = ((newvw / 2) - centerx) * layerdict.transform.s - layerdict.transform.x;
+  var flip = (layerdict.layer == "B")
+  if (flip) {
+    newpx = -newpx + (layerdict.bg.width / layerdict.transform.zoom);
+  }
+  var newpy = ((newvh / 2) - centery) * layerdict.transform.s - layerdict.transform.y;
+  // console.log(`pan (${layerdict.transform.panx},${layerdict.transform.pany}) => (${newpx},${newpy})`);
+  layerdict.transform.panx = newpx;
+  layerdict.transform.pany = newpy;
 
-    redrawCanvas(layerdict);
+  redrawCanvas(layerdict);
 }
 
 function zoomToTargetBoxes(schmin, layoutmin) {
-    var layerdicts = {
-        "S": schematic_canvas,
-        "F": allcanvas.front,
-        "B": allcanvas.back
-    };
+  var layerdicts = {
+    "S": schematic_canvas,
+    "F": allcanvas.front,
+    "B": allcanvas.back
+  };
 
-    for (let layer in target_boxes) {
-        if (target_boxes[layer] !== null) {
-            if (target_boxes[layer].length > 0) {
-                let targetsize = layer === "S" ? schmin : layoutmin;
-                // console.log(`finding ${target_boxes[layer]} on ${layer}`)
-                zoomToBox(layerdicts[layer], bboxListToObj(target_boxes[layer]), targetsize);
-            } else {
-                // console.log(`resetting ${layer}`)
-                resetTransform(layerdicts[layer]);
-            }
-        }
+  for (let layer in target_boxes) {
+    if (target_boxes[layer] !== null) {
+      if (target_boxes[layer].length > 0) {
+        let targetsize = layer === "S" ? schmin : layoutmin;
+        // console.log(`finding ${target_boxes[layer]} on ${layer}`)
+        zoomToBox(layerdicts[layer], bboxListToObj(target_boxes[layer]), targetsize);
+      } else {
+        // console.log(`resetting ${layer}`)
+        resetTransform(layerdicts[layer]);
+      }
     }
+  }
 }
 
 function zoomToSelection(layerdict) {
-    var targetsize = null;
-    if (highlighted_component !== -1) {
-        targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["comp"] : VIEW_MINIMUMS["layout"]["footprint"];
-    }
-    if (highlighted_pin !== -1) {
-        targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["pin"] : VIEW_MINIMUMS["layout"]["pad"];
-    }
-    if (highlighted_net !== null) {
-        targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["net"] : null;
-    }
+  var targetsize = null;
+  if (highlighted_component !== -1) {
+    targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["comp"] : VIEW_MINIMUMS["layout"]["footprint"];
+  }
+  if (highlighted_pin !== -1) {
+    targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["pin"] : VIEW_MINIMUMS["layout"]["pad"];
+  }
+  if (highlighted_net !== null) {
+    targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["net"] : null;
+  }
 
-    if (targetsize === null || target_boxes[layerdict.layer] === null) {
-        return;
-    }
+  if (targetsize === null || target_boxes[layerdict.layer] === null) {
+    return;
+  }
 
-    zoomToBox(layerdict, bboxListToObj(target_boxes[layerdict.layer]), targetsize);
+  zoomToBox(layerdict, bboxListToObj(target_boxes[layerdict.layer]), targetsize);
 }
 
 /**
@@ -228,494 +228,494 @@ function zoomToSelection(layerdict) {
  * @returns integer value
  */
 function intFromText(val, lo, hi, def = 0) {
-    val = parseInt(val);
-    if (isNaN(val)) {
-        return def;
-    } else if (val < lo) {
-        return lo;
-    } else if (val > hi) {
-        return hi;
-    } else {
-        return val;
-    }
+  val = parseInt(val);
+  if (isNaN(val)) {
+    return def;
+  } else if (val < lo) {
+    return lo;
+  } else if (val > hi) {
+    return hi;
+  } else {
+    return val;
+  }
 }
 
 /**
  * Initializes various page elements, such as the menu bar and popups
  */
 function initPage() {
-    // Assume for now that 1st schematic shares title with project
-    var projtitle = schdata.schematics[schid_to_idx[1]].name
-    document.getElementById("projtitle").textContent = projtitle
+  // Assume for now that 1st schematic shares title with project
+  var projtitle = schdata.schematics[schid_to_idx[1]].name
+  document.getElementById("projtitle").textContent = projtitle
 
-    // Search field
-    var search_input_field = document.getElementById("search-input");
-    var searchlist = document.getElementById("search-content");
+  // Search field
+  var search_input_field = document.getElementById("search-input");
+  var searchlist = document.getElementById("search-content");
 
-    search_input_field.value = "";
-    search_input_field.addEventListener("focusin", () => {
-        searchlist.classList.remove("hidden");
-    });
-    search_input_field.addEventListener("click", () => {
-        searchlist.classList.remove("hidden");
-    });
-    search_input_field.addEventListener("input", () => {
-        searchlist.classList.remove("hidden");
-    });
-    document.addEventListener("click", (e) => {
-        if (!search_input_field.contains(e.target) && !searchlist.contains(e.target)) {
-            searchlist.classList.add("hidden");
-        }
-    });
-
-    search_nav_num = document.getElementById("search-nav-num");
-    search_nav_text = document.getElementById("search-nav-text");
-    search_nav_num.innerText = "0 of 0";
-    search_nav_text.innerText = "";
-
-    for (let refid in compdict) {
-        appendSelectionDiv(searchlist, refid, "comp");
+  search_input_field.value = "";
+  search_input_field.addEventListener("focusin", () => {
+    searchlist.classList.remove("hidden");
+  });
+  search_input_field.addEventListener("click", () => {
+    searchlist.classList.remove("hidden");
+  });
+  search_input_field.addEventListener("input", () => {
+    searchlist.classList.remove("hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!search_input_field.contains(e.target) && !searchlist.contains(e.target)) {
+      searchlist.classList.add("hidden");
     }
-    for (let pinidx in pindict) {
-        appendSelectionDiv(searchlist, pinidx, "pin");
-    }
-    for (let netname in netdict) {
-        appendSelectionDiv(searchlist, netname, "net");
-    }
+  });
 
-    // Settings
+  search_nav_num = document.getElementById("search-nav-num");
+  search_nav_text = document.getElementById("search-nav-text");
+  search_nav_num.innerText = "0 of 0";
+  search_nav_text.innerText = "";
 
-    // this is scuffed, do better later
-    var display_checkboxes = document.querySelectorAll('input[name="settings-display"]');
-    display_checkboxes.forEach((checkbox) => {
-        // For now just start with everything enabled
-        checkbox.checked = true
+  for (let refid in compdict) {
+    appendSelectionDiv(searchlist, refid, "comp");
+  }
+  for (let pinidx in pindict) {
+    appendSelectionDiv(searchlist, pinidx, "pin");
+  }
+  for (let netname in netdict) {
+    appendSelectionDiv(searchlist, netname, "net");
+  }
 
-        checkbox.addEventListener("click", () => {
-            let s = document.querySelector('input[name="settings-display"][value="S"]');
-            let l = document.querySelector('input[name="settings-display"][value="L"]');
-            let lf = document.querySelector('input[name="settings-display"][value="LF"]');
-            let lb = document.querySelector('input[name="settings-display"][value="LB"]');
+  // Settings
 
-            let sch_select = document.getElementById("sch-selection");
+  // this is scuffed, do better later
+  var display_checkboxes = document.querySelectorAll('input[name="settings-display"]');
+  display_checkboxes.forEach((checkbox) => {
+    // For now just start with everything enabled
+    checkbox.checked = true
 
-            if (s.checked && !l.checked) {
-                display_split.collapse(1);
-                sch_select.classList.remove("hidden");
-            } else if (!s.checked && l.checked) {
-                display_split.collapse(0);
-                sch_select.classList.add("hidden");
-            } else {
-                // Disallow an empty selection
-                display_split.setSizes([50, 50]);
-                s.checked = true;
-                l.checked = true;
-                sch_select.classList.remove("hidden");
-            }
+    checkbox.addEventListener("click", () => {
+      let s = document.querySelector('input[name="settings-display"][value="S"]');
+      let l = document.querySelector('input[name="settings-display"][value="L"]');
+      let lf = document.querySelector('input[name="settings-display"][value="LF"]');
+      let lb = document.querySelector('input[name="settings-display"][value="LB"]');
 
-            if (lf.checked && !lb.checked) {
-                canvas_split.collapse(1);
-            } else if (!lf.checked && lb.checked) {
-                canvas_split.collapse(0);
-            } else {
-                // Disallow an empty selection
-                canvas_split.setSizes([50, 50]);
-                lf.checked = true;
-                lb.checked = true;
-            }
+      let sch_select = document.getElementById("sch-selection");
 
-            resizeAll();
+      if (s.checked && !l.checked) {
+        display_split.collapse(1);
+        sch_select.classList.remove("hidden");
+      } else if (!s.checked && l.checked) {
+        display_split.collapse(0);
+        sch_select.classList.add("hidden");
+      } else {
+        // Disallow an empty selection
+        display_split.setSizes([50, 50]);
+        s.checked = true;
+        l.checked = true;
+        sch_select.classList.remove("hidden");
+      }
 
-            // Viewing window is not maintained (without extra effort), so just reset
-            resetTransform(allcanvas.front);
-            resetTransform(allcanvas.back);
-            resetTransform(schematic_canvas);
-        });
+      if (lf.checked && !lb.checked) {
+        canvas_split.collapse(1);
+      } else if (!lf.checked && lb.checked) {
+        canvas_split.collapse(0);
+      } else {
+        // Disallow an empty selection
+        canvas_split.setSizes([50, 50]);
+        lf.checked = true;
+        lb.checked = true;
+      }
+
+      resizeAll();
+
+      // Viewing window is not maintained (without extra effort), so just reset
+      resetTransform(allcanvas.front);
+      resetTransform(allcanvas.back);
+      resetTransform(schematic_canvas);
     });
+  });
 
-    var render_checkboxes = document.querySelectorAll('input[name="settings-render"]');
-    render_checkboxes.forEach((checkbox) => {
-        // Make sure we start in the correct state
-        checkbox.checked = ibom_settings[checkbox.value];
-
-        checkbox.addEventListener("click", () => {
-            ibom_settings[checkbox.value] = checkbox.checked;
-            resizeAll();
-        });
-    });
-
-    var rotation_slider = document.getElementById("settings-rotation");
-    var rotation_label = document.getElementById("settings-rotation-label");
-    rotation_slider.value = 0;
-    rotation_label.value = "0";
-    rotation_slider.addEventListener("input", () => {
-        ibom_settings.boardRotation = rotation_slider.value * 5;
-        rotation_label.value = ibom_settings.boardRotation;
-        resizeAll();
-    });
-    rotation_label.addEventListener("focus", () => {
-        rotation_label.value = "";
-    });
-    rotation_label.addEventListener("keyup", (e) => {
-        if (e.key === "Enter") {
-            let val = intFromText(rotation_label.value, -180, 180);
-            val = Math.floor(val / 5);
-            rotation_slider.value = val;
-            ibom_settings.boardRotation = val * 5;
-            rotation_label.value = ibom_settings.boardRotation;
-            rotation_label.blur();
-            resizeAll();
-        }
-    });
-
-    var find_radio = document.querySelectorAll('input[name="settings-find"]');
-    find_radio.forEach((radio) => {
-        // Make sure we start in the correct state
-        radio.checked = settings["find-type"] === radio.value;
-
-        radio.addEventListener("click", () => {
-            if (radio.checked) {
-                settings["find-type"] = radio.value;
-            }
-        })
-    })
-
-    var find_toggle = document.getElementById("settings-find-toggle");
+  var render_checkboxes = document.querySelectorAll('input[name="settings-render"]');
+  render_checkboxes.forEach((checkbox) => {
     // Make sure we start in the correct state
-    find_toggle.checked = settings["find-activate"] === "auto";
+    checkbox.checked = ibom_settings[checkbox.value];
 
-    find_toggle.addEventListener("click", () => {
-        if (find_toggle.checked) {
-            settings["find-activate"] = "auto";
-            // console.log("AUTO ZOOM IS WIP")
-        } else {
-            settings["find-activate"] = "key";
-        }
+    checkbox.addEventListener("click", () => {
+      ibom_settings[checkbox.value] = checkbox.checked;
+      resizeAll();
     });
+  });
 
-    // Zoom to find feature
-    window.addEventListener("keydown", function (event) {
-        if (document.activeElement !== document.getElementById("search-input")) {
-            if (event.key == "f" && settings["find-activate"] === "key") {
-                if (settings["find-type"] === "zoom") {
-                    zoomToSelection(schematic_canvas);
-                    zoomToSelection(allcanvas.front);
-                    zoomToSelection(allcanvas.back);
-                } else {
-                    draw_crosshair = !draw_crosshair;
-                    drawHighlights();
-                    drawSchematicHighlights();
-                }
-            }
-        }
-    }, true);
-
-    // Schematic selection
-    var sch_selection_display = document.getElementById("sch-selection");
-    for (let i = 1; i <= num_schematics; i++) {
-        let div = document.createElement("div");
-        div.innerHTML = `${i}. ${schdata.schematics[schid_to_idx[i]].name}`;
-        div.innerHTML += `<span>&#9666;</span>`;
-        div.addEventListener("click", () => {
-            switchSchematic(i);
-        });
-        if (i == current_schematic) {
-            div.classList.add("current");
-        }
-        sch_selection_display.appendChild(div);
+  var rotation_slider = document.getElementById("settings-rotation");
+  var rotation_label = document.getElementById("settings-rotation-label");
+  rotation_slider.value = 0;
+  rotation_label.value = "0";
+  rotation_slider.addEventListener("input", () => {
+    ibom_settings.boardRotation = rotation_slider.value * 5;
+    rotation_label.value = ibom_settings.boardRotation;
+    resizeAll();
+  });
+  rotation_label.addEventListener("focus", () => {
+    rotation_label.value = "";
+  });
+  rotation_label.addEventListener("keyup", (e) => {
+    if (e.key === "Enter") {
+      let val = intFromText(rotation_label.value, -180, 180);
+      val = Math.floor(val / 5);
+      rotation_slider.value = val;
+      ibom_settings.boardRotation = val * 5;
+      rotation_label.value = ibom_settings.boardRotation;
+      rotation_label.blur();
+      resizeAll();
     }
+  });
 
-    var projector_calibrate_toggle = document.getElementById("settings-projector-calibrate");
-    projector_calibrate_toggle.checked = false;
-    projector_calibrate_toggle.addEventListener("click", () => {
-        if (projector_calibrate_toggle.checked) {
-            socket.emit("projector-mode", "calibrate");
-        } else {
-            socket.emit("projector-mode", "highlight");
-        }
-    });
+  var find_radio = document.querySelectorAll('input[name="settings-find"]');
+  find_radio.forEach((radio) => {
+    // Make sure we start in the correct state
+    radio.checked = settings["find-type"] === radio.value;
 
-    var projector_reset = document.getElementById("settings-projector-reset");
-    projector_reset.addEventListener("click", () => {
-        socket.emit("projector-adjust", { "type": "tx", "val": 0 });
-        socket.emit("projector-adjust", { "type": "ty", "val": 0 });
-        socket.emit("projector-adjust", { "type": "r", "val": 0 });
-        socket.emit("projector-adjust", { "type": "z", "val": 1 });
-    });
-
-    projector_sliders["tx"]["slider"] = document.getElementById("settings-projector-tx");
-    projector_sliders["tx"]["label"] = document.getElementById("settings-projector-tx-label");
-    projector_sliders["tx"]["slider"].value = 0;
-    projector_sliders["tx"]["label"].value = "0";
-    projector_sliders["tx"]["slider"].addEventListener("input", () => {
-        socket.emit("projector-adjust", { "type": "tx", "val": projector_sliders["tx"]["slider"].value });
-    });
-    projector_sliders["tx"]["label"].addEventListener("keyup", (e) => {
-        if (e.key === "Enter") {
-            let val = intFromText(projector_sliders["tx"]["label"].value, -200, 200);
-            projector_sliders["tx"]["label"].value = val;
-            projector_sliders["tx"]["label"].blur();
-            socket.emit("projector-adjust", { "type": "tx", "val": val });
-        }
-    });
-
-    projector_sliders["ty"]["slider"] = document.getElementById("settings-projector-ty");
-    projector_sliders["ty"]["label"] = document.getElementById("settings-projector-ty-label");
-    projector_sliders["ty"]["slider"].value = 0;
-    projector_sliders["ty"]["label"].value = 0;
-    projector_sliders["ty"]["slider"].addEventListener("input", () => {
-        socket.emit("projector-adjust", { "type": "ty", "val": projector_sliders["ty"]["slider"].value });
-    });
-    projector_sliders["ty"]["label"].addEventListener("keyup", (e) => {
-        if (e.key === "Enter") {
-            let val = intFromText(projector_sliders["ty"]["label"].value, -200, 200);
-            projector_sliders["ty"]["label"].value = val;
-            projector_sliders["ty"]["label"].blur();
-            socket.emit("projector-adjust", { "type": "ty", "val": val });
-        }
-    });
-
-    projector_sliders["r"]["slider"] = document.getElementById("settings-projector-rotation");
-    projector_sliders["r"]["label"] = document.getElementById("settings-projector-rotation-label");
-    projector_sliders["r"]["slider"].value = 0;
-    projector_sliders["r"]["label"].value = 0;
-    projector_sliders["r"]["slider"].addEventListener("input", () => {
-        socket.emit("projector-adjust", { "type": "r", "val": projector_sliders["r"]["slider"].value });
-    });
-    projector_sliders["r"]["label"].addEventListener("keyup", (e) => {
-        if (e.key === "Enter") {
-            let val = intFromText(projector_sliders["r"]["label"].value, -180, 180);
-            projector_sliders["r"]["label"].value = val;
-            projector_sliders["r"]["label"].blur();
-            socket.emit("projector-adjust", { "type": "r", "val": val });
-        }
-    });
-
-    projector_sliders["z"]["slider"] = document.getElementById("settings-projector-zoom");
-    projector_sliders["z"]["label"] = document.getElementById("settings-projector-zoom-label");
-    projector_sliders["z"]["slider"].value = 100;
-    projector_sliders["z"]["label"].value = 100;
-    projector_sliders["z"]["slider"].addEventListener("input", () => {
-        let val = projector_sliders["z"]["slider"].value / 100
-        socket.emit("projector-adjust", { "type": "z", "val": val });
-    });
-    projector_sliders["z"]["label"].addEventListener("keyup", (e) => {
-        if (e.key === "Enter") {
-            let val = intFromText(projector_sliders["z"]["label"].value, 10, 1000, 100) / 100;
-            projector_sliders["z"]["label"].value = val * 100;
-            projector_sliders["z"]["label"].blur();
-            socket.emit("projector-adjust", { "type": "z", "val": val });
-        }
-    });
-
-    for (let t in projector_sliders) {
-        projector_sliders[t]["label"].addEventListener("focus", () => {
-            projector_sliders[t]["label"].value = "";
-        });
-    }
-
-    // Populate debug session search bar content and set up fields
-    var sidebar_custom = document.getElementById("sidebar-custom-dmm");
-    var pos_input = sidebar_custom.querySelector('*[name="pos"]');
-    var neg_input = sidebar_custom.querySelector('*[name="neg"]');
-    var pos_content = sidebar_custom.querySelector('*[name="pos-content"]');
-    var neg_content = sidebar_custom.querySelector('*[name="neg-content"]');
-
-    for (let netname in netdict) {
-        let posdiv = document.createElement("div");
-        let negdiv = document.createElement("div");
-        let name = getElementName({ "type": "net", "val": netname });
-        posdiv.innerHTML = name;
-        negdiv.innerHTML = name;
-        posdiv.addEventListener("click", () => {
-            sidebar_custom_selection.pos.type = "net";
-            sidebar_custom_selection.pos.val = netname;
-            pos_input.value = name;
-            pos_content.classList.add("hidden");
-        });
-        negdiv.addEventListener("click", () => {
-            sidebar_custom_selection.neg.type = "net";
-            sidebar_custom_selection.neg.val = netname;
-            neg_input.value = name;
-            neg_content.classList.add("hidden");
-        });
-        pos_content.appendChild(posdiv);
-        neg_content.appendChild(negdiv);
-    }
-    for (let pinidx in pindict) {
-        let posdiv = document.createElement("div");
-        let negdiv = document.createElement("div");
-        let name = getElementName({ "type": "pin", "val": pinidx });
-        posdiv.innerHTML = name;
-        negdiv.innerHTML = name;
-        posdiv.addEventListener("click", () => {
-            sidebar_custom_selection.pos.type = "pin";
-            sidebar_custom_selection.pos.val = pinidx;
-            pos_input.value = name;
-            pos_content.classList.add("hidden");
-        });
-        negdiv.addEventListener("click", () => {
-            sidebar_custom_selection.neg.type = "pin";
-            sidebar_custom_selection.neg.val = pinidx;
-            neg_input.value = name;
-            neg_content.classList.add("hidden");
-        });
-        pos_content.appendChild(posdiv);
-        neg_content.appendChild(negdiv);
-    }
-
-    pos_input.addEventListener("focusin", () => { pos_content.classList.remove("hidden") });
-    neg_input.addEventListener("focusin", () => { neg_content.classList.remove("hidden") });
-
-    var lo_input = sidebar_custom.querySelector('*[name="lo"]');
-    var hi_input = sidebar_custom.querySelector('*[name="hi"]');
-    forceNumericInput(lo_input);
-    forceNumericInput(hi_input);
-
-    var custom_save_button = sidebar_custom.querySelector('*[name="save"]');
-    custom_save_button.addEventListener("click", () => {
-        if (sidebar_custom_selection.pos.type !== null) {
-            // A positive rail is all we need
-            addDebugCard(from_user = true);
-
-            sidebar_custom.classList.add("hidden");
-
-        } else {
-            // TODO maybe pulse positive rail input field
-        }
-    });
-
-    resetSidebarCustom();
-
-    document.getElementById("sidebar-add-button").addEventListener("click", () => {
-        sidebar_custom.classList.remove("hidden");
-    });
-
-    document.getElementById("sidebar-save-button").addEventListener("click", () => {
-        console.log("Saving session is WIP, closing sidebar");
-
-        saveDebug();
-    });
-
-    document.getElementById("sidebar-export-button").addEventListener("click", () => {
-        console.log("Export function is WIP, doing nothing");
-        alert("Export function WIP");
+    radio.addEventListener("click", () => {
+      if (radio.checked) {
+        settings["find-type"] = radio.value;
+      }
     })
+  })
+
+  var find_toggle = document.getElementById("settings-find-toggle");
+  // Make sure we start in the correct state
+  find_toggle.checked = settings["find-activate"] === "auto";
+
+  find_toggle.addEventListener("click", () => {
+    if (find_toggle.checked) {
+      settings["find-activate"] = "auto";
+      // console.log("AUTO ZOOM IS WIP")
+    } else {
+      settings["find-activate"] = "key";
+    }
+  });
+
+  // Zoom to find feature
+  window.addEventListener("keydown", function (event) {
+    if (document.activeElement !== document.getElementById("search-input")) {
+      if (event.key == "f" && settings["find-activate"] === "key") {
+        if (settings["find-type"] === "zoom") {
+          zoomToSelection(schematic_canvas);
+          zoomToSelection(allcanvas.front);
+          zoomToSelection(allcanvas.back);
+        } else {
+          draw_crosshair = !draw_crosshair;
+          drawHighlights();
+          drawSchematicHighlights();
+        }
+      }
+    }
+  }, true);
+
+  // Schematic selection
+  var sch_selection_display = document.getElementById("sch-selection");
+  for (let i = 1; i <= num_schematics; i++) {
+    let div = document.createElement("div");
+    div.innerHTML = `${i}. ${schdata.schematics[schid_to_idx[i]].name}`;
+    div.innerHTML += `<span>&#9666;</span>`;
+    div.addEventListener("click", () => {
+      switchSchematic(i);
+    });
+    if (i == current_schematic) {
+      div.classList.add("current");
+    }
+    sch_selection_display.appendChild(div);
+  }
+
+  var projector_calibrate_toggle = document.getElementById("settings-projector-calibrate");
+  projector_calibrate_toggle.checked = false;
+  projector_calibrate_toggle.addEventListener("click", () => {
+    if (projector_calibrate_toggle.checked) {
+      socket.emit("projector-mode", "calibrate");
+    } else {
+      socket.emit("projector-mode", "highlight");
+    }
+  });
+
+  var projector_reset = document.getElementById("settings-projector-reset");
+  projector_reset.addEventListener("click", () => {
+    socket.emit("projector-adjust", { "type": "tx", "val": 0 });
+    socket.emit("projector-adjust", { "type": "ty", "val": 0 });
+    socket.emit("projector-adjust", { "type": "r", "val": 0 });
+    socket.emit("projector-adjust", { "type": "z", "val": 1 });
+  });
+
+  projector_sliders["tx"]["slider"] = document.getElementById("settings-projector-tx");
+  projector_sliders["tx"]["label"] = document.getElementById("settings-projector-tx-label");
+  projector_sliders["tx"]["slider"].value = 0;
+  projector_sliders["tx"]["label"].value = "0";
+  projector_sliders["tx"]["slider"].addEventListener("input", () => {
+    socket.emit("projector-adjust", { "type": "tx", "val": projector_sliders["tx"]["slider"].value });
+  });
+  projector_sliders["tx"]["label"].addEventListener("keyup", (e) => {
+    if (e.key === "Enter") {
+      let val = intFromText(projector_sliders["tx"]["label"].value, -200, 200);
+      projector_sliders["tx"]["label"].value = val;
+      projector_sliders["tx"]["label"].blur();
+      socket.emit("projector-adjust", { "type": "tx", "val": val });
+    }
+  });
+
+  projector_sliders["ty"]["slider"] = document.getElementById("settings-projector-ty");
+  projector_sliders["ty"]["label"] = document.getElementById("settings-projector-ty-label");
+  projector_sliders["ty"]["slider"].value = 0;
+  projector_sliders["ty"]["label"].value = 0;
+  projector_sliders["ty"]["slider"].addEventListener("input", () => {
+    socket.emit("projector-adjust", { "type": "ty", "val": projector_sliders["ty"]["slider"].value });
+  });
+  projector_sliders["ty"]["label"].addEventListener("keyup", (e) => {
+    if (e.key === "Enter") {
+      let val = intFromText(projector_sliders["ty"]["label"].value, -200, 200);
+      projector_sliders["ty"]["label"].value = val;
+      projector_sliders["ty"]["label"].blur();
+      socket.emit("projector-adjust", { "type": "ty", "val": val });
+    }
+  });
+
+  projector_sliders["r"]["slider"] = document.getElementById("settings-projector-rotation");
+  projector_sliders["r"]["label"] = document.getElementById("settings-projector-rotation-label");
+  projector_sliders["r"]["slider"].value = 0;
+  projector_sliders["r"]["label"].value = 0;
+  projector_sliders["r"]["slider"].addEventListener("input", () => {
+    socket.emit("projector-adjust", { "type": "r", "val": projector_sliders["r"]["slider"].value });
+  });
+  projector_sliders["r"]["label"].addEventListener("keyup", (e) => {
+    if (e.key === "Enter") {
+      let val = intFromText(projector_sliders["r"]["label"].value, -180, 180);
+      projector_sliders["r"]["label"].value = val;
+      projector_sliders["r"]["label"].blur();
+      socket.emit("projector-adjust", { "type": "r", "val": val });
+    }
+  });
+
+  projector_sliders["z"]["slider"] = document.getElementById("settings-projector-zoom");
+  projector_sliders["z"]["label"] = document.getElementById("settings-projector-zoom-label");
+  projector_sliders["z"]["slider"].value = 100;
+  projector_sliders["z"]["label"].value = 100;
+  projector_sliders["z"]["slider"].addEventListener("input", () => {
+    let val = projector_sliders["z"]["slider"].value / 100
+    socket.emit("projector-adjust", { "type": "z", "val": val });
+  });
+  projector_sliders["z"]["label"].addEventListener("keyup", (e) => {
+    if (e.key === "Enter") {
+      let val = intFromText(projector_sliders["z"]["label"].value, 10, 1000, 100) / 100;
+      projector_sliders["z"]["label"].value = val * 100;
+      projector_sliders["z"]["label"].blur();
+      socket.emit("projector-adjust", { "type": "z", "val": val });
+    }
+  });
+
+  for (let t in projector_sliders) {
+    projector_sliders[t]["label"].addEventListener("focus", () => {
+      projector_sliders[t]["label"].value = "";
+    });
+  }
+
+  // Populate debug session search bar content and set up fields
+  var sidebar_custom = document.getElementById("sidebar-custom-dmm");
+  var pos_input = sidebar_custom.querySelector('*[name="pos"]');
+  var neg_input = sidebar_custom.querySelector('*[name="neg"]');
+  var pos_content = sidebar_custom.querySelector('*[name="pos-content"]');
+  var neg_content = sidebar_custom.querySelector('*[name="neg-content"]');
+
+  for (let netname in netdict) {
+    let posdiv = document.createElement("div");
+    let negdiv = document.createElement("div");
+    let name = getElementName({ "type": "net", "val": netname });
+    posdiv.innerHTML = name;
+    negdiv.innerHTML = name;
+    posdiv.addEventListener("click", () => {
+      sidebar_custom_selection.pos.type = "net";
+      sidebar_custom_selection.pos.val = netname;
+      pos_input.value = name;
+      pos_content.classList.add("hidden");
+    });
+    negdiv.addEventListener("click", () => {
+      sidebar_custom_selection.neg.type = "net";
+      sidebar_custom_selection.neg.val = netname;
+      neg_input.value = name;
+      neg_content.classList.add("hidden");
+    });
+    pos_content.appendChild(posdiv);
+    neg_content.appendChild(negdiv);
+  }
+  for (let pinidx in pindict) {
+    let posdiv = document.createElement("div");
+    let negdiv = document.createElement("div");
+    let name = getElementName({ "type": "pin", "val": pinidx });
+    posdiv.innerHTML = name;
+    negdiv.innerHTML = name;
+    posdiv.addEventListener("click", () => {
+      sidebar_custom_selection.pos.type = "pin";
+      sidebar_custom_selection.pos.val = pinidx;
+      pos_input.value = name;
+      pos_content.classList.add("hidden");
+    });
+    negdiv.addEventListener("click", () => {
+      sidebar_custom_selection.neg.type = "pin";
+      sidebar_custom_selection.neg.val = pinidx;
+      neg_input.value = name;
+      neg_content.classList.add("hidden");
+    });
+    pos_content.appendChild(posdiv);
+    neg_content.appendChild(negdiv);
+  }
+
+  pos_input.addEventListener("focusin", () => { pos_content.classList.remove("hidden") });
+  neg_input.addEventListener("focusin", () => { neg_content.classList.remove("hidden") });
+
+  var lo_input = sidebar_custom.querySelector('*[name="lo"]');
+  var hi_input = sidebar_custom.querySelector('*[name="hi"]');
+  forceNumericInput(lo_input);
+  forceNumericInput(hi_input);
+
+  var custom_save_button = sidebar_custom.querySelector('*[name="save"]');
+  custom_save_button.addEventListener("click", () => {
+    if (sidebar_custom_selection.pos.type !== null) {
+      // A positive rail is all we need
+      addDebugCard(from_user = true);
+
+      sidebar_custom.classList.add("hidden");
+
+    } else {
+      // TODO maybe pulse positive rail input field
+    }
+  });
+
+  resetSidebarCustom();
+
+  document.getElementById("sidebar-add-button").addEventListener("click", () => {
+    sidebar_custom.classList.remove("hidden");
+  });
+
+  document.getElementById("sidebar-save-button").addEventListener("click", () => {
+    console.log("Saving session is WIP, closing sidebar");
+
+    saveDebug();
+  });
+
+  document.getElementById("sidebar-export-button").addEventListener("click", () => {
+    console.log("Export function is WIP, doing nothing");
+    alert("Export function WIP");
+  })
 }
 
 function resetSidebarCustom() {
-    sidebar_custom_selection.pos.type = null;
-    sidebar_custom_selection.pos.val = null;
-    sidebar_custom_selection.neg.type = null;
-    sidebar_custom_selection.neg.val = null;
+  sidebar_custom_selection.pos.type = null;
+  sidebar_custom_selection.pos.val = null;
+  sidebar_custom_selection.neg.type = null;
+  sidebar_custom_selection.neg.val = null;
 
-    var sidebar_custom = document.getElementById("sidebar-custom-dmm");
-    sidebar_custom.querySelector('*[name="pos"]').value = "";
-    sidebar_custom.querySelector('*[name="neg"]').value = "";
-    sidebar_custom.querySelector('*[name="lo"]').value = "";
-    sidebar_custom.querySelector('*[name="hi"]').value = "";
-    sidebar_custom.querySelector('*[name="unit-prefix"]').value = "none";
-    sidebar_custom.querySelector('*[name="unit"]').value = "none";
+  var sidebar_custom = document.getElementById("sidebar-custom-dmm");
+  sidebar_custom.querySelector('*[name="pos"]').value = "";
+  sidebar_custom.querySelector('*[name="neg"]').value = "";
+  sidebar_custom.querySelector('*[name="lo"]').value = "";
+  sidebar_custom.querySelector('*[name="hi"]').value = "";
+  sidebar_custom.querySelector('*[name="unit-prefix"]').value = "none";
+  sidebar_custom.querySelector('*[name="unit"]').value = "none";
 
-    // Refresh the search bar contents
-    sidebarSearchHandler("pos");
-    sidebarSearchHandler("neg");
+  // Refresh the search bar contents
+  sidebarSearchHandler("pos");
+  sidebarSearchHandler("neg");
 }
 
 /** Returns true if the cards have the same pos, neg, and unit */
 function doCardsMatch(card1, card2) {
-    return card1.pos.type == card2.pos.type &&
-        card1.pos.val == card2.pos.val &&
-        card1.neg.type == card2.neg.type &&
-        card1.neg.val == card2.neg.val &&
-        card1.unit == card2.unit;
+  return card1.pos.type == card2.pos.type &&
+    card1.pos.val == card2.pos.val &&
+    card1.neg.type == card2.neg.type &&
+    card1.neg.val == card2.neg.val &&
+    card1.unit == card2.unit;
 }
 
 function addDebugCard(from_user, measurement = null) {
-    var new_card = {
-        "pos": {
-            "type": null,
-            "val": null
-        },
-        "neg": {
-            "type": null,
-            "val": null
-        },
-        "bounds": {
-            "lo": null,
-            "hi": null
-        },
-        "value": null,
-        "unit": null,
-        "element": null
-    };
+  var new_card = {
+    "pos": {
+      "type": null,
+      "val": null
+    },
+    "neg": {
+      "type": null,
+      "val": null
+    },
+    "bounds": {
+      "lo": null,
+      "hi": null
+    },
+    "value": null,
+    "unit": null,
+    "element": null
+  };
 
-    if (from_user) {
-        // User specified custom card and hit save
+  if (from_user) {
+    // User specified custom card and hit save
 
-        new_card.pos.type = sidebar_custom_selection.pos.type;
-        new_card.pos.val = sidebar_custom_selection.pos.val;
+    new_card.pos.type = sidebar_custom_selection.pos.type;
+    new_card.pos.val = sidebar_custom_selection.pos.val;
 
-        if (sidebar_custom_selection.neg.type === null) {
-            new_card.neg.type = "net";
-            new_card.neg.val = "GND";
-        } else {
-            new_card.neg.type = sidebar_custom_selection.neg.type;
-            new_card.neg.val = sidebar_custom_selection.neg.val;
-        }
-
-        // Rest of info can be taken straight from form
-        var sidebar_custom = document.getElementById("sidebar-custom-dmm");
-
-        let multiplier = units.getMultiplier(sidebar_custom.querySelector('*[name="unit-prefix"]').value);
-        let lo = parseFloat(sidebar_custom.querySelector('*[name="lo"]').value);
-        let hi = parseFloat(sidebar_custom.querySelector('*[name="hi"]').value);
-        if (!isNaN(lo)) {
-            new_card.bounds.lo = lo * multiplier;
-        }
-        if (!isNaN(hi)) {
-            new_card.bounds.hi = hi * multiplier;
-        }
-
-        let unit = sidebar_custom.querySelector('*[name="unit"]').value;
-        if (unit !== "none") {
-            new_card.unit = unit;
-        }
-
-        resetSidebarCustom();
+    if (sidebar_custom_selection.neg.type === null) {
+      new_card.neg.type = "net";
+      new_card.neg.val = "GND";
     } else {
-        // A measurement was taken during a session without a corresponding card
-        console.log("Measurement cards are WIP");
-        new_card.pos = measurement.pos;
-        new_card.neg = measurement.neg;
-        new_card.value = measurement.value;
-        new_card.unit = measurement.unit;
+      new_card.neg.type = sidebar_custom_selection.neg.type;
+      new_card.neg.val = sidebar_custom_selection.neg.val;
     }
 
-    // No duplicate cards in session
-    let found_duplicate = false;
-    for (let card of current_debug_session.cards) {
-        if (card.pos.type == new_card.pos.type &&
-            card.pos.val == new_card.pos.val &&
-            card.neg.type == new_card.neg.type &&
-            card.neg.val == new_card.neg.val &&
-            card.unit == new_card.unit) {
-            found_duplicate = true;
-            break;
-        }
+    // Rest of info can be taken straight from form
+    var sidebar_custom = document.getElementById("sidebar-custom-dmm");
+
+    let multiplier = units.getMultiplier(sidebar_custom.querySelector('*[name="unit-prefix"]').value);
+    let lo = parseFloat(sidebar_custom.querySelector('*[name="lo"]').value);
+    let hi = parseFloat(sidebar_custom.querySelector('*[name="hi"]').value);
+    if (!isNaN(lo)) {
+      new_card.bounds.lo = lo * multiplier;
     }
-    if (found_duplicate) {
-        return;
+    if (!isNaN(hi)) {
+      new_card.bounds.hi = hi * multiplier;
     }
 
-    let div = document.createElement("div");
-    div.classList.add("sidebar-card");
-    let valtext = new_card.value !== null ? String(new_card.value) : "--";
-    if (new_card.unit !== null) {
-        valtext += new_card.unit;
+    let unit = sidebar_custom.querySelector('*[name="unit"]').value;
+    if (unit !== "none") {
+      new_card.unit = unit;
     }
-    div.innerHTML =
-        `<div class="card-row">
+
+    resetSidebarCustom();
+  } else {
+    // A measurement was taken during a session without a corresponding card
+    console.log("Measurement cards are WIP");
+    new_card.pos = measurement.pos;
+    new_card.neg = measurement.neg;
+    new_card.value = measurement.value;
+    new_card.unit = measurement.unit;
+  }
+
+  // No duplicate cards in session
+  let found_duplicate = false;
+  for (let card of current_debug_session.cards) {
+    if (card.pos.type == new_card.pos.type &&
+      card.pos.val == new_card.pos.val &&
+      card.neg.type == new_card.neg.type &&
+      card.neg.val == new_card.neg.val &&
+      card.unit == new_card.unit) {
+      found_duplicate = true;
+      break;
+    }
+  }
+  if (found_duplicate) {
+    return;
+  }
+
+  let div = document.createElement("div");
+  div.classList.add("sidebar-card");
+  let valtext = new_card.value !== null ? String(new_card.value) : "--";
+  if (new_card.unit !== null) {
+    valtext += new_card.unit;
+  }
+  div.innerHTML =
+    `<div class="card-row">
         <span style="background: red;">&nbsp;</span>
         <span class="sidebar-card-search">${getElementName(new_card.pos)}</span>
     </div>
@@ -727,640 +727,640 @@ function addDebugCard(from_user, measurement = null) {
         <span class="sidebar-result">${valtext}</span>
     </div>`;
 
-    if (new_card.bounds.lo !== null || new_card.bounds.hi !== null) {
-        let lospan = document.createElement("span");
-        lospan.classList.add("bound");
-        if (new_card.bounds.lo !== null) {
-            lospan.innerHTML = new_card.bounds.lo;
-            if (new_card.value !== null) {
-                lospan.classList.add(new_card.value >= new_card.bounds.lo ? "good" : "bad");
-            }
-        } else {
-            lospan.innerHTML = "n/a";
-        }
-        let hispan = document.createElement("span");
-        hispan.classList.add("bound");
-        if (new_card.bounds.hi !== null) {
-            hispan.innerHTML = new_card.bounds.hi;
-            if (new_card.value !== null) {
-                hispan.classList.add(new_card.value <= new_card.bounds.hi ? "good" : "bad");
-            }
-        } else {
-            hispan.innerHTML = "n/a";
-        }
-
-        let bounddiv = document.createElement("div");
-        bounddiv.innerHTML = "(";
-        bounddiv.appendChild(lospan);
-        bounddiv.innerHTML += "-";
-        bounddiv.appendChild(hispan);
-        if (new_card.unit !== null) {
-            bounddiv.innerHTML += new_card.unit;
-        }
-        bounddiv.innerHTML += " )";
-
-        div.querySelector(".card-row:last-child").appendChild(bounddiv);
+  if (new_card.bounds.lo !== null || new_card.bounds.hi !== null) {
+    let lospan = document.createElement("span");
+    lospan.classList.add("bound");
+    if (new_card.bounds.lo !== null) {
+      lospan.innerHTML = new_card.bounds.lo;
+      if (new_card.value !== null) {
+        lospan.classList.add(new_card.value >= new_card.bounds.lo ? "good" : "bad");
+      }
+    } else {
+      lospan.innerHTML = "n/a";
+    }
+    let hispan = document.createElement("span");
+    hispan.classList.add("bound");
+    if (new_card.bounds.hi !== null) {
+      hispan.innerHTML = new_card.bounds.hi;
+      if (new_card.value !== null) {
+        hispan.classList.add(new_card.value <= new_card.bounds.hi ? "good" : "bad");
+      }
+    } else {
+      hispan.innerHTML = "n/a";
     }
 
-    document.getElementById("sidebar-cards").appendChild(div);
+    let bounddiv = document.createElement("div");
+    bounddiv.innerHTML = "(";
+    bounddiv.appendChild(lospan);
+    bounddiv.innerHTML += "-";
+    bounddiv.appendChild(hispan);
+    if (new_card.unit !== null) {
+      bounddiv.innerHTML += new_card.unit;
+    }
+    bounddiv.innerHTML += " )";
 
-    new_card.element = div;
-    current_debug_session.cards.push(new_card);
+    div.querySelector(".card-row:last-child").appendChild(bounddiv);
+  }
+
+  document.getElementById("sidebar-cards").appendChild(div);
+
+  new_card.element = div;
+  current_debug_session.cards.push(new_card);
 }
 
 function toggleRecord() {
-    var button = document.getElementById("record-button");
-    if (recording_is_on) {
-        button.classList.remove("on");
-    } else {
-        button.classList.add("on");
-    }
-    recording_is_on = !recording_is_on;
+  var button = document.getElementById("record-button");
+  if (recording_is_on) {
+    button.classList.remove("on");
+  } else {
+    button.classList.add("on");
+  }
+  recording_is_on = !recording_is_on;
 }
 
 function toggleSidebar(x = false) {
-    if (x || sidebar_is_open) {
-        sidebar_split.collapse(1);
-        sidebar_is_open = false;
-    } else {
-        // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
-        var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
-        sidebar_split.setSizes([100 - min_percent, min_percent]);
-        sidebar_is_open = true;
-    }
-    resizeAll();
-}
-
-function openDebug() {
+  if (x || sidebar_is_open) {
+    sidebar_split.collapse(1);
+    sidebar_is_open = false;
+  } else {
     // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
     var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
     sidebar_split.setSizes([100 - min_percent, min_percent]);
-    resizeAll();
+    sidebar_is_open = true;
+  }
+  resizeAll();
+}
 
-    if (active_debug_session) {
-        // We already have the sidebar open, so we're done
-        return;
-    }
+function openDebug() {
+  // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
+  var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
+  sidebar_split.setSizes([100 - min_percent, min_percent]);
+  resizeAll();
 
-    active_debug_session = true;
+  if (active_debug_session) {
+    // We already have the sidebar open, so we're done
+    return;
+  }
 
-    // For now, just create a new session when we open the panel
-    var now = new Date();
-    current_debug_session = {
-        "name": "",
-        "timestamp": now.toLocaleTimeString(),
-        "notes": "",
-        "cards": []
-    }
+  active_debug_session = true;
 
-    var sidebar = document.getElementById("sidebar");
-    var name_input = sidebar.querySelector('*[name="sidebar-name"]');
-    var timestamp = sidebar.querySelector('*[name="sidebar-timestamp"]');
-    var notes_input = sidebar.querySelector('*[name="sidebar-notes"]');
-    name_input.value = "";
-    name_input.placeholder = `Debug Session #${debug_sessions.length + 1}`;
-    timestamp.innerHTML = current_debug_session.timestamp;
-    notes_input.value = "";
+  // For now, just create a new session when we open the panel
+  var now = new Date();
+  current_debug_session = {
+    "name": "",
+    "timestamp": now.toLocaleTimeString(),
+    "notes": "",
+    "cards": []
+  }
+
+  var sidebar = document.getElementById("sidebar");
+  var name_input = sidebar.querySelector('*[name="sidebar-name"]');
+  var timestamp = sidebar.querySelector('*[name="sidebar-timestamp"]');
+  var notes_input = sidebar.querySelector('*[name="sidebar-notes"]');
+  name_input.value = "";
+  name_input.placeholder = `Debug Session #${debug_sessions.length + 1}`;
+  timestamp.innerHTML = current_debug_session.timestamp;
+  notes_input.value = "";
 }
 
 function saveDebug() {
-    if (current_debug_session.cards.length > 0) {
-        let name_input = document.querySelector("#sidebar-name > input");
-        current_debug_session.name = name_input.value !== "" ? name_input.value : name_input.placeholder;
-        current_debug_session.notes = document.querySelector("#sidebar-notes > textarea").value;
-        debug_sessions.push(current_debug_session);
+  if (current_debug_session.cards.length > 0) {
+    let name_input = document.querySelector("#sidebar-name > input");
+    current_debug_session.name = name_input.value !== "" ? name_input.value : name_input.placeholder;
+    current_debug_session.notes = document.querySelector("#sidebar-notes > textarea").value;
+    debug_sessions.push(current_debug_session);
 
-        let custom_card = document.getElementById("sidebar-custom-dmm");
-        let sidebar_cards = document.getElementById("sidebar-cards");
-        sidebar_cards.innerHTML = "";
-        sidebar_cards.appendChild(custom_card);
-    }
+    let custom_card = document.getElementById("sidebar-custom-dmm");
+    let sidebar_cards = document.getElementById("sidebar-cards");
+    sidebar_cards.innerHTML = "";
+    sidebar_cards.appendChild(custom_card);
+  }
 
-    active_debug_session = false;
+  active_debug_session = false;
 
-    sidebar_split.collapse(1);
-    resizeAll();
+  sidebar_split.collapse(1);
+  resizeAll();
 }
 
 function searchHandler(tokens, divs) {
-    for (var i = 0; i < divs.length; i++) {
-        let val = divs[i].innerText.toLowerCase();
-        let match = true;
-        for (let token of tokens) {
-            if (val.indexOf(token) == -1) {
-                match = false;
-                break;
-            }
-        }
-        if (match) {
-            divs[i].classList.remove("hidden");
-        } else {
-            divs[i].classList.add("hidden");
-        }
+  for (var i = 0; i < divs.length; i++) {
+    let val = divs[i].innerText.toLowerCase();
+    let match = true;
+    for (let token of tokens) {
+      if (val.indexOf(token) == -1) {
+        match = false;
+        break;
+      }
     }
+    if (match) {
+      divs[i].classList.remove("hidden");
+    } else {
+      divs[i].classList.add("hidden");
+    }
+  }
 }
 
 function sidebarSearchHandler(dir) {
-    // TODO query selector name stuff is in case we want multiple customs at once
-    var input = document.getElementById("sidebar-custom-dmm").querySelector(`input[name="${dir}"]`);
-    var filter = input.value.toLowerCase();
-    var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
+  // TODO query selector name stuff is in case we want multiple customs at once
+  var input = document.getElementById("sidebar-custom-dmm").querySelector(`input[name="${dir}"]`);
+  var filter = input.value.toLowerCase();
+  var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
 
-    var divs = document.getElementById("sidebar-custom-dmm").querySelector(`div[name="${dir}-content"]`).getElementsByTagName("div");
+  var divs = document.getElementById("sidebar-custom-dmm").querySelector(`div[name="${dir}-content"]`).getElementsByTagName("div");
 
-    searchHandler(tokens, divs);
+  searchHandler(tokens, divs);
 
-    // We only want to allow selections by clicking on a list item, so typing erases saved value
-    sidebar_custom_selection[dir].type = null;
-    sidebar_custom_selection[dir].val = null;
+  // We only want to allow selections by clicking on a list item, so typing erases saved value
+  sidebar_custom_selection[dir].type = null;
+  sidebar_custom_selection[dir].val = null;
 }
 
 function searchBarHandler() {
-    var input = document.getElementById("search-input");
-    var filter = input.value.toLowerCase();
-    var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
+  var input = document.getElementById("search-input");
+  var filter = input.value.toLowerCase();
+  var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
 
-    var divs = document.getElementById("search-content").getElementsByTagName("div");
+  var divs = document.getElementById("search-content").getElementsByTagName("div");
 
-    searchHandler(tokens, divs);
+  searchHandler(tokens, divs);
 }
 
 function dmmMeasurement(data) {
-    if (current_debug_session.name === null) {
-        console.log("Received measurement without an active debug session, ignoring");
-        return;
-    }
+  if (current_debug_session.name === null) {
+    console.log("Received measurement without an active debug session, ignoring");
+    return;
+  }
 
-    let pos_selection = null;
-    let neg_selection = null;
-    let poshits = [];
-    let neghits = [];
+  let pos_selection = null;
+  let neg_selection = null;
+  let poshits = [];
+  let neghits = [];
 
-    let layer = data.side; // F or B
+  let layer = data.side; // F or B
 
-    for (let pin of pinHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
-        // poshits.push({ "type": "pin", "val": pin });
-    }
-    for (let net of netHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
-        poshits.push({ "type": "net", "val": net });
-    }
-    if (poshits.length == 0) {
-        logerr("Positive probe measured unknown pad/net");
-        return;
-    } else if (poshits.length > 1) {
-        console.log("Positive probe hit several components. Selection disambiguation is still WIP");
-        return;
-    } else {
-        pos_selection = poshits[0];
-    }
+  for (let pin of pinHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
+    // poshits.push({ "type": "pin", "val": pin });
+  }
+  for (let net of netHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
+    poshits.push({ "type": "net", "val": net });
+  }
+  if (poshits.length == 0) {
+    logerr("Positive probe measured unknown pad/net");
+    return;
+  } else if (poshits.length > 1) {
+    console.log("Positive probe hit several components. Selection disambiguation is still WIP");
+    return;
+  } else {
+    pos_selection = poshits[0];
+  }
 
-    for (let pin of pinHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
-        // neghits.push({ "type": "pin", "val": pin });
-    }
-    for (let net of netHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
-        neghits.push({ "type": "net", "val": net });
-    }
-    if (neghits.length == 0) {
-        logerr("Negative probe measured unknown pad/net");
-        return;
-    } else if (neghits.length > 1) {
-        console.log("Negative probe hit several components. Selection disambiguation is still WIP");
-        return;
-    } else {
-        neg_selection = neghits[0];
-    }
+  for (let pin of pinHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
+    // neghits.push({ "type": "pin", "val": pin });
+  }
+  for (let net of netHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
+    neghits.push({ "type": "net", "val": net });
+  }
+  if (neghits.length == 0) {
+    logerr("Negative probe measured unknown pad/net");
+    return;
+  } else if (neghits.length > 1) {
+    console.log("Negative probe hit several components. Selection disambiguation is still WIP");
+    return;
+  } else {
+    neg_selection = neghits[0];
+  }
 
-    let measurement = {
-        "pos": pos_selection,
-        "neg": neg_selection,
-        "value": data.val,
-        "unit": data.unit
-    };
+  let measurement = {
+    "pos": pos_selection,
+    "neg": neg_selection,
+    "value": data.val,
+    "unit": data.unit
+  };
 
-    // TODO show probes actually selecting
+  // TODO show probes actually selecting
 
-    for (let card of current_debug_session.cards) {
-        if (doCardsMatch(card, measurement)) {
-            // update existing measurement instead
-            if (card.value !== null) {
-                console.log(`card ${card} already has a measurement but was measured again`);
-            } else {
-                card.value = measurement.value;
-                card.unit = measurement.unit;
+  for (let card of current_debug_session.cards) {
+    if (doCardsMatch(card, measurement)) {
+      // update existing measurement instead
+      if (card.value !== null) {
+        console.log(`card ${card} already has a measurement but was measured again`);
+      } else {
+        card.value = measurement.value;
+        card.unit = measurement.unit;
 
-                card.element.querySelector('.sidebar-result').innerHTML = `${card.value}${card.unit}`;
-                let bounds = card.element.querySelectorAll('.bound');
-                if (card.bounds.lo !== null) {
-                    if (card.bounds.lo <= card.value) {
-                        bounds[0].classList.add("good");
-                    } else {
-                        bounds[0].classList.add("bad");
-                    }
-                }
-                if (card.bounds.hi !== null) {
-                    if (card.bounds.hi >= card.value) {
-                        bounds[1].classList.add("good");
-                    } else {
-                        bounds[1].classList.add("bad");
-                    }
-                }
-            }
-            return;
+        card.element.querySelector('.sidebar-result').innerHTML = `${card.value}${card.unit}`;
+        let bounds = card.element.querySelectorAll('.bound');
+        if (card.bounds.lo !== null) {
+          if (card.bounds.lo <= card.value) {
+            bounds[0].classList.add("good");
+          } else {
+            bounds[0].classList.add("bad");
+          }
         }
+        if (card.bounds.hi !== null) {
+          if (card.bounds.hi >= card.value) {
+            bounds[1].classList.add("good");
+          } else {
+            bounds[1].classList.add("bad");
+          }
+        }
+      }
+      return;
     }
+  }
 
-    // No matching card found, just add one
-    addDebugCard(from_user = false, measurement);
+  // No matching card found, just add one
+  addDebugCard(from_user = false, measurement);
 }
 
 function searchBarX() {
-    var searchlist = document.getElementById("search-content");
-    var input = document.getElementById("search-input");
-    searchlist.classList.add("hidden");
-    input.value = "";
-    deselectClicked();
-    input.focus();
+  var searchlist = document.getElementById("search-content");
+  var input = document.getElementById("search-input");
+  searchlist.classList.add("hidden");
+  input.value = "";
+  deselectClicked();
+  input.focus();
 }
 
 function searchNav(dir) {
-    if (search_nav_current[1] > 1) {
-        // We have a multi-part selection
-        if (dir === "L") {
-            search_nav_current[0] -= 1;
-            if (search_nav_current[0] === 0) {
-                search_nav_current[0] = search_nav_current[1];
-            }
-        } else {
-            search_nav_current[0] += 1;
-            if (search_nav_current[0] > search_nav_current[1]) {
-                search_nav_current[0] = 1;
-            }
-        }
-
-        search_nav_num.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
-
-        if (highlighted_component !== -1) {
-            let comp = compdict[highlighted_component];
-            let unit = Object.values(comp.units)[search_nav_current[0] - 1];
-            search_nav_text.innerText = `${comp.ref} ${unit.num}`;
-
-            if (unit.schid != current_schematic) {
-                switchSchematic(unit.schid);
-            }
-
-            target_boxes["S"] = unit.bbox.map((i) => parseFloat(i));
-            let footprint = pcbdata.footprints[highlighted_component];
-            for (let layer of ["F", "B"]) {
-                // Do nothing to layer that doesn't have the component
-                target_boxes[layer] = footprint.layer == layer ? bboxPcbnewToList(footprint.bbox) : null;
-            }
-
-            if (settings["find-type"] === "zoom") {
-                zoomToTargetBoxes(VIEW_MINIMUMS["sch"]["comp"], VIEW_MINIMUMS["layout"]["footprint"]);
-            } else {
-                console.log("TODO comp xhair")
-                draw_crosshair = true;
-                drawHighlights();
-                drawSchematicHighlights();
-            }
-            // TODO emphasize this unit somehow
-        }
-        if (highlighted_net !== null) {
-            let pin = pindict[netdict[highlighted_net]["pins"][search_nav_current[0] - 1]];
-            search_nav_text.innerText = `${pin.ref}.${pin.num}`;
-
-            if (pin.schid != current_schematic) {
-                switchSchematic(pin.schid);
-            }
-
-            target_boxes["S"] = pinBoxFromPos(pin.pos);
-            for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
-                if (pad.padname == pin.num) {
-                    if (pad.layers.length > 1) {
-                        logwarn(`ref ${pin.ref} pad ${pad.padname} has several layers`)
-                    }
-                    for (let layer of ["F", "B"]) {
-                        target_boxes[layer] = pad.layers.includes(layer) ? bboxPcbnewToList(pad) : null;
-                    }
-                    break;
-                }
-            }
-
-            if (settings["find-type"] === "zoom") {
-                zoomToTargetBoxes(VIEW_MINIMUMS["sch"]["pin"], VIEW_MINIMUMS["layout"]["pad"]);
-            } else {
-                console.log("TODO net xhair")
-                draw_crosshair = true;
-                drawHighlights();
-                drawSchematicHighlights();
-            }
-            // TODO emphasize this pin somehow
-        }
+  if (search_nav_current[1] > 1) {
+    // We have a multi-part selection
+    if (dir === "L") {
+      search_nav_current[0] -= 1;
+      if (search_nav_current[0] === 0) {
+        search_nav_current[0] = search_nav_current[1];
+      }
+    } else {
+      search_nav_current[0] += 1;
+      if (search_nav_current[0] > search_nav_current[1]) {
+        search_nav_current[0] = 1;
+      }
     }
+
+    search_nav_num.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
+
+    if (highlighted_component !== -1) {
+      let comp = compdict[highlighted_component];
+      let unit = Object.values(comp.units)[search_nav_current[0] - 1];
+      search_nav_text.innerText = `${comp.ref} ${unit.num}`;
+
+      if (unit.schid != current_schematic) {
+        switchSchematic(unit.schid);
+      }
+
+      target_boxes["S"] = unit.bbox.map((i) => parseFloat(i));
+      let footprint = pcbdata.footprints[highlighted_component];
+      for (let layer of ["F", "B"]) {
+        // Do nothing to layer that doesn't have the component
+        target_boxes[layer] = footprint.layer == layer ? bboxPcbnewToList(footprint.bbox) : null;
+      }
+
+      if (settings["find-type"] === "zoom") {
+        zoomToTargetBoxes(VIEW_MINIMUMS["sch"]["comp"], VIEW_MINIMUMS["layout"]["footprint"]);
+      } else {
+        console.log("TODO comp xhair")
+        draw_crosshair = true;
+        drawHighlights();
+        drawSchematicHighlights();
+      }
+      // TODO emphasize this unit somehow
+    }
+    if (highlighted_net !== null) {
+      let pin = pindict[netdict[highlighted_net]["pins"][search_nav_current[0] - 1]];
+      search_nav_text.innerText = `${pin.ref}.${pin.num}`;
+
+      if (pin.schid != current_schematic) {
+        switchSchematic(pin.schid);
+      }
+
+      target_boxes["S"] = pinBoxFromPos(pin.pos);
+      for (let pad of pcbdata.footprints[ref_to_id[pin.ref]].pads) {
+        if (pad.padname == pin.num) {
+          if (pad.layers.length > 1) {
+            logwarn(`ref ${pin.ref} pad ${pad.padname} has several layers`)
+          }
+          for (let layer of ["F", "B"]) {
+            target_boxes[layer] = pad.layers.includes(layer) ? bboxPcbnewToList(pad) : null;
+          }
+          break;
+        }
+      }
+
+      if (settings["find-type"] === "zoom") {
+        zoomToTargetBoxes(VIEW_MINIMUMS["sch"]["pin"], VIEW_MINIMUMS["layout"]["pad"]);
+      } else {
+        console.log("TODO net xhair")
+        draw_crosshair = true;
+        drawHighlights();
+        drawSchematicHighlights();
+      }
+      // TODO emphasize this pin somehow
+    }
+  }
 }
 
 function toolPopupX() {
-    document.getElementById("tool-popup").classList.add("hidden");
+  document.getElementById("tool-popup").classList.add("hidden");
 }
 
 function toolButton(type) {
-    if (!tools[type].ready && !active_tool_request) {
-        console.log(`Requesting ${type} tool`);
-        socket.emit("tool-request", { "type": type, "val": "device" });
-    } else if (tools[type].ready) {
-        console.log(`tool ${type} is already ready`);
-    } else {
-        // Show active tool request
-        document.getElementById("tool-popup").classList.remove("hidden");
-    }
+  if (!tools[type].ready && !active_tool_request) {
+    console.log(`Requesting ${type} tool`);
+    socket.emit("tool-request", { "type": type, "val": "device" });
+  } else if (tools[type].ready) {
+    console.log(`tool ${type} is already ready`);
+  } else {
+    // Show active tool request
+    document.getElementById("tool-popup").classList.remove("hidden");
+  }
 }
 
 function toolRequest(data) {
-    var popup = document.getElementById("tool-popup");
-    var popup_title = document.getElementById("tool-popup-title");
-    var popup_text = document.getElementById("tool-popup-text");
-    var popup_buttons = document.getElementById("tool-popup-buttons");
+  var popup = document.getElementById("tool-popup");
+  var popup_title = document.getElementById("tool-popup-title");
+  var popup_text = document.getElementById("tool-popup-text");
+  var popup_buttons = document.getElementById("tool-popup-buttons");
 
-    console.log(data)
+  console.log(data)
 
-    if (tools[data.type].ready) {
-        // This should never happen
-        logerr(`Received ${data.type} tool request from server that was already ready`);
-        popup_title.innerText = tools[data.type].name;
-        popup_text.innerText = "Already connected, closing...";
+  if (tools[data.type].ready) {
+    // This should never happen
+    logerr(`Received ${data.type} tool request from server that was already ready`);
+    popup_title.innerText = tools[data.type].name;
+    popup_text.innerText = "Already connected, closing...";
+    popup_buttons.innerHTML = "";
+    popup.classList.remove("hidden");
+    setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+  } else {
+    popup_title.innerText = `Connecting ${tools[data.type].name}`;
+    switch (data.type) {
+      case "ptr":
+        popup_text.innerHTML = `Connecting ${tools.ptr.name.toLowerCase()} with Optitrack<br />{optitrack instructions}`;
         popup_buttons.innerHTML = "";
-        popup.classList.remove("hidden");
-        setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
-    } else {
-        popup_title.innerText = `Connecting ${tools[data.type].name}`;
-        switch (data.type) {
-            case "ptr":
-                popup_text.innerHTML = `Connecting ${tools.ptr.name.toLowerCase()} with Optitrack<br />{optitrack instructions}`;
-                popup_buttons.innerHTML = "";
-                break;
-            case "dmm":
-                popup_buttons.innerHTML = "";
-                if (data.val === "device") {
-                    popup_text.innerHTML = "Trying to find DMM. Ensure device is properly connected.";
-                } else {
-                    popup_text.innerHTML = `Connecting ${data.val} probe with Optitrack<br />{optitrack instructions}`;
-                    // TODO loading icon or something
-                }
-                break;
-            case "osc":
-                console.log("TODO osc connection");
-                break;
+        break;
+      case "dmm":
+        popup_buttons.innerHTML = "";
+        if (data.val === "device") {
+          popup_text.innerHTML = "Trying to find DMM. Ensure device is properly connected.";
+        } else {
+          popup_text.innerHTML = `Connecting ${data.val} probe with Optitrack<br />{optitrack instructions}`;
+          // TODO loading icon or something
         }
-
-        popup.classList.remove("hidden");
+        break;
+      case "osc":
+        console.log("TODO osc connection");
+        break;
     }
+
+    popup.classList.remove("hidden");
+  }
 }
 
 function toolConnect(data) {
-    var popup = document.getElementById("tool-popup");
-    var popup_title = document.getElementById("tool-popup-title");
-    var popup_text = document.getElementById("tool-popup-text");
-    var popup_buttons = document.getElementById("tool-popup-buttons");
+  var popup = document.getElementById("tool-popup");
+  var popup_title = document.getElementById("tool-popup-title");
+  var popup_text = document.getElementById("tool-popup-text");
+  var popup_buttons = document.getElementById("tool-popup-buttons");
 
-    popup_title.innerText = `Connecting ${tools[data.type].name}`;
+  popup_title.innerText = `Connecting ${tools[data.type].name}`;
 
-    if (data.status === "success") {
-        switch (data.type) {
-            case "ptr":
-                console.log("ptr connected and ready to use");
-                tools.ptr.ready = true;
-                tools.ptr.selection = false;
+  if (data.status === "success") {
+    switch (data.type) {
+      case "ptr":
+        console.log("ptr connected and ready to use");
+        tools.ptr.ready = true;
+        tools.ptr.selection = false;
 
-                popup_text.innerHTML = "Probe connected! Closing..."
-                popup_buttons.innerHTML = "";
-                setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+        popup_text.innerHTML = "Probe connected! Closing..."
+        popup_buttons.innerHTML = "";
+        setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
 
-                var toolbutton = document.getElementById("tools-ptr");
-                toolbutton.classList.add("ready");
-                toolbutton.innerHTML = "PTR";
+        var toolbutton = document.getElementById("tools-ptr");
+        toolbutton.classList.add("ready");
+        toolbutton.innerHTML = "PTR";
 
-                break;
-            case "dmm":
-                if (data.val == "pos") {
-                    console.log("dmm pos probe connected");
-                    tools.dmm.selection.pos = false;
-                    popup_text.innerHTML = "Positive probe connected.";
-                } else if (data.val == "neg") {
-                    console.log("dmm neg probe connected");
-                    tools.dmm.selection.neg = false;
-                    popup_text.innerHTML = "Negative probe connected.";
-                } else {
-                    console.log("dmm connected");
-                    tools.dmm.device = true;
-                    popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
-                }
-
-                popup_buttons.innerHTML = "";
-                for (let dir in tools.dmm.selection) {
-                    let div = document.createElement("div");
-                    div.classList.add("button");
-                    div.classList.add(`dmm-probe-${dir}`);
-                    if (tools.dmm.selection[dir] === null) {
-                        // has not yet been added
-                        div.innerHTML = `+ ${dir.toUpperCase()}`;
-                        div.addEventListener("click", () => {
-                            socket.emit("tool-request", { "type": data.type, "val": dir });
-                        });
-                    } else {
-                        // has already been added
-                        div.innerHTML = `${dir.toUpperCase()}`;
-                        div.classList.add("ready");
-                        div.classList.add("disabled");
-                    }
-                    popup_buttons.appendChild(div);
-                }
-
-                if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
-                    console.log("dmm ready to use")
-                    tools.dmm.ready = true;
-
-                    popup_text.innerHTML += `<br />${tools.dmm.name} ready to use, closing...`
-                    setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
-
-                    var toolbutton = document.getElementById("tools-dmm");
-                    toolbutton.classList.add("ready");
-                    toolbutton.innerHTML = "DMM";
-                }
-                break;
-            case "osc":
-                if (data.val == "osc") {
-                    console.log("osc connected");
-                    tools.osc.device = true;
-                    popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
-
-                } else {
-                    console.log(`osc chan ${data.val} probe connected`);
-                    tools.osc.selection[data.val] = false;
-                }
-                if (tools.osc.device) {
-                    let channels_ready = 0;
-                    for (let chan in tools.osc.selection) {
-                        if (tools.osc.selection[chan] !== null) {
-                            channels_ready += 1;
-                        }
-                    }
-                    if (channels_ready > 1) {
-                        console.log("osc ready to use");
-                        tools.osc.ready = true;
-
-                        popup_text.innerHTML += `<br />${tools.osc.name} ready to use`;
-                        if (channels_ready == 4) {
-                            popup_text.innerHTML += ", closing...";
-                            setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
-                        }
-
-                        var toolbutton = document.getElementById("tools-soc");
-                        toolbutton.classList.add("ready");
-                        toolbutton.innerHTML = "OSC";
-                    }
-                }
-                break;
-        }
-        popup.classList.remove("hidden");
-    } else {
-        console.log(`${data.type} ${data.val} failed to connect`);
-
-        if (data.val === "device") {
-            // Device connection failed
-            popup_text.innerHTML = `${tools[data.type].name} was not found or failed to connect.`;
-            popup_buttons.innerHTML = "";
-
-            let retry_button = document.createElement("div");
-            retry_button.innerHTML = "Retry";
-            retry_button.classList.add("button");
-            retry_button.addEventListener("click", () => {
-                socket.emit("tool-request", { "type": data.type, "val": data.val });
-            });
-            popup_buttons.appendChild(retry_button);
-
-            let exit_button = document.createElement("div");
-            exit_button.innerHTML = "Cancel";
-            exit_button.classList.add("button");
-            exit_button.addEventListener("click", toolPopupX);
-            popup_buttons.appendChild(exit_button);
+        break;
+      case "dmm":
+        if (data.val == "pos") {
+          console.log("dmm pos probe connected");
+          tools.dmm.selection.pos = false;
+          popup_text.innerHTML = "Positive probe connected.";
+        } else if (data.val == "neg") {
+          console.log("dmm neg probe connected");
+          tools.dmm.selection.neg = false;
+          popup_text.innerHTML = "Negative probe connected.";
         } else {
-            // Probe connection failed
-            popup_text.innerHTML = `Probe ${data.val} failed to connect. Ensure Optitrack is working and try again.`;
-            popup_buttons.innerHTML = "";
-            for (let dir in tools.dmm.selection) {
-                let div = document.createElement("div");
-                div.classList.add("button");
-                div.classList.add(`dmm-probe-${dir}`);
-                if (tools.dmm.selection[dir] === null) {
-                    // has not yet been added
-                    div.innerHTML = `+ ${dir.toUpperCase()}`;
-                    div.addEventListener("click", () => {
-                        socket.emit("tool-request", { "type": data.type, "val": dir });
-                    });
-                } else {
-                    // has already been added
-                    div.innerHTML = `${dir.toUpperCase()}`;
-                    div.classList.add("ready");
-                    div.classList.add("disabled");
-                }
-                popup_buttons.appendChild(div);
-            }
+          console.log("dmm connected");
+          tools.dmm.device = true;
+          popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
         }
-        popup.classList.remove("hidden");
+
+        popup_buttons.innerHTML = "";
+        for (let dir in tools.dmm.selection) {
+          let div = document.createElement("div");
+          div.classList.add("button");
+          div.classList.add(`dmm-probe-${dir}`);
+          if (tools.dmm.selection[dir] === null) {
+            // has not yet been added
+            div.innerHTML = `+ ${dir.toUpperCase()}`;
+            div.addEventListener("click", () => {
+              socket.emit("tool-request", { "type": data.type, "val": dir });
+            });
+          } else {
+            // has already been added
+            div.innerHTML = `${dir.toUpperCase()}`;
+            div.classList.add("ready");
+            div.classList.add("disabled");
+          }
+          popup_buttons.appendChild(div);
+        }
+
+        if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
+          console.log("dmm ready to use")
+          tools.dmm.ready = true;
+
+          popup_text.innerHTML += `<br />${tools.dmm.name} ready to use, closing...`
+          setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+
+          var toolbutton = document.getElementById("tools-dmm");
+          toolbutton.classList.add("ready");
+          toolbutton.innerHTML = "DMM";
+        }
+        break;
+      case "osc":
+        if (data.val == "osc") {
+          console.log("osc connected");
+          tools.osc.device = true;
+          popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
+
+        } else {
+          console.log(`osc chan ${data.val} probe connected`);
+          tools.osc.selection[data.val] = false;
+        }
+        if (tools.osc.device) {
+          let channels_ready = 0;
+          for (let chan in tools.osc.selection) {
+            if (tools.osc.selection[chan] !== null) {
+              channels_ready += 1;
+            }
+          }
+          if (channels_ready > 1) {
+            console.log("osc ready to use");
+            tools.osc.ready = true;
+
+            popup_text.innerHTML += `<br />${tools.osc.name} ready to use`;
+            if (channels_ready == 4) {
+              popup_text.innerHTML += ", closing...";
+              setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
+            }
+
+            var toolbutton = document.getElementById("tools-soc");
+            toolbutton.classList.add("ready");
+            toolbutton.innerHTML = "OSC";
+          }
+        }
+        break;
     }
+    popup.classList.remove("hidden");
+  } else {
+    console.log(`${data.type} ${data.val} failed to connect`);
+
+    if (data.val === "device") {
+      // Device connection failed
+      popup_text.innerHTML = `${tools[data.type].name} was not found or failed to connect.`;
+      popup_buttons.innerHTML = "";
+
+      let retry_button = document.createElement("div");
+      retry_button.innerHTML = "Retry";
+      retry_button.classList.add("button");
+      retry_button.addEventListener("click", () => {
+        socket.emit("tool-request", { "type": data.type, "val": data.val });
+      });
+      popup_buttons.appendChild(retry_button);
+
+      let exit_button = document.createElement("div");
+      exit_button.innerHTML = "Cancel";
+      exit_button.classList.add("button");
+      exit_button.addEventListener("click", toolPopupX);
+      popup_buttons.appendChild(exit_button);
+    } else {
+      // Probe connection failed
+      popup_text.innerHTML = `Probe ${data.val} failed to connect. Ensure Optitrack is working and try again.`;
+      popup_buttons.innerHTML = "";
+      for (let dir in tools.dmm.selection) {
+        let div = document.createElement("div");
+        div.classList.add("button");
+        div.classList.add(`dmm-probe-${dir}`);
+        if (tools.dmm.selection[dir] === null) {
+          // has not yet been added
+          div.innerHTML = `+ ${dir.toUpperCase()}`;
+          div.addEventListener("click", () => {
+            socket.emit("tool-request", { "type": data.type, "val": dir });
+          });
+        } else {
+          // has already been added
+          div.innerHTML = `${dir.toUpperCase()}`;
+          div.classList.add("ready");
+          div.classList.add("disabled");
+        }
+        popup_buttons.appendChild(div);
+      }
+    }
+    popup.classList.remove("hidden");
+  }
 }
 
 function initSocket() {
-    socket = io();
-    socket.on("connect", () => {
-        console.log("connected")
-    });
-    socket.on("selection", (selection) => {
-        switch (selection.type) {
-            case "comp":
-                selectComponent(selection.val);
-                break;
-            case "pin":
-                selectPins([selection.val]);
-                break;
-            case "net":
-                selectNet(selection.val);
-                break;
-            case "deselect":
-                deselectAll(true);
-                break;
-        }
-    });
-    socket.on("projector-mode", (mode) => {
-        if (mode === "calibrate") {
-            document.getElementById("settings-projector-calibrate").checked = true;
-        } else {
-            document.getElementById("settings-projector-calibrate").checked = false;
-        }
-    });
-    socket.on("projector-adjust", (adjust) => {
-        let val = adjust.type === "z" ? adjust.val * 100 : adjust.val;
-        projector_sliders[adjust.type].slider.value = val;
-        projector_sliders[adjust.type].label.value = val;
-    });
+  socket = io();
+  socket.on("connect", () => {
+    console.log("connected")
+  });
+  socket.on("selection", (selection) => {
+    switch (selection.type) {
+      case "comp":
+        selectComponent(selection.val);
+        break;
+      case "pin":
+        selectPins([selection.val]);
+        break;
+      case "net":
+        selectNet(selection.val);
+        break;
+      case "deselect":
+        deselectAll(true);
+        break;
+    }
+  });
+  socket.on("projector-mode", (mode) => {
+    if (mode === "calibrate") {
+      document.getElementById("settings-projector-calibrate").checked = true;
+    } else {
+      document.getElementById("settings-projector-calibrate").checked = false;
+    }
+  });
+  socket.on("projector-adjust", (adjust) => {
+    let val = adjust.type === "z" ? adjust.val * 100 : adjust.val;
+    projector_sliders[adjust.type].slider.value = val;
+    projector_sliders[adjust.type].label.value = val;
+  });
 
-    // tools
-    socket.on("tool-request", (data) => {
-        // Any tool requests by the client are echoed back by the server if valid,
-        // ie. if the tool had not already been requested
-        toolRequest(data);
-    })
+  // tools
+  socket.on("tool-request", (data) => {
+    // Any tool requests by the client are echoed back by the server if valid,
+    // ie. if the tool had not already been requested
+    toolRequest(data);
+  })
 
-    socket.on("tool-connect", (data) => {
-        toolConnect(data);
-    });
+  socket.on("tool-connect", (data) => {
+    toolConnect(data);
+  });
 
-    socket.on("tool-measure", (data) => {
-        if (!tools[data.type].ready) {
-            console.log(`${data.type} tool received measurement but is not fully set up`);
-            return;
-        }
-        switch (data.type) {
-            case "ptr":
-                console.log(`received ptr selection at (${data.coords.x},${data.coords.y})`);
-                break;
-            case "dmm":
-                console.log(`measured ${data.val} ${data.unit} with pos at (${data.pos_coords.x},${data.pos_coords.y})
+  socket.on("tool-measure", (data) => {
+    if (!tools[data.type].ready) {
+      console.log(`${data.type} tool received measurement but is not fully set up`);
+      return;
+    }
+    switch (data.type) {
+      case "ptr":
+        console.log(`received ptr selection at (${data.coords.x},${data.coords.y})`);
+        break;
+      case "dmm":
+        console.log(`measured ${data.val} ${data.unit} with pos at (${data.pos_coords.x},${data.pos_coords.y})
                 and neg probe at (${data.neg_coords.x},${data.neg_coords.y})`);
-                dmmMeasurement(data);
-                break;
-            case "osc":
-                console.log("I don't know what the oscilloscope should do");
-                break;
-        }
-    });
+        dmmMeasurement(data);
+        break;
+      case "osc":
+        console.log("I don't know what the oscilloscope should do");
+        break;
+    }
+  });
 }
 
 
 window.onload = () => {
-    let data_urls = ["schdata", "pcbdata"]
-    data_urls = data_urls.map((name) => ("http://" + window.location.host + "/" + name))
+  let data_urls = ["schdata", "pcbdata"]
+  data_urls = data_urls.map((name) => ("http://" + window.location.host + "/" + name))
 
-    Promise.all(data_urls.map((url) => fetch(url))).then((responses) =>
-        Promise.all(responses.map((res) => res.json()))
-    ).then((datas) => {
+  Promise.all(data_urls.map((url) => fetch(url))).then((responses) =>
+    Promise.all(responses.map((res) => res.json()))
+  ).then((datas) => {
 
-        schdata = datas[0];
-        pcbdata = datas[1];
+    schdata = datas[0];
+    pcbdata = datas[1];
 
-        initUtils();
-        initData();
+    initUtils();
+    initData();
 
-        initPage();
+    initPage();
 
-        initLayout();
-        initSchematic();
-        initMouseHandlers();
+    initLayout();
+    initSchematic();
+    initMouseHandlers();
 
-        initSocket();
+    initSocket();
 
-        resizeAll();
+    resizeAll();
 
-    }).catch((e) => console.log(e))
+  }).catch((e) => console.log(e))
 }
 window.onresize = resizeAll;
