@@ -381,17 +381,27 @@ function drawPins(canvas, layer) {
   var padHoleColor = style.getPropertyValue('--pad-hole-color');
   var ctx = canvas.getContext("2d");
 
-  var pin = pindict[highlighted_pin];
-  if (pin == undefined) {
-    logerr(`highlighted pin ${highlighted_pin} is not in pindict`);
-    return;
+  var highlight_list = [];
+  if (current_selection.type === "pin") {
+    highlight_list.push(current_selection.val);
+  } else {
+    for (let selection of tool_selections) {
+      if (selection.type === "pin") {
+        highlight_list.push(selection.val);
+      }
+    }
   }
-  for (var footprint of pcbdata.footprints) {
-    if (footprint.ref != pin.ref) continue;
 
-    // draw pads
+  for (let pinidx of highlight_list) {
+    var pin = pindict[pinidx];
+    if (pin == undefined) {
+      logerr(`highlighted pin ${pinidx} is not in pindict`);
+      return;
+    }
+    // Trusting that every pin in pindict has a corresponding comp with a valid refid
+    var pads = pcbdata.footprints[ref_to_id[pin.ref]].pads;
     var padDrawn = false;
-    for (var pad of footprint.pads) {
+    for (var pad of pads) {
       // padname should match pin.num, not pin.name
       if (pad.padname == pin.num && pad.layers.includes(layer)) {
         drawPad(ctx, pad, padColor, false);
@@ -400,7 +410,7 @@ function drawPins(canvas, layer) {
     }
     if (padDrawn && ibom_settings.renderPads) {
       // redraw all pad holes because some pads may overlap
-      for (var pad of footprint.pads) {
+      for (var pad of pads) {
         drawPadHole(ctx, pad, padHoleColor);
       }
     }
@@ -408,6 +418,16 @@ function drawPins(canvas, layer) {
 }
 
 function drawFootprints(canvas, layer, scalefactor, highlight) {
+  var highlight_list = [];
+  if (current_selection.type === "comp") {
+    highlight_list.push(current_selection.val);
+  } else {
+    for (let selection of tool_selections) {
+      if (selection.type === "comp") {
+        highlight_list.push(selection.val);
+      }
+    }
+  }
   var ctx = canvas.getContext("2d");
   ctx.lineWidth = 3 / scalefactor;
   var style = getComputedStyle(topmostdiv);
@@ -421,7 +441,7 @@ function drawFootprints(canvas, layer, scalefactor, highlight) {
   for (var i = 0; i < pcbdata.footprints.length; i++) {
     var mod = pcbdata.footprints[i];
     var outline = ibom_settings.renderDnpOutline && pcbdata.bom.skipped.includes(i);
-    if (!highlight || highlighted_component == i) {
+    if (!highlight || highlight_list.includes(i)) {
       drawFootprint(ctx, layer, scalefactor, mod, padColor, padHoleColor, outlineColor, highlight, outline);
     }
   }
@@ -445,7 +465,8 @@ function drawTracks(canvas, layer, color, highlight) {
   ctx.strokeStyle = color;
   ctx.lineCap = "round";
   for (var track of pcbdata.tracks[layer]) {
-    if (highlight && highlighted_net != track.net) continue;
+    // Note: if highlight is true, then current_selection is guaranteed to be a net
+    if (highlight && current_selection.val != track.net) continue;
     ctx.lineWidth = track.width;
     ctx.beginPath();
     if ('radius' in track) {
@@ -471,7 +492,8 @@ function drawZones(canvas, layer, color, highlight) {
     if (!zone.path2d) {
       zone.path2d = getPolygonsPath(zone);
     }
-    if (highlight && highlighted_net != zone.net) continue;
+    // Note: if highlight is true, then current_selection is guaranteed to be a net
+    if (highlight && current_selection.val != zone.net) continue;
     ctx.fill(zone.path2d);
     if (zone.width > 0) {
       ctx.lineWidth = zone.width;
@@ -511,7 +533,7 @@ function drawNets(canvas, layer, highlight) {
       // draw pads
       var padDrawn = false;
       for (var pad of footprint.pads) {
-        if (highlighted_net != pad.net) continue;
+        if (current_selection.val != pad.net) continue;
         if (pad.layers.includes(layer)) {
           drawPad(ctx, pad, padColor, false);
           padDrawn = true;
@@ -576,14 +598,14 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
   if (clear) {
     clearCanvas(canvasdict.highlight);
   }
-  if (highlighted_component != -1) {
+  if (current_selection.type === "comp") {
     drawFootprints(canvasdict.highlight, canvasdict.layer,
       canvasdict.transform.s * canvasdict.transform.zoom, true);
   }
-  if (highlighted_pin != -1) {
+  if (current_selection.type === "pin") {
     drawPins(canvasdict.highlight, canvasdict.layer);
   }
-  if (highlighted_net !== null) {
+  if (current_selection.type === "net") {
     drawNets(canvasdict.highlight, canvasdict.layer, true);
   }
   if (draw_crosshair) {
@@ -749,25 +771,25 @@ function drawSchematicHighlights() {
   prepareCanvas(canvas, false, schematic_canvas.transform);
   clearCanvas(canvas);
   var ctx = canvas.getContext("2d");
-  if (highlighted_component !== -1) {
-    if (compdict[highlighted_component] == undefined) {
-      logerr(`highlighted refid ${highlighted_component} not in compdict`);
+  if (current_selection.type === "comp") {
+    if (compdict[current_selection.val] == undefined) {
+      logerr(`highlighted refid ${current_selection.val} not in compdict`);
       return;
     }
-    for (var unitnum in compdict[highlighted_component].units) {
-      var unit = compdict[highlighted_component].units[unitnum];
+    for (var unitnum in compdict[current_selection.val].units) {
+      var unit = compdict[current_selection.val].units[unitnum];
       if (unit.schid == current_schematic) {
         var box = unit.bbox.map((b) => parseFloat(b));
         drawSchBox(ctx, box);
       }
     }
   }
-  if (highlighted_pin !== -1) {
-    if (pindict[highlighted_pin] == undefined) {
-      logerr(`highlighted pinidx ${highlighted_pin} not in pindict`);
+  if (current_selection.type === "pin") {
+    if (pindict[current_selection.val] == undefined) {
+      logerr(`highlighted pinidx ${current_selection.val} not in pindict`);
       return;
     }
-    var pin = pindict[highlighted_pin];
+    var pin = pindict[current_selection.val];
     if (pin.schid == current_schematic) {
       drawSchBox(ctx, pinBoxFromPos(pin.pos));
     } else {
@@ -775,9 +797,9 @@ function drawSchematicHighlights() {
         `but we are on schid ${current_schematic}`);
     }
   }
-  if (highlighted_net !== null) {
+  if (current_selection.type === "net") {
     for (var pin of pindict) {
-      if (pin.schid == current_schematic && pin.net == highlighted_net) {
+      if (pin.schid == current_schematic && pin.net == current_selection.val) {
         drawSchBox(ctx, pinBoxFromPos(pin.pos));
       }
     }

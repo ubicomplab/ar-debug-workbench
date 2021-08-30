@@ -9,6 +9,16 @@ var highlighted_component = -1; // refid
 var highlighted_pin = -1; // pinidx
 var highlighted_net = null; // netname
 
+/** current desktop selection, mutually exclusive with tool_selections */
+var current_selection = {
+  "type": null,
+  "val": null
+}
+
+// TODO change tool selections to be purely coordinates
+/** list of {type, val, color}; mutually exclusive with current_selection */
+var tool_selections = [];
+
 var sch_zoom_default; // different for each schematic sheet
 
 var draw_crosshair = false;
@@ -25,8 +35,8 @@ function updateTargetBoxes() {
   target_boxes["F"] = null;
   target_boxes["B"] = null;
 
-  if (highlighted_component !== -1) {
-    var comp = compdict[highlighted_component];
+  if (current_selection.type === "comp") {
+    var comp = compdict[current_selection.val];
     if (comp.schids.includes(current_schematic)) {
       var bounds = [Infinity, Infinity, -Infinity, -Infinity];
       for (let unitnum in comp.units) {
@@ -41,14 +51,14 @@ function updateTargetBoxes() {
       target_boxes["S"] = bounds;
     }
 
-    var footprint = pcbdata.footprints[highlighted_component];
+    var footprint = pcbdata.footprints[current_selection.val];
     for (let layer of ["F", "B"]) {
       // Do nothing to layer that doesn't have the component
       target_boxes[layer] = layer == footprint.layer ? bboxPcbnewToList(footprint.bbox) : null;
     }
   }
-  if (highlighted_pin !== -1) {
-    var pin = pindict[highlighted_pin];
+  if (current_selection.type === "pin") {
+    var pin = pindict[current_selection.val];
     if (pin.schid == current_schematic) {
       target_boxes["S"] = pinBoxFromPos(pin.pos);
     }
@@ -64,12 +74,12 @@ function updateTargetBoxes() {
       }
     }
   }
-  if (highlighted_net !== null) {
+  if (current_selection.type === "net") {
     /*
     var bounds = [Infinity, Infinity, -Infinity, -Infinity];
-    for (let pinidx of netdict[highlighted_net].pins) {
+    for (let pinidx of netdict[current_selection.val].pins) {
         let pin = pindict[pinidx];
-        if (pin.schid == current_schematic && pin.net == highlighted_net) {
+        if (pin.schid == current_schematic && pin.net == current_selection.val) {
             let box = pinBoxFromPos(pin.pos);
             bounds[0] = Math.min(bounds[0], box[0], box[2]);
             bounds[1] = Math.min(bounds[1], box[1], box[3]);
@@ -95,7 +105,8 @@ function selectComponent(refid) {
     return;
   }
   deselectAll(false);
-  highlighted_component = selected;
+  current_selection.type = "comp";
+  current_selection.val = selected;
 
   var comp = compdict[selected];
   /*
@@ -152,7 +163,8 @@ function selectPins(pin_hits) {
     return;
   }
   deselectAll(false);
-  highlighted_pin = selected;
+  current_selection.type = "pin";
+  current_selection.val = selected;
 
   var pin = pindict[selected];
   /*
@@ -195,7 +207,8 @@ function selectNet(selected) {
   }
   deselectAll(false);
 
-  highlighted_net = selected;
+  current_selection.type = "net";
+  current_selection.val = selected;
   /*
   if (!netdict[selected].includes(current_schematic)) {
     switchSchematic(netdict[selected][0]);
@@ -237,9 +250,9 @@ function selectNet(selected) {
 }
 
 function deselectAll(redraw) {
-  highlighted_component = -1;
-  highlighted_pin = -1;
-  highlighted_net = null;
+  current_selection.type = null;
+  current_selection.val = null;
+  
   draw_crosshair = false;
   target_boxes["S"] = null;
   target_boxes["F"] = null;

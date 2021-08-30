@@ -191,14 +191,17 @@ function zoomToTargetBoxes(schmin, layoutmin) {
 
 function zoomToSelection(layerdict) {
   var targetsize = null;
-  if (highlighted_component !== -1) {
-    targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["comp"] : VIEW_MINIMUMS["layout"]["footprint"];
+  if (current_selection.type === null) {
+    return;
   }
-  if (highlighted_pin !== -1) {
-    targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["pin"] : VIEW_MINIMUMS["layout"]["pad"];
-  }
-  if (highlighted_net !== null) {
-    targetsize = layerdict.layer === "S" ? VIEW_MINIMUMS["sch"]["net"] : null;
+  if (layerdict.layer === "S") {
+    targetsize = VIEW_MINIMUMS["sch"][current_selection.type];
+  } else {
+    if (current_selection.type === "comp") {
+      targetsize = VIEW_MINIMUMS["layout"]["footprint"];
+    } else if (current_selection.type === "pin") {
+      targetsize = VIEW_MINIMUMS["layout"]["pad"];
+    }
   }
 
   if (targetsize === null || target_boxes[layerdict.layer] === null) {
@@ -1084,8 +1087,8 @@ function searchNav(dir) {
 
     search_nav_num.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
 
-    if (highlighted_component !== -1) {
-      let comp = compdict[highlighted_component];
+    if (current_selection.type === "comp") {
+      let comp = compdict[current_selection.val];
       let unit = Object.values(comp.units)[search_nav_current[0] - 1];
       search_nav_text.innerText = `${comp.ref} ${unit.num}`;
 
@@ -1094,7 +1097,7 @@ function searchNav(dir) {
       }
 
       target_boxes["S"] = unit.bbox.map((i) => parseFloat(i));
-      let footprint = pcbdata.footprints[highlighted_component];
+      let footprint = pcbdata.footprints[current_selection.val];
       for (let layer of ["F", "B"]) {
         // Do nothing to layer that doesn't have the component
         target_boxes[layer] = footprint.layer == layer ? bboxPcbnewToList(footprint.bbox) : null;
@@ -1110,8 +1113,8 @@ function searchNav(dir) {
       }
       // TODO emphasize this unit somehow
     }
-    if (highlighted_net !== null) {
-      let pin = pindict[netdict[highlighted_net]["pins"][search_nav_current[0] - 1]];
+    if (current_selection.type === "net") {
+      let pin = pindict[netdict[current_selection.val]["pins"][search_nav_current[0] - 1]];
       search_nav_text.innerText = `${pin.ref}.${pin.num}`;
 
       if (pin.schid != current_schematic) {

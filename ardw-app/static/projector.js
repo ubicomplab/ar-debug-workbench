@@ -26,7 +26,8 @@ function projectorSelectComponent(refid) {
   }
 
   projectorDeselectAll();
-  highlighted_component = selected;
+  current_selection.type = "comp";
+  current_selection.val = selected;
   drawHighlights();
 }
 
@@ -39,7 +40,8 @@ function projectorSelectPins(pin_hits) {
   }
 
   projectorDeselectAll();
-  highlighted_pin = selected;
+  current_selection.type = "pin";
+  current_selection.val = selected;
   drawHighlights();
 }
 
@@ -50,14 +52,15 @@ function projectorSelectNet(netname) {
   }
 
   projectorDeselectAll();
-  highlighted_net = netname;
+  current_selection.type = "net";
+  current_selection.val = netname;
   drawHighlights();
 }
 
 function projectorDeselectAll() {
-  highlighted_component = -1;
-  highlighted_pin = -1;
-  highlighted_net = null;
+  current_selection.type = null;
+  current_selection.val = null;
+  
   draw_crosshair = false;
   target_boxes["S"] = null;
   target_boxes["F"] = null;
