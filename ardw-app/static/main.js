@@ -44,17 +44,6 @@ var sidebar_custom_selection = {
   }
 };
 
-/** list of { name, timestamp, notes, cards=[] } */
-var debug_sessions = [];
-
-/** cards is list of {pos, neg, bounds, value, unit, DOM element} */
-var current_debug_session = {
-  "name": null,
-  "timestamp": null,
-  "notes": null,
-  "cards": []
-}
-
 var active_debug_session = false;
 
 /** true iff sidebar is open; independent of debug session state */
@@ -247,6 +236,12 @@ function initPage() {
   // Assume for now that 1st schematic shares title with project
   var projtitle = schdata.schematics[schid_to_idx[1]].name
   document.getElementById("projtitle").textContent = projtitle
+
+  // Tool buttons
+  // TODO, add tool buttons currently handled by onclicks
+  document.getElementById("open-debug").addEventListener("click", () => {
+    toggleSidebar();
+  })
 
   // Search field
   var search_input_field = document.getElementById("search-input");
@@ -514,6 +509,18 @@ function initPage() {
     });
   }
 
+
+  // DEBUG SIDEBAR
+  var sidebar = document.getElementById("sidebar");
+  var sidebar_name = sidebar.querySelector('*[name="sidebar-name"]');
+  var sidebar_notes = sidebar.querySelector('*[name="sidebar-notes"]');
+  
+  [sidebar_name, sidebar_notes].forEach((input) => {
+    input.addEventListener("focusout", () => {
+      socket.emit("debug-session", { "event": "edit", "name": sidebar_name.value, "notes": sidebar_notes.value });
+    });
+  });
+
   // Populate debug session search bar content and set up fields
   var sidebar_custom = document.getElementById("sidebar-custom-dmm");
   var pos_input = sidebar_custom.querySelector('*[name="pos"]');
@@ -575,8 +582,50 @@ function initPage() {
   var custom_save_button = sidebar_custom.querySelector('*[name="save"]');
   custom_save_button.addEventListener("click", () => {
     if (sidebar_custom_selection.pos.type !== null) {
-      // A positive rail is all we need
-      addDebugCard(from_user = true);
+      var new_card = {
+        "pos": {
+          "type": sidebar_custom_selection.pos.type,
+          "val": sidebar_custom_selection.pos.val
+        },
+        "neg": {
+          "type": null,
+          "val": null
+        },
+        "val": null,
+        "unit": null,
+        "lo": null,
+        "hi": null
+      };
+
+      if (sidebar_custom_selection.neg.type === null) {
+        new_card.neg.type = "net";
+        new_card.neg.val = "GND";
+      } else {
+        new_card.neg.type = sidebar_custom_selection.neg.type;
+        new_card.neg.val = sidebar_custom_selection.neg.val;
+      }
+
+      // Rest of info can be taken straight from form
+      var sidebar_custom = document.getElementById("sidebar-custom-dmm");
+
+      let multiplier = units.getMultiplier(sidebar_custom.querySelector('*[name="unit-prefix"]').value);
+      let lo = parseFloat(sidebar_custom.querySelector('*[name="lo"]').value);
+      let hi = parseFloat(sidebar_custom.querySelector('*[name="hi"]').value);
+      if (!isNaN(lo)) {
+        new_card.lo = lo * multiplier;
+      }
+      if (!isNaN(hi)) {
+        new_card.hi = hi * multiplier;
+      }
+
+      let unit = sidebar_custom.querySelector('*[name="unit"]').value;
+      if (unit !== "none") {
+        new_card.unit = unit;
+      }
+
+      resetSidebarCustom();
+
+      socket.emit("debug-session", { "event": "custom", "card": new_card });
 
       sidebar_custom.classList.add("hidden");
 
@@ -592,14 +641,12 @@ function initPage() {
   });
 
   document.getElementById("sidebar-save-button").addEventListener("click", () => {
-    console.log("Saving session is WIP, closing sidebar");
-
-    saveDebug();
+    socket.emit("debug-session", { "event": "save" });
   });
 
   document.getElementById("sidebar-export-button").addEventListener("click", () => {
     console.log("Export function is WIP, doing nothing");
-    alert("Export function WIP");
+    socket.emit("debug-session", { "event": "export" });
   })
 }
 
@@ -631,7 +678,7 @@ function doCardsMatch(card1, card2) {
     card1.unit == card2.unit;
 }
 
-function addDebugCard(from_user, measurement = null) {
+function addDebugCard_DEPR(from_user, measurement = null) {
   var new_card = {
     "pos": {
       "type": null,
@@ -768,77 +815,115 @@ function addDebugCard(from_user, measurement = null) {
   current_debug_session.cards.push(new_card);
 }
 
-function toggleRecord() {
-  var button = document.getElementById("record-button");
-  if (recording_is_on) {
-    button.classList.remove("on");
-  } else {
-    button.classList.add("on");
+function addDebugCard(card, id) {
+  var div = document.createElement("div");
+  div.classList.add("sidebar-card", `card-${id}`);
+  var valtext = card.val !== null ? String(card.val) : "--";
+  if (card.unit !== null) {
+    valtext += card.unit;
   }
-  recording_is_on = !recording_is_on;
+  div.innerHTML =
+    `<div class="card-row">
+        <span style="background: red;">&nbsp;</span>
+        <span class="sidebar-card-search">${getElementName(card.pos)}</span>
+    </div>
+    <div class="card-row">
+        <span style="background: black;">&nbsp;</span>
+        <span class="sidebar-card-search">${getElementName(card.neg)}</span>
+    </div>
+    <div class="card-row">
+        <span class="sidebar-result">${valtext}</span>
+    </div>`;
+
+  if (card.lo !== null || card.hi !== null) {
+    var lospan = document.createElement("span");
+    lospan.classList.add("bound");
+    if (card.lo !== null) {
+      lospan.innerHTML = card.lo;
+      if (card.val !== null) {
+        lospan.classList.add(card.val >= card.lo ? "good" : "bad");
+      }
+    } else {
+      lospan.innerHTML = "n/a";
+    }
+    var hispan = document.createElement("span");
+    hispan.classList.add("bound");
+    if (card.hi !== null) {
+      hispan.innerHTML = card.hi;
+      if (card.val !== null) {
+        hispan.classList.add(card.val <= card.hi ? "good" : "bad");
+      }
+    } else {
+      hispan.innerHTML = "n/a";
+    }
+
+    var bounddiv = document.createElement("div");
+    bounddiv.innerHTML = "(";
+    bounddiv.appendChild(lospan);
+    bounddiv.innerHTML += "-";
+    bounddiv.appendChild(hispan);
+    if (card.unit !== null) {
+      bounddiv.innerHTML += card.unit;
+    }
+    bounddiv.innerHTML += " )";
+
+    div.querySelector(".card-row:last-child").appendChild(bounddiv);
+  }
+
+  document.getElementById("sidebar-cards").appendChild(div);
+}
+
+function updateDebugCard(card, id) {
+  var bottom_row = document.getElementById("sidebar-cards").querySelector(`.card-${id}>*:last-child`);
+  bottom_row.querySelector('.sidebar-result').innerHTML = `${card.val}${card.unit}`;
+  let bounds = bottom_row.querySelectorAll('.bound');
+  if (card.lo !== null) {
+    if (card.lo <= card.val) {
+      bounds[0].classList.add("good");
+    } else {
+      bounds[0].classList.add("bad");
+    }
+  }
+  if (card.hi !== null) {
+    if (card.hi >= card.val) {
+      bounds[1].classList.add("good");
+    } else {
+      bounds[1].classList.add("bad");
+    }
+  }
+}
+
+function recordButton() {
+  socket.emit("debug-session", { "event": "record", "record": !recording_is_on });
+}
+
+function setRecordState(record) {
+  var button = document.getElementById("record-button");
+  var icon = document.getElementById("record-icon");
+  if (record) {
+    button.classList.add("on");
+    icon.classList.remove("hidden");
+    recording_is_on = true
+  } else {
+    button.classList.remove("on");
+    icon.classList.add("hidden");
+    recording_is_on = false
+  }
 }
 
 function toggleSidebar(x = false) {
+  var text = document.getElementById("open-debug").querySelector("span");
   if (x || sidebar_is_open) {
     sidebar_split.collapse(1);
     sidebar_is_open = false;
+    text.innerHTML = "Show Debug Panel ";
   } else {
     // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
     var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
     sidebar_split.setSizes([100 - min_percent, min_percent]);
     sidebar_is_open = true;
+    text.innerHTML = "Hide Debug Panel ";
   }
-  resizeAll();
-}
-
-function openDebug() {
-  // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
-  var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
-  sidebar_split.setSizes([100 - min_percent, min_percent]);
-  resizeAll();
-
-  if (active_debug_session) {
-    // We already have the sidebar open, so we're done
-    return;
-  }
-
-  active_debug_session = true;
-
-  // For now, just create a new session when we open the panel
-  var now = new Date();
-  current_debug_session = {
-    "name": "",
-    "timestamp": now.toLocaleTimeString(),
-    "notes": "",
-    "cards": []
-  }
-
-  var sidebar = document.getElementById("sidebar");
-  var name_input = sidebar.querySelector('*[name="sidebar-name"]');
-  var timestamp = sidebar.querySelector('*[name="sidebar-timestamp"]');
-  var notes_input = sidebar.querySelector('*[name="sidebar-notes"]');
-  name_input.value = "";
-  name_input.placeholder = `Debug Session #${debug_sessions.length + 1}`;
-  timestamp.innerHTML = current_debug_session.timestamp;
-  notes_input.value = "";
-}
-
-function saveDebug() {
-  if (current_debug_session.cards.length > 0) {
-    let name_input = document.querySelector("#sidebar-name > input");
-    current_debug_session.name = name_input.value !== "" ? name_input.value : name_input.placeholder;
-    current_debug_session.notes = document.querySelector("#sidebar-notes > textarea").value;
-    debug_sessions.push(current_debug_session);
-
-    let custom_card = document.getElementById("sidebar-custom-dmm");
-    let sidebar_cards = document.getElementById("sidebar-cards");
-    sidebar_cards.innerHTML = "";
-    sidebar_cards.appendChild(custom_card);
-  }
-
-  active_debug_session = false;
-
-  sidebar_split.collapse(1);
   resizeAll();
 }
 
@@ -970,7 +1055,7 @@ function dmmMeasurement(data) {
   }
 
   // No matching card found, just add one
-  addDebugCard(from_user = false, measurement);
+  addDebugCard_DEPR(from_user = false, measurement);
 }
 
 function searchBarX() {
@@ -1270,6 +1355,56 @@ function toolConnect(data) {
   }
 }
 
+function debugSessionEvent(data) {
+  console.log("debug session event")
+  console.log(data);
+  var sidebar = document.getElementById("sidebar");
+  switch (data.event) {
+    case "new":
+    case "edit":
+      // A client requested a new debug session or is editing an existing one
+      active_debug_session = true
+      sidebar.querySelector('*[name="sidebar-name"]').value = data.name;
+      sidebar.querySelector('*[name="sidebar-notes"]').value = data.notes;
+      sidebar.querySelector('*[name="sidebar-timestamp"]').innerHTML = data.timestamp;
+      break;
+    case "custom":
+    case "measurement":
+      if (data.update) {
+        // Measurement for existing card
+        updateDebugCard(data.card, data.id);
+      } else {
+        // Custom card, or measurement without corresponding card
+        addDebugCard(data.card, data.id);
+      }
+      break;
+    case "record":
+      setRecordState(data.record);
+      break;
+    case "save":
+      // Session was saved and exited, so wipe all fields and close the sidebar
+      sidebar.querySelector('*[name="sidebar-name"]').value = "";
+      sidebar.querySelector('*[name="sidebar-name"]').placeholder = `Debug Session ${data.count + 1}`;
+      sidebar.querySelector('*[name="sidebar-notes"]').value = "";
+      sidebar.querySelector('*[name="sidebar-timestamp"]').innerHTML = "";
+
+      let custom_card = document.getElementById("sidebar-custom-dmm");
+      let sidebar_cards = document.getElementById("sidebar-cards");
+      sidebar_cards.innerHTML = "";
+      sidebar_cards.appendChild(custom_card);
+
+      setRecordState(false);
+      toggleSidebar(true);
+
+      active_debug_session = false;
+
+      break;
+    case "export":
+      console.log("export is WIP");
+      break;
+  }
+}
+
 function initSocket() {
   socket = io();
   socket.on("connect", () => {
@@ -1334,6 +1469,10 @@ function initSocket() {
         break;
     }
   });
+
+  socket.on("debug-session", (data) => {
+    debugSessionEvent(data);
+  })
 }
 
 

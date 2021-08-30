@@ -11,6 +11,7 @@ import re
 import sys
 
 from example_tool import ExampleTool
+from tools import DebugCard, DebugSession
 
 
 logging.basicConfig(
@@ -47,6 +48,7 @@ else:
 app.config["SECRET_KEY"] = "secret!"
 socketio = SocketIO(app)
 
+
 @app.route("/")
 def index():
     return render_template(
@@ -57,6 +59,7 @@ def index():
         proj=url_for("projector_page"),
         js=url_for("static", filename="index.js")
     )
+
 
 @app.route("/main")
 def main_page():
@@ -72,6 +75,7 @@ def main_page():
         mainjs=url_for("static", filename="main.js")
     )
 
+
 @app.route("/projector")
 def projector_page():
     return render_template(
@@ -85,13 +89,16 @@ def projector_page():
         projjs=url_for("static", filename="projector.js")
     )
 
+
 @app.route("/schdata")
 def get_schdata():
     return json.dumps(schdata)
 
+
 @app.route("/pcbdata")
 def get_pcbdata():
     return json.dumps(pcbdata)
+
 
 @app.route("/sch<schid>")
 def get_schematic_svg(schid):
@@ -116,6 +123,7 @@ def get_schematic_svg(schid):
         else:
             return send_from_directory(dirpath, filename)
     return ""
+
 
 @app.route("/tool-debug")
 def tool_debug_page():
@@ -175,34 +183,60 @@ tools = {
     }
 }
 
+# list of DebugSession
+session_history: list[DebugSession] = []
+
+active_session: DebugSession = None
+
+# if True, measurements are added to the current session and the next custom card is highlighted
+# if False, measurements are ignored and custom cards are not highlighted
+active_session_is_recording = False
+
+
 @socketio.on("connect")
 def handle_connect():
-    global active_connections, selection, projector_mode, projector_calibration
+    global active_connections, selection, projector_mode, projector_calibration, active_session
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
 
     if selection["comp"] != -1:
-        emit("selection", { "type": "comp", "val": selection["comp"] })
+        emit("selection", {"type": "comp", "val": selection["comp"]})
     elif selection["pin"] != -1:
-        emit("selection", { "type": "pin", "val": selection["pin"] })
+        emit("selection", {"type": "pin", "val": selection["pin"]})
     elif selection["net"] != None:
-        emit("selection", { "type": "net", "val": selection["net"] })
+        emit("selection", {"type": "net", "val": selection["net"]})
 
     emit("projector-mode", projector_mode)
     for k, v in projector_calibration.items():
-        emit("projector-adjust", { "type": k, "val": v })
+        emit("projector-adjust", {"type": k, "val": v})
 
     for tool in tools:
         for val, ready in tools[tool]["ready-elements"].items():
             if ready:
-                emit("tool-connect", { "type": tool, "val": val, "status": "success" })
+                emit("tool-connect", {"type": tool,
+                     "val": val, "status": "success"})
+
+    if active_session is not None:
+        data = active_session.asdict()
+        data["event"] = "new"
+        emit("debug-session", data)
+        
+        for i in range(len(active_session.cards)):
+            data = {
+                "event": "custom",
+                "card": active_session.cards[i].asdict(),
+                "id": i
+            }
+            emit("debug-session", data)
+
 
 @socketio.on("disconnect")
 def handle_disconnect():
     global active_connections
     active_connections -= 1
     logging.info(f"Client disconnected ({active_connections} active)")
+
 
 @socketio.on("selection")
 def handle_selection(new_selection):
@@ -215,6 +249,7 @@ def handle_selection(new_selection):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
 
+
 @socketio.on("projector-mode")
 def handle_projectormode(mode):
     global projector_mode
@@ -222,12 +257,14 @@ def handle_projectormode(mode):
     projector_mode = mode
     socketio.emit("projector-mode", mode)
 
+
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
     global projector_calibration
     logging.info(f"Received projector adjust {adjust}")
     projector_calibration[adjust["type"]] = adjust["val"]
     socketio.emit("projector-adjust", adjust)
+
 
 @socketio.on("tool-request")
 def handle_tool_request(data):
@@ -242,6 +279,70 @@ def handle_tool_request(data):
         # tools[data["type"]]["ready"] = True
         # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
         socketio.emit("tool-request", data)
+
+
+@socketio.on("debug-session")
+def handle_debug_session(data):
+    global session_history
+    global active_session
+    global active_session_is_recording
+
+    logging.info(f"Received debug session event {data}")
+
+    if active_session is None:
+        # if we don't have a session, start a new one
+        active_session = DebugSession()
+        newdata = active_session.asdict()
+        newdata["event"] = "new"
+        socketio.emit("debug-session", newdata)
+
+    if data["event"] == "edit":
+        # client is editing name or notes
+        active_session.name = data["name"]
+        active_session.notes = data["notes"]
+        newdata = active_session.asdict()
+        newdata["event"] = "edit"
+        socketio.emit("debug-session", newdata)
+    elif data["event"] == "custom":
+        # client is sending a new custom card
+        card = DebugCard(
+            data["card"]["pos"],
+            data["card"]["neg"],
+            data["card"]["val"],
+            data["card"]["unit"],
+            data["card"]["lo"],
+            data["card"]["hi"]
+        )
+        if active_session.has(card, exact=True) != -1:
+            logging.error("Request for custom card that already exists")
+        else:
+            # for now, allow adding custom card w/ unit after adding same card w/o unit
+            newdata = {
+                "event": "custom",
+                "update": False,
+                "id": len(active_session.cards),
+                "card": card.asdict()
+            }
+            active_session.cards.append(card)
+            socketio.emit("debug-session", newdata)
+    elif data["event"] == "record":
+        # client is turning recording on or off
+        if data["record"] != active_session_is_recording:
+            active_session_is_recording = data["record"]
+            socketio.emit("debug-session", data)
+            # TODO highlight or deselect next custom card as necessary
+    elif data["event"] == "save":
+        # client wants to save and exit session
+        session_history.append(active_session)
+        active_session = None
+        active_session_is_recording = False
+        # tell client how many sessions are saved
+        data["count"] = len(session_history)
+        socketio.emit("debug-session", data)
+    elif data["event"] == "export":
+        # client wants to export
+        logging.info("Session export is WIP")
+
 
 @socketio.on("tool-debug")
 def handle_tool_debug(data):
@@ -259,13 +360,13 @@ def handle_tool_debug(data):
                     allready = False
                     break
             tools[data["type"]]["ready"] = allready
-            
+
         socketio.emit(name, data)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     port = 5000
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
-        
+
     socketio.run(app, port=port, debug=True)

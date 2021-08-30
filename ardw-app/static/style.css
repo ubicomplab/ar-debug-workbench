@@ -79,6 +79,14 @@ html, body {
     /* width: 70px; */
 }
 
+#record-icon {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border-radius: 40px;
+    background-color: red;
+}
+
 #menubar #search, #menubar #settings {
     position: relative;
 }

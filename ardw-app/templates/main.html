@@ -18,7 +18,10 @@
                     <div id="tools-ptr" class="button tool-button" onclick="toolButton('ptr')">+ PTR</div>
                     <div id="tools-dmm" class="button tool-button" onclick="toolButton('dmm')">+ DMM</div>
                     <div id="tools-osc" class="button tool-button" onclick="toolButton('osc')">+ OSC</div>
-                    <div id="open-debug" class="button tool-button" onclick="openDebug()">Open Debug Panel</div>
+                    <div id="open-debug" class="button tool-button">
+                        <span>Show Debug Panel</span>
+                        <div id="record-icon" class="hidden"></div>
+                    </div>
                 </div>
                 <div id="search">
                     <div id="search-field">
@@ -181,7 +184,7 @@
                                 to have them automatically recorded, or specify a guided measurement below.
                             </div>
                         </div>
-                        <div id="record-button" onclick="toggleRecord()"></div>
+                        <div id="record-button" onclick="recordButton()"></div>
                         <div class="button x-button" onclick="toggleSidebar(true)">X</div>
                     </div>
                     <div id="sidebar-name">
