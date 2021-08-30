@@ -23,7 +23,7 @@
                 <div id="search">
                     <div id="search-field">
                         <input type="text" id="search-input" placeholder="Search..." onkeyup="searchBarHandler()" />
-                        <span onclick="searchBarX()">X</span>
+                        <span class="button x-button" onclick="searchBarX()">X</span>
                     </div>
                     <div id="search-content" class="search-content hidden"></div>
                     <div id="search-nav">
@@ -174,13 +174,15 @@
                 <div>
                     <div id="sidebar-title">
                         <h2>Debug Session</h2>
-                        <div id="sidebar-help">
+                        <div id="sidebar-help" style="display:none;">
                             <div>?</div>
                             <div id="sidebar-help-content">
                                 To add measurements to the session, either directly probe the board
                                 to have them automatically recorded, or specify a guided measurement below.
                             </div>
                         </div>
+                        <div id="record-button" onclick="toggleRecord()"></div>
+                        <div class="button x-button" onclick="toggleSidebar(true)">X</div>
                     </div>
                     <div id="sidebar-name">
                         Name:&nbsp;

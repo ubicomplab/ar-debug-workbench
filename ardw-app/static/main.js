@@ -57,6 +57,11 @@ var current_debug_session = {
 
 var active_debug_session = false;
 
+/** true iff sidebar is open; independent of debug session state */
+var sidebar_is_open = false;
+
+var recording_is_on = false;
+
 /*
 name: display name of device
 ready: true when device is fully set up
@@ -763,6 +768,29 @@ function addDebugCard(from_user, measurement = null) {
     current_debug_session.cards.push(new_card);
 }
 
+function toggleRecord() {
+    var button = document.getElementById("record-button");
+    if (recording_is_on) {
+        button.classList.remove("on");
+    } else {
+        button.classList.add("on");
+    }
+    recording_is_on = !recording_is_on;
+}
+
+function toggleSidebar(x = false) {
+    if (x || sidebar_is_open) {
+        sidebar_split.collapse(1);
+        sidebar_is_open = false;
+    } else {
+        // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
+        var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
+        sidebar_split.setSizes([100 - min_percent, min_percent]);
+        sidebar_is_open = true;
+    }
+    resizeAll();
+}
+
 function openDebug() {
     // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
     var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
@@ -951,6 +979,7 @@ function searchBarX() {
     searchlist.classList.add("hidden");
     input.value = "";
     deselectClicked();
+    input.focus();
 }
 
 function searchNav(dir) {
