@@ -24,7 +24,8 @@ var settings = {
   "log-error": true,
   "log-warning": true,
   "find-activate": "key", // 'key', 'auto'
-  "find-type": "zoom"     // 'zoom', 'xhair'
+  "find-type": "xhair",   // 'zoom', 'xhair'
+  "tool-selection-display": "icon",  // 'xhair', 'icon'
 };
 
 

@@ -549,7 +549,7 @@ function drawNets(canvas, layer, highlight) {
   }
 }
 
-function crosshairOnBox(layerdict, box) {
+function crosshairOnBox(layerdict, box, color=null) {
   var canvas = layerdict.highlight;
   var style = getComputedStyle(topmostdiv);
   var ctx = canvas.getContext("2d");
@@ -561,6 +561,9 @@ function crosshairOnBox(layerdict, box) {
   } else {
     stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
     line_width = style.getPropertyValue("--pcb-crosshair-line-width");
+  }
+  if (color !== null) {
+    stroke_style = color;
   }
   // scale line_width based on effective zoom
   line_width /= layerdict.transform.s * layerdict.transform.zoom;
@@ -594,6 +597,51 @@ function drawCrosshair(layerdict) {
   crosshairOnBox(layerdict, bboxListSort(box));
 }
 
+var r = 30;
+var t = 15;
+var l = 2;
+
+function toolIconAtPoint(layerdict, coords, color) {
+  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
+
+  var canvas = layerdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  var flip = layerdict.layer === "B" ? -1 : 1;
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = l * s;
+  ctx.beginPath();
+  ctx.arc(coords.x + r * s * flip, coords.y - r * s, r * s, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.moveTo(coords.x, coords.y);
+  ctx.lineTo(coords.x, coords.y - t * s);
+  ctx.lineTo(coords.x + t * s * flip, coords.y);
+  ctx.fill();
+}
+
+function boxFromPoint(coords, size=1) {
+  return [coords.x - size / 2, coords.y - size / 2, coords.x + size / 2, coords.y + size / 2];
+}
+
+function drawToolSelections(layerdict) {
+  for (let selection of tool_selections) {
+    if (selection.coords.layer == layerdict.layer) {
+      if (settings["tool-selection-display"] == "xhair") {
+        crosshairOnBox(layerdict, boxFromPoint(selection.coords), selection.color);
+      } else {
+        toolIconAtPoint(layerdict, selection.coords, selection.color);
+      }
+    }
+  }
+}
+
 function drawHighlightsOnLayer(canvasdict, clear = true) {
   if (clear) {
     clearCanvas(canvasdict.highlight);
@@ -610,6 +658,10 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
   }
   if (draw_crosshair) {
     drawCrosshair(canvasdict);
+  }
+  // NOW
+  if (tool_selections.length > 0) {
+    drawToolSelections(canvasdict);
   }
 }
 
@@ -877,7 +929,6 @@ function handlePointerLeave(e, layerdict) {
 }
 
 function resetTransform(layerdict) {
-  console.log(`reset transform ${layerdict.layer}`)
   if (layerdict.layer === "S") {
     layerdict.transform.zoom = sch_zoom_default;
     var t = layerdict.transform;

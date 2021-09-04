@@ -5,18 +5,14 @@ var PIN_BBOX_SIZE = 50; // how big the bbox around a pin is
 
 var socket;
 
-var highlighted_component = -1; // refid
-var highlighted_pin = -1; // pinidx
-var highlighted_net = null; // netname
-
 /** current desktop selection, mutually exclusive with tool_selections */
 var current_selection = {
   "type": null,
   "val": null
 }
 
-// TODO change tool selections to be purely coordinates
-/** list of {type, val, color}; mutually exclusive with current_selection */
+
+/** list of {type, val, coords, color}; mutually exclusive with current_selection */
 var tool_selections = [];
 
 var sch_zoom_default; // different for each schematic sheet
@@ -252,6 +248,9 @@ function selectNet(selected) {
 function deselectAll(redraw) {
   current_selection.type = null;
   current_selection.val = null;
+  
+  // TODO make sure we don't have a leak
+  tool_selections = [];
   
   draw_crosshair = false;
   target_boxes["S"] = null;
@@ -575,7 +574,7 @@ function handleMouseClick(layerdict, e = null) {
     var v = rotateVector([x, y], -ibom_settings.boardRotation);
 
     if (DEBUG_LAYOUT_CLICK) {
-      console.log(`click in layer ${layerdict.layer} at (${x},${y})`);
+      console.log(`click in layer ${layerdict.layer} at (${v[0]},${v[1]})`);
       return;
     }
 
