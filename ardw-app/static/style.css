@@ -33,15 +33,11 @@ html, body {
     font-family: Verdana, sans-serif;
 }
 
-.dark.topmostdiv {
-    --pcb-edge-color: #eee;
-    --pad-color: #808080;
-    --pin1-outline-color: #ffa800;
-    --pin1-outline-color-highlight: #ccff00;
-    --track-color: #42524f;
-    --zone-color: #42524f;
-    background-color: #252c30;
-    color: #eee;
+#topmostdiv.projector {
+    background-color: black;
+    --pad-color: #ddd;
+    --pad-hole-color: #eee;
+    --pcb-edge-color: white;
 }
 
 #menubar {
@@ -633,11 +629,11 @@ div.canvas-container>canvas {
     padding: 5px;
 }
 
-#projector #layout-div {
+#topmostdiv.projector #layout-div {
     height: 100vh;
 }
 
-#projector #layout-div>div {
+#topmostdiv.projector #layout-div>div {
     height: 100%;
 }
 
