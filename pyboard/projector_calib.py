@@ -1,18 +1,12 @@
-import threading
-from matplotlib import patches
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button
-import matplotlib.cm as cm
 import pyrealtime as prt
 import numpy as np
 import cv2 as cv
 import math
-import msvcrt
 import pickle
-import sys
-import select
-import matplotlib.image as mpimg
-plt.ion()
+import pygame
+import matplotlib.cm as cm
+from matplotlib.widgets import Button
 
 FRAME_SIZE = [1920, 1080]
 # size of checkerboard squares to project
@@ -24,6 +18,24 @@ circleColor = (1, 0, 0)
 textColor = (0.5, 0.5, 0.5)
 text = "Please place probe tip accurately on corner circled in blue. Press any key to capture position"
 CALIBRATION = 0
+
+
+class projection_draw(prt.PyGameLayer):
+    def __init__(self, *arg, **kwargs):
+        super().__init__(*arg, **kwargs)
+
+    def initialize(self):
+        super().initialize()
+
+    def draw(self):
+
+        pygame.display.update()
+        self.screen.fill((200, 200, 255))
+        data = self.get_data()
+        pygame.draw.circle(self.screen, (100, 0, 0), (int(data[0]), - int(data[1])), 15)
+        # pygame.draw.circle(self.screen, (100, 0, 0), (1, 1), 25)
+        # pygame.draw.circle(self.screen, (100, 0, 0), (1919, 1079), 25)
+        # print(data)
 
 def projectPointOnProbeTip(data, projectionMatrix):
 
@@ -51,7 +63,7 @@ def get_world_pos(data, capturedWorldPoints, imagePoints, row, col, counter):
     imagePoints[0:2, bleh] = center[0:2]
     print(data)
     # TODO capture the probe position
-    capturedWorldPoints[0:3, row * 4 + col] = data[0]
+    capturedWorldPoints[0:3, row * 4 + col] = data
     return capturedWorldPoints, imagePoints
 
 
@@ -139,95 +151,112 @@ class ProjectorLayer(prt.TransformMixin, prt.ThreadLayer):
             if not self.calib:
                 self.projectionMatrix = pickle.load(open("projectionMatrix.pkl", 'rb'))
                 self.capturedWorldPoints = pickle.load(open("capturedWorldPoints.pkl", 'rb'))
-                print(self.capturedWorldPoints)
+                # self.capturedWorldPoints = pickle.load(open("imagePoints.pkl", 'rb'))
+                # print(self.capturedWorldPoints)
                 self.calib = 1
-            else:
-                projectPointOnProbeTip(data, self.projectionMatrix)
-        else:
-            if not self.calib:
-                self.counter += 1
-                # capturedWorldPoints, imagePoints = calibrate_projector(data, self.checkerBoard, self.imagePoints,
-                #                                                        self.capturedWorldPoints, self.row, self.col,
-                #                                                        self.counter)
-                if self.counter % 2400 == 0:
-                    plt.isinteractive()
-                    # image = plt.imread("checkerBoardWithCircle" + str(self.row) + str(self.col) + ".png")
-                    image = cv.imread("checkerBoardWithCircle" + str(self.row) + str(self.col) + ".png")
-                    cv.imshow("image", image)
-                    cv.waitKey(1)
-                    # imgplot = plt.imshow(image)
-                    # fig = plt.figure()
-                    # plt.show()
-                    # print("fig")
-                    self.saveWorldPoint = 1
-                elif self.saveWorldPoint and self.counter % 1200 == 0:
-                    capturedWorldPoints, imagePoints = get_world_pos(data, self.capturedWorldPoints, self.imagePoints,
-                                                                     self.row, self.col, self.counter)
-                    # print(data)
-                    self.capturedWorldPoints = capturedWorldPoints
-                    self.imagePoints = imagePoints
-                    self.saveWorldPoint = 0
-                    self.col += 1
-                    if self.col == GRID_SIZE[1] + 1:
-                        self.col = 0
-                        self.row += 1
-                        # print("col")
-                    if self.row == GRID_SIZE[0] + 1:
-                        self.calib = 1
-                        # print("row")
-                        cv.destroyAllWindows()
-                        projectionMatrix = np.linalg.lstsq(self.capturedWorldPoints.T, self.imagePoints.T)[0].T
-                        self.projectionMatrix = projectionMatrix
 
-                        pickle.dump(self.projectionMatrix, open("projectionMatrix.pkl", 'wb'))
-                        pickle.dump(self.capturedWorldPoints, open("capturedWorldPoints.pkl", 'wb'))
+        elif CALIBRATION and not self.calib:
+            # print(self.counter)
+            # self.counter += 1
+            # capturedWorldPoints, imagePoints = calibrate_projector(data, self.checkerBoard, self.imagePoints,
+            #                                                        self.capturedWorldPoints, self.row, self.col,
+            #                                                        self.counter)
+            if self.counter % 2400*2 == 0:
+                # print("as")
+                # plt.isinteractive()
+                # image = plt.imread("checkerBoardWithCircle" + str(self.row) + str(self.col) + ".png")
+                image = cv.imread("checkerBoardWithCircle" + str(self.row) + str(self.col) + ".png")
+                cv.imshow("image", image)
+                cv.waitKey(1)
+                # imgplot = plt.imshow(image)
+                # fig = plt.figure()
+                # plt.show()
+                # print("fig")
+                self.saveWorldPoint = 1
+            elif self.saveWorldPoint and self.counter % 1200*2 == 0:
+                capturedWorldPoints, imagePoints = get_world_pos(data, self.capturedWorldPoints, self.imagePoints,
+                                                                 self.row, self.col, self.counter)
+                # print(data)
+                self.capturedWorldPoints = capturedWorldPoints
+                self.imagePoints = imagePoints
+                self.saveWorldPoint = 0
+                self.col += 1
+                if self.col == GRID_SIZE[1] + 1:
+                    self.col = 0
+                    self.row += 1
+                if self.row == GRID_SIZE[0] + 1:
+                    self.calib = 1
+                    cv.destroyAllWindows()
+                    projectionMatrix = np.linalg.lstsq(self.capturedWorldPoints.T, self.imagePoints.T)[0].T
+                    self.projectionMatrix = projectionMatrix
 
-                        print(self.projectionMatrix)
-                        print(self.capturedWorldPoints)
+                    pickle.dump(self.projectionMatrix, open("projectionMatrix.pkl", 'wb'))
+                    pickle.dump(self.capturedWorldPoints, open("capturedWorldPoints.pkl", 'wb'))
+                    pickle.dump(self.imagePoints, open("imagePoints.pkl", 'wb'))
+                    print(self.projectionMatrix)
+                    print(self.capturedWorldPoints)
 
-            else:
-                projectPointOnProbeTip(data, self.projectionMatrix)
-
-
+        currentWorldPoint = np.array(data)
+        currentWorldPoint = np.append(currentWorldPoint, [1])
+        currentPixelPoint = np.matmul(self.projectionMatrix, currentWorldPoint)
+        pixel = np.hstack((currentPixelPoint[0], -currentPixelPoint[1]))
+        # print(pixel)
+        return pixel
 
 
 class DrawingPane(prt.AggregateScatterPlotLayer):
     def __init__(self, port_in, *args, x_proj=None, y_proj=None, scroll_speed=0, **kwargs):
         super().__init__(port_in, *args, scatter_kwargs={'color': "#1f77b4", "s": 60}, **kwargs)
-        self.x_proj = x_proj if x_proj is not None else np.array([1,0,0])
-        self.y_proj = y_proj if y_proj is not None else np.array([0,1,0])
         self.do_clear = False
         self.clear_button = None
         self.scroll_speed = scroll_speed
-        self.colors = cm.rainbow(np.linspace(0, 1, self.buffer_size))
+        # self.colors = cm.rainbow(np.linspace(0, 1, self.buffer_size))
 
     def clear(self, _):
         self.do_clear = True
 
     def draw_empty_plot(self, ax):
-        ax_clear = ax.figure.add_axes([0.81, 0.005, 0.1, 0.075], label="clear button"+ax.get_label())
-        self.clear_button = Button(ax_clear, 'Clear', color="#000000")
-        self.clear_button.on_clicked(self.clear)
-        ax.set_axis_off()
-        ax.figure.patch.set_facecolor('black')
-        ax.figure.canvas.toolbar.pack_forget()
+        # ax_clear = ax.figure.add_axes([0.81, 0.005, 0.1, 0.075], label="clear button"+ax.get_label())
+        # ax_clear = ax.figure.add_axes([0, 0, 1, 1])
+        ax.margins(x=0)
+        ax.margins(y=0)
+        ax.axis("off")
+        # self.clear_button = Button(ax_clear, 'Clear', color="#000000")
+        # self.clear_button.on_clicked(self.clear)
+        # ax.set_axis_off()
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.get_xaxis().set_ticks([])
+        ax.get_yaxis().set_ticks([])
+        ax.patch.set_visible(False)
+
+        plt.margins(x=0)
+        plt.margins(y=0)
+        plt.axis('off')
+        plt.axis("tight")
+        # ax.figure.patch.set_facecolor('black')
+        # ax.figure.canvas.toolbar.pack_forget()
         return []
 
     def post_init(self, data):
         super().post_init(data)
-        self.series[0].set_color(self.colors)
+        # self.series[0].set_color(self.colors)
 
     def transform(self, data):
-        data = np.atleast_2d(data)
-        # x = np.matmul(data, self.x_proj)
-        # y = np.matmul(data, self.y_proj)
-        xyz = np.linalg.norm(data, axis=1)
-        xz = np.linalg.norm(data[:, [0, 2]], axis=1)
-        yaw = np.arcsin(data[:, 0] / xz)
-        pitch = np.arcsin(data[:, 1] / xyz)
-        data_2d = np.hstack((yaw, pitch))
+        # data = np.atleast_2d(data)
+        # # x = np.matmul(data, self.x_proj)
+        # # y = np.matmul(data, self.y_proj)
+        # xyz = np.linalg.norm(data, axis=1)
+        # xz = np.linalg.norm(data[:, [0, 2]], axis=1)
+        # yaw = np.arcsin(data[:, 0] / xz)
+        # pitch = np.arcsin(data[:,1] / xyz)
+        # data_2d = np.hstack((yaw, pitch))
+        # print(data)
+        data_2d = data
 
-        # self.buffer[:, :, 0] += self.scroll_speed
+        self.buffer[:, :, 0] += self.scroll_speed
         super().transform(data_2d)
         if self.do_clear:
             self.do_clear = False

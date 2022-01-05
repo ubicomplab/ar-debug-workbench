@@ -29,7 +29,10 @@ def extract_cord(data):
     red_markers_adj = red_pos + red_rot.apply(red_tip)
 
     # return [grey_pos, grey_rot.as_quat(), red_pos, red_rot.as_quat(), grey_markers_adj, red_markers_adj]
-    return [red_markers_adj]
+    # return np.hstack((red_markers_adj[0], red_markers_adj[1]))
+    # return [0, red_markers_adj[1], red_markers_adj[2]]
+    return red_markers_adj
+
     # return [grey_markers_adj, red_markers_adj]
 
 
