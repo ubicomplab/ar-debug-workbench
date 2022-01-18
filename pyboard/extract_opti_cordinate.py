@@ -8,6 +8,7 @@ import os
 from settings import DATA_ROOT
 calib = 1
 
+
 @prt.transformer
 def extract_cord(data):
 
@@ -30,8 +31,8 @@ def extract_cord(data):
 
     # return [grey_pos, grey_rot.as_quat(), red_pos, red_rot.as_quat(), grey_markers_adj, red_markers_adj]
     # return np.hstack((red_markers_adj[0], red_markers_adj[1]))
-    # return [0, red_markers_adj[1], red_markers_adj[2]]
-    return red_markers_adj
+    return [red_markers_adj[0], 0, red_markers_adj[2]]
+    # return red_markers_adj
 
     # return [grey_markers_adj, red_markers_adj]
 
