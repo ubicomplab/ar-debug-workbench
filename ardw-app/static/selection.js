@@ -587,6 +587,10 @@ function handleMouseClick(layerdict, e = null) {
     for (let net of netHitScan(layerdict.layer, ...v)) {
       hits.push({ "type": "net", "val": net });
     }
+
+    if (PYTHON_HITSCAN) {
+      socket.emit("python hitscan", { point: v, layer: layerdict.layer, hits: hits })
+    }
   }
 
   if (hits.length == 1) {

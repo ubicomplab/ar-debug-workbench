@@ -2,6 +2,7 @@
 
 // DEBUG
 var DEBUG_LAYOUT_CLICK = false;
+var PYTHON_HITSCAN = true;
 
 // zoom and crosshair constants
 var VIEW_MINIMUMS = {
