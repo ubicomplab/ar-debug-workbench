@@ -17,9 +17,6 @@ from tools import DebugCard, DebugSession
 from boardgeometry.hitscan import hitscan
 
 
-#schdata = None
-#pcbdata = None
-
 if getattr(sys, 'frozen', False):
     template_folder = os.path.join(sys._MEIPASS, 'templates')
     app = Flask(__name__, template_folder=template_folder)
@@ -30,6 +27,7 @@ app.config["SECRET_KEY"] = "secret!"
 socketio = SocketIO(app)
 
 
+# -- app routing --
 @app.route("/")
 def index():
     return render_template(
@@ -107,10 +105,9 @@ def tool_debug_page():
         js=url_for("static", filename="tool-test.js"),
         socketiojs=url_for("static", filename="socket.io.min.js")
     )
+# -- end app routing --
 
-
-
-
+# -- socket --
 @socketio.on("connect")
 def handle_connect():
     global active_connections, selection, projector_mode, projector_calibration, active_session
@@ -279,10 +276,39 @@ def handle_python_hitscan(data):
     python_hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"], renderPads=True, renderTracks=False)
     logging.info(f"expected hits: {data['hits']}")
     logging.info(f"  actual hits: {python_hits}")
+# -- end socket --
 
 
-def init_data(a, b):
-    return
+def init_data(pcbdata, schdata):
+    pinref_to_idx = dict()
+    netdict = dict()
+    pindict = dict()
+
+    ref_to_id = dict()
+    for bomentry in pcbdata["bom"]["both"]:
+        for ref in bomentry[3]:
+            # TODO make sure types are okay
+            ref_to_id[ref[0]] = ref[1]
+    
+    schid_to_idx = dict()
+    compdict = dict()
+    for i, schematic in enumerate(schdata["schematics"]):
+        schid = int(schematic["orderpos"]["sheet"])
+        schid_to_idx[schid] = i  # schematics may be out of order
+        if "components" not in schematic:
+            logging.warn(f"Schematic {schid} has no components")
+            continue
+        for comp in schematic["components"]:
+            if comp["ref"] not in ref_to_id:
+                logging.warn(f"Component {comp['ref']} is in schematic but not in layout")
+                continue
+            refid = ref_to_id[comp["ref"]]
+            unit = int(comp["unit"])
+            
+
+
+    return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict 
+
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -309,7 +335,7 @@ if __name__ == "__main__":
         exit()
 
     # dictionaries from util.js
-    #schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict = init_data(pcbdata, schdata)
+    schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict = init_data(pcbdata, schdata)
 
 
 
