@@ -9,35 +9,16 @@ import logging
 import os
 import re
 import sys
+import boardgeometry
 
 from example_tool import ExampleTool
 from tools import DebugCard, DebugSession
 
+from boardgeometry.hitscan import hitscan
 
-logging.basicConfig(
-    filename="ardw.log",
-    filemode="w",
-    encoding="utf-8",
-    level="DEBUG",
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
-logging.info("Server started")
-
-schdata = None
-pcbdata = None
-
-with open("./data/schdata.json", "r") as schfile:
-    schdata = json.load(schfile)
-
-with open("./data/pcbdata.json", "r") as pcbfile:
-    pcbdata = json.load(pcbfile)
-
-if schdata is None or pcbdata is None:
-    logging.error("Failed to load sch or pcb data, exiting...")
-    exit()
-
-num_schematics = schdata["schematics"][0]["orderpos"]["total"]
+#schdata = None
+#pcbdata = None
 
 if getattr(sys, 'frozen', False):
     template_folder = os.path.join(sys._MEIPASS, 'templates')
@@ -60,7 +41,6 @@ def index():
         js=url_for("static", filename="index.js")
     )
 
-
 @app.route("/main")
 def main_page():
     return render_template(
@@ -75,7 +55,6 @@ def main_page():
         mainjs=url_for("static", filename="main.js")
     )
 
-
 @app.route("/projector")
 def projector_page():
     return render_template(
@@ -89,16 +68,13 @@ def projector_page():
         projjs=url_for("static", filename="projector.js")
     )
 
-
 @app.route("/schdata")
 def get_schdata():
     return json.dumps(schdata)
 
-
 @app.route("/pcbdata")
 def get_pcbdata():
     return json.dumps(pcbdata)
-
 
 @app.route("/sch<schid>")
 def get_schematic_svg(schid):
@@ -124,7 +100,6 @@ def get_schematic_svg(schid):
             return send_from_directory(dirpath, filename)
     return ""
 
-
 @app.route("/tool-debug")
 def tool_debug_page():
     return render_template(
@@ -134,63 +109,6 @@ def tool_debug_page():
     )
 
 
-active_connections = 0
-
-# Server tracks current selections and settings
-selection = {
-    "comp": -1,
-    "pin": -1,
-    "net": None
-}
-app_settings = {}
-projector_mode = "calibrate"
-projector_calibration = {
-    "tx": 0,
-    "ty": 0,
-    "r": 0,
-    "z": 1
-}
-ibom_settings = {}
-
-# Server tracks connected tools
-tools = {
-    "ptr": {
-        "ready": False,
-        "thread": None,
-        "ready-elements": {
-            "device": False
-        }
-    },
-    "dmm": {
-        "ready": False,
-        "thread": None,
-        "ready-elements": {
-            "device": False,
-            "pos": False,
-            "neg": False
-        }
-    },
-    "osc": {
-        "ready": False,
-        "thread": None,
-        "ready-elements": {
-            "device": False,
-            "1": False,
-            "2": False,
-            "3": False,
-            "4": False
-        }
-    }
-}
-
-# list of DebugSession
-session_history: list[DebugSession] = []
-
-active_session: DebugSession = None
-
-# if True, measurements are added to the current session and the next custom card is highlighted
-# if False, measurements are ignored and custom cards are not highlighted
-active_session_is_recording = False
 
 
 @socketio.on("connect")
@@ -230,13 +148,11 @@ def handle_connect():
             }
             emit("debug-session", data)
 
-
 @socketio.on("disconnect")
 def handle_disconnect():
     global active_connections
     active_connections -= 1
     logging.info(f"Client disconnected ({active_connections} active)")
-
 
 @socketio.on("selection")
 def handle_selection(new_selection):
@@ -249,7 +165,6 @@ def handle_selection(new_selection):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
 
-
 @socketio.on("projector-mode")
 def handle_projectormode(mode):
     global projector_mode
@@ -257,14 +172,12 @@ def handle_projectormode(mode):
     projector_mode = mode
     socketio.emit("projector-mode", mode)
 
-
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
     global projector_calibration
     logging.info(f"Received projector adjust {adjust}")
     projector_calibration[adjust["type"]] = adjust["val"]
     socketio.emit("projector-adjust", adjust)
-
 
 @socketio.on("tool-request")
 def handle_tool_request(data):
@@ -279,7 +192,6 @@ def handle_tool_request(data):
         # tools[data["type"]]["ready"] = True
         # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
         socketio.emit("tool-request", data)
-
 
 @socketio.on("debug-session")
 def handle_debug_session(data):
@@ -343,7 +255,6 @@ def handle_debug_session(data):
         # client wants to export
         logging.info("Session export is WIP")
 
-
 @socketio.on("tool-debug")
 def handle_tool_debug(data):
     global tools
@@ -363,8 +274,104 @@ def handle_tool_debug(data):
 
         socketio.emit(name, data)
 
+@socketio.on("python hitscan")
+def handle_python_hitscan(data):
+    python_hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"], renderPads=True, renderTracks=False)
+    logging.info(f"expected hits: {data['hits']}")
+    logging.info(f"  actual hits: {python_hits}")
+
+
+def init_data(a, b):
+    return
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        filename="ardw.log",
+        #filemode="w",
+        encoding="utf-8",
+        level="DEBUG",
+        format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
+    logging.info("Server started")
+
+    schdata = None
+    pcbdata = None
+
+    with open("./data/schdata.json", "r") as schfile:
+        schdata = json.load(schfile)
+
+    with open("./data/pcbdata.json", "r") as pcbfile:
+        pcbdata = json.load(pcbfile)
+
+    if schdata is None or pcbdata is None:
+        logging.error("Failed to load sch or pcb data, exiting...")
+        exit()
+
+    # dictionaries from util.js
+    #schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict = init_data(pcbdata, schdata)
+
+
+
+    active_connections = 0
+
+    # Server tracks current selections and settings
+    selection = {
+        "comp": -1,
+        "pin": -1,
+        "net": None
+    }
+    app_settings = {}
+    projector_mode = "calibrate"
+    projector_calibration = {
+        "tx": 0,
+        "ty": 0,
+        "r": 0,
+        "z": 1
+    }
+    ibom_settings = {}
+
+    # Server tracks connected tools
+    tools = {
+        "ptr": {
+            "ready": False,
+            "thread": None,
+            "ready-elements": {
+                "device": False
+            }
+        },
+        "dmm": {
+            "ready": False,
+            "thread": None,
+            "ready-elements": {
+                "device": False,
+                "pos": False,
+                "neg": False
+            }
+        },
+        "osc": {
+            "ready": False,
+            "thread": None,
+            "ready-elements": {
+                "device": False,
+                "1": False,
+                "2": False,
+                "3": False,
+                "4": False
+            }
+        }
+    }
+
+    # list of DebugSession
+    session_history: list[DebugSession] = []
+
+    active_session: DebugSession = None
+
+    # if True, measurements are added to the current session and the next custom card is highlighted
+    # if False, measurements are ignored and custom cards are not highlighted
+    active_session_is_recording = False
+
+
     port = 5000
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
