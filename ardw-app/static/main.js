@@ -1,7 +1,7 @@
 // Main page stuff plus whatever else is wip (like tools)
 
 // DEBUG
-var DEBUG_LAYOUT_CLICK = false;
+var DEBUG_LAYOUT_CLICK = true;
 var PYTHON_HITSCAN = true;
 
 // zoom and crosshair constants

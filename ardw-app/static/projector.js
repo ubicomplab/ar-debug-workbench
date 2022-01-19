@@ -116,6 +116,17 @@ function initSocket() {
 
     resizeAll();
   })
+  socket.on("udp", (data) => {
+     // {type, val, coords, color}
+     udp_selection = ht(data)
+  })
+}
+
+function ht(data) {
+  return {
+    "x": data[0] / 28 + 114,
+    "y": data[1] / 28 +  78
+  }
 }
 
 window.onload = () => {
