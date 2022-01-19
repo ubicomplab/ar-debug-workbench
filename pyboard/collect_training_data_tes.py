@@ -6,11 +6,13 @@ from opti_lib import get_opti_source
 from projector_calib import ProjectorLayer, projection_draw, get_current_pixel_point
 
 CALIBRATE = False
+DEBUG = False
 FILTERED = False
 SEND_OVER_UDP = True
 
 
 def encode_udp(data):
+    # print(data)
     return struct.pack("f" * 2, data[0], data[1])
 
 
@@ -24,7 +26,7 @@ def main():
 
     if FILTERED:
         pixel_point = prt.ExponentialFilter(pixel_point, alpha=0.1)
-    if not CALIBRATE:
+    if not CALIBRATE and DEBUG:
         draw = projection_draw(pixel_point, win_width=1920, win_height=1080)
     if SEND_OVER_UDP:
         prt.UDPWriteLayer(pixel_point, port=8052, encoder=encode_udp)

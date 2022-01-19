@@ -1479,10 +1479,17 @@ function initSocket() {
   })
 
   socket.on("udp", (data) => {
-    console.log(data)
+    udp_selection = ht(data)
+    console.log(udp_selection)
   })
 }
 
+function ht(data) {
+  return {
+    "x": data.x / 28 + 114,
+    "y": -data.y / 28 +  78
+  }
+}
 
 window.onload = () => {
   let data_urls = ["schdata", "pcbdata"]

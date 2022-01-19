@@ -9,7 +9,7 @@ import logging
 import os
 import re
 import sys
-
+import struct
 import socket
 import threading
 
@@ -25,14 +25,15 @@ def listen_udp():
     sock.bind(("127.0.0.1", 8052))
     while True:
         data, addr = sock.recvfrom(1024)
-        print(data, addr)
-        socketio.emit("udp", data)
+        var = struct.unpack("f" * 2, data)
+        # print(var)
+        socketio.emit("udp", {"x": var[0], "y": var[1]})
 
 
 logging.basicConfig(
     filename="ardw.log",
     filemode="w",
-    encoding="utf-8",
+    # encoding="utf-8",
     level="DEBUG",
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -219,7 +220,7 @@ tools = {
 }
 
 # list of DebugSession
-session_history: list[DebugSession] = []
+# session_history: list[DebugSession] = []
 
 active_session: DebugSession = None
 

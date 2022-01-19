@@ -119,13 +119,14 @@ function initSocket() {
   socket.on("udp", (data) => {
      // {type, val, coords, color}
      udp_selection = ht(data)
+     drawHighlights()
   })
 }
 
 function ht(data) {
   return {
-    "x": data[0] / 28 + 114,
-    "y": data[1] / 28 +  78
+    "x": data.x / 28 + 114,
+    "y": -data.y / 28 +  78
   }
 }
 
