@@ -10,8 +10,23 @@ import os
 import re
 import sys
 
+import socket
+import threading
+
 from example_tool import ExampleTool
 from tools import DebugCard, DebugSession
+
+
+def listen_udp():
+    global socketio
+
+    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("127.0.0.1", 8052))
+    while True:
+        data, addr = sock.recvfrom(1024)
+        print(data, addr)
+        socketio.emit("udp", data)
 
 
 logging.basicConfig(
@@ -45,12 +60,25 @@ if getattr(sys, 'frozen', False):
 else:
     app = Flask(__name__)
 
-app.config["SECRET_KEY"] = "secret!"
-socketio = SocketIO(app)
 
+# magical fix from stack overflow:
+# https://stackoverflow.com/questions/34581255/python-flask-socketio-send-message-from-thread-not-always-working
+import eventlet
+eventlet.monkey_patch()
+
+app.config["SECRET_KEY"] = "secret!"
+socketio = SocketIO(app, async_mode="eventlet")
+thread = None
 
 @app.route("/")
 def index():
+    global thread
+    if thread is None:
+        print("starting thread")
+        thread = threading.Thread(target=listen_udp)
+        thread.daemon = True
+        thread.start()
+
     return render_template(
         "index.html",
         css=url_for("static", filename="style.css"),
@@ -63,6 +91,13 @@ def index():
 
 @app.route("/main")
 def main_page():
+    global thread
+    if thread is None:
+        print("starting thread")
+        thread = threading.Thread(target=listen_udp)
+        thread.daemon = True
+        thread.start()
+
     return render_template(
         "main.html",
         css=url_for("static", filename="style.css"),
@@ -370,3 +405,4 @@ if __name__ == "__main__":
         port = int(sys.argv[1])
 
     socketio.run(app, port=port, debug=True)
+

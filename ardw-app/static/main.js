@@ -1477,6 +1477,10 @@ function initSocket() {
   socket.on("debug-session", (data) => {
     debugSessionEvent(data);
   })
+
+  socket.on("udp", (data) => {
+    console.log(data)
+  })
 }
 
 
