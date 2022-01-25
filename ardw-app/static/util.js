@@ -184,6 +184,7 @@ function initUtils() {
 }
 // -------------------- //
 
+// DEPRECATED
 // Populates the PCB data dictionaries
 // Requires populated schdata and pcbdata variables
 function initData() {

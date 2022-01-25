@@ -1481,7 +1481,7 @@ function initSocket() {
 
 
 window.onload = () => {
-  let data_urls = ["schdata", "pcbdata"]
+  let data_urls = ["schdata", "pcbdata", "datadicts"]
   data_urls = data_urls.map((name) => ("http://" + window.location.host + "/" + name))
 
   Promise.all(data_urls.map((url) => fetch(url))).then((responses) =>
@@ -1491,8 +1491,15 @@ window.onload = () => {
     schdata = datas[0];
     pcbdata = datas[1];
 
+    schid_to_idx = datas[2]["schid_to_idx"]
+    ref_to_id = datas[2]["ref_to_id"]
+    pinref_to_idx = datas[2]["pinref_to_idx"]
+    compdict = datas[2]["compdict"]
+    netdict = datas[2]["netdict"]
+    pindict = datas[2]["pindict"]
+
     initUtils();
-    initData();
+    // initData();
 
     initPage();
 

@@ -9,7 +9,6 @@ import logging
 import os
 import re
 import sys
-import boardgeometry
 
 from example_tool import ExampleTool
 from tools import DebugCard, DebugSession
@@ -66,13 +65,13 @@ def projector_page():
         projjs=url_for("static", filename="projector.js")
     )
 
-@app.route("/schdata")
-def get_schdata():
-    return json.dumps(schdata)
-
-@app.route("/pcbdata")
-def get_pcbdata():
-    return json.dumps(pcbdata)
+@app.route("/tool-debug")
+def tool_debug_page():
+    return render_template(
+        "tool-test.html",
+        js=url_for("static", filename="tool-test.js"),
+        socketiojs=url_for("static", filename="socket.io.min.js")
+    )
 
 @app.route("/sch<schid>")
 def get_schematic_svg(schid):
@@ -98,16 +97,30 @@ def get_schematic_svg(schid):
             return send_from_directory(dirpath, filename)
     return ""
 
-@app.route("/tool-debug")
-def tool_debug_page():
-    return render_template(
-        "tool-test.html",
-        js=url_for("static", filename="tool-test.js"),
-        socketiojs=url_for("static", filename="socket.io.min.js")
-    )
+@app.route("/schdata")
+def get_schdata():
+    return json.dumps(schdata)
+
+@app.route("/pcbdata")
+def get_pcbdata():
+    return json.dumps(pcbdata)
+
+@app.route("/datadicts")
+def get_datadicts():
+    return json.dumps({
+        "schid_to_idx": schid_to_idx,
+        "ref_to_id": ref_to_id,
+        "pinref_to_idx": pinref_to_idx,
+        "compdict": compdict,
+        "netdict": netdict,
+        "pindict": pindict
+    })
+
 # -- end app routing --
 
 # -- socket --
+
+
 @socketio.on("connect")
 def handle_connect():
     global active_connections, selection, projector_mode, projector_calibration, active_session
@@ -136,7 +149,7 @@ def handle_connect():
         data = active_session.asdict()
         data["event"] = "new"
         emit("debug-session", data)
-        
+
         for i in range(len(active_session.cards)):
             data = {
                 "event": "custom",
@@ -145,11 +158,13 @@ def handle_connect():
             }
             emit("debug-session", data)
 
+
 @socketio.on("disconnect")
 def handle_disconnect():
     global active_connections
     active_connections -= 1
     logging.info(f"Client disconnected ({active_connections} active)")
+
 
 @socketio.on("selection")
 def handle_selection(new_selection):
@@ -162,6 +177,7 @@ def handle_selection(new_selection):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
 
+
 @socketio.on("projector-mode")
 def handle_projectormode(mode):
     global projector_mode
@@ -169,12 +185,14 @@ def handle_projectormode(mode):
     projector_mode = mode
     socketio.emit("projector-mode", mode)
 
+
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
     global projector_calibration
     logging.info(f"Received projector adjust {adjust}")
     projector_calibration[adjust["type"]] = adjust["val"]
     socketio.emit("projector-adjust", adjust)
+
 
 @socketio.on("tool-request")
 def handle_tool_request(data):
@@ -189,6 +207,7 @@ def handle_tool_request(data):
         # tools[data["type"]]["ready"] = True
         # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
         socketio.emit("tool-request", data)
+
 
 @socketio.on("debug-session")
 def handle_debug_session(data):
@@ -252,6 +271,7 @@ def handle_debug_session(data):
         # client wants to export
         logging.info("Session export is WIP")
 
+
 @socketio.on("tool-debug")
 def handle_tool_debug(data):
     global tools
@@ -271,49 +291,127 @@ def handle_tool_debug(data):
 
         socketio.emit(name, data)
 
+
 @socketio.on("python hitscan")
 def handle_python_hitscan(data):
-    python_hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"], renderPads=True, renderTracks=False)
+    python_hits = hitscan(data["point"][0], data["point"][1], pcbdata,
+                          pinref_to_idx, layer=data["layer"], renderPads=True, renderTracks=False)
     logging.info(f"expected hits: {data['hits']}")
     logging.info(f"  actual hits: {python_hits}")
 # -- end socket --
 
 
+# moved from util.js to keep main data on server rather than client
+# takes raw pcbdata and schdata and populates the various dictionaries
+# that server needs to hitscan and client needs to render
+# TODO would be much cleaner if we actually defined classes for the data
 def init_data(pcbdata, schdata):
-    pinref_to_idx = dict()
-    netdict = dict()
-    pindict = dict()
-
+    # ref : refid
     ref_to_id = dict()
+
+    # schid : idx in schdata["schematics"]
+    schid_to_idx = dict()
+
+    # refid : ref, schids=[schid], units={unitnum : schid, bbox, pins=[pin]}
+    #   where pin={name, num, pos, end, schid, ref, net}
+    # Note that pins from schdata only contain the first four fields
+    compdict = dict()
+
+    # netname : schids=[schid], pins=[pinidx]
+    netdict = dict()
+
+    # '<compref>.<pinnum>' : pinidx
+    pinref_to_idx = dict()
+
+    # pinidx : {ref, name, num, pos, schid, net}
+    # Note: 'dict' is a misnomer, but it still functions as one
+    pindict = []
+
     for bomentry in pcbdata["bom"]["both"]:
         for ref in bomentry[3]:
             # TODO make sure types are okay
             ref_to_id[ref[0]] = ref[1]
-    
-    schid_to_idx = dict()
-    compdict = dict()
+
     for i, schematic in enumerate(schdata["schematics"]):
         schid = int(schematic["orderpos"]["sheet"])
         schid_to_idx[schid] = i  # schematics may be out of order
         if "components" not in schematic:
-            logging.warn(f"Schematic {schid} has no components")
+            logging.warning(f"Schematic {schid} has no components")
             continue
+
         for comp in schematic["components"]:
             if comp["ref"] not in ref_to_id:
-                logging.warn(f"Component {comp['ref']} is in schematic but not in layout")
+                logging.warning(
+                    f"Component {comp['ref']} is in schematic but not in layout")
                 continue
+
             refid = ref_to_id[comp["ref"]]
-            unit = int(comp["unit"])
+            unitnum = int(comp["unit"])
+            if refid not in compdict:
+                compdict[refid] = {
+                    "ref": comp["ref"],
+                    "libcomp": comp["libcomp"],
+                    "schids": [schid],
+                    "units": dict()
+                }
+            else:
+                if unitnum in compdict[refid]["units"]:
+                    logging.warning(
+                        f"Component {comp['ref']} has unit {unitnum} multiple times, ignoring repeat")
+                    continue
+                if schid not in compdict[refid]["schids"]:
+                    compdict[refid]["schids"].append(schid)
+
+            compdict[refid]["units"][unitnum] = {
+                "num": unitnum,
+                "schid": schid,
+                "bbox": comp["bbox"],
+                "pins": comp["pins"]
+            }
+
+    for netinfo in schdata["nets"]:
+        schids = set()
+        for netpin in netinfo["pins"]:
+            if netpin["ref"] not in ref_to_id:
+                logging.warning(f"ref {netpin['ref']} with a pin in net {netinfo['name']} is unknown, ignoring")
+                continue
             
+            refid = ref_to_id[netpin["ref"]]
+            for unitnum in compdict[refid]["units"]:
+                for unitpin in compdict[refid]["units"][unitnum]["pins"]:
+                    unitpin["net"] = netinfo["name"]
+                    schids.add(compdict[refid]["units"][unitnum]["schid"])
+        if len(schids) == 0:
+            logging.warning(f"{netinfo['name']} has no valid pins")
+        else:
+            netdict[netinfo["name"]] = {
+                "schids": list(schids),
+                "pins": []  # will be populated next
+            }
 
+    for refid, comp in compdict.items():
+        for unitnum, unit in comp["units"].items():
+            for pin in unit["pins"]:
+                pin["ref"] = comp["ref"]
+                pin["schid"] = unit["schid"]
+                if "net" not in pin:
+                    pin["net"] = None
+                else:
+                    netdict[pin["net"]]["pins"].append(len(pindict))
+                pin_name = f"{pin['ref']}.{pin['num']}"
+                if pin_name not in pinref_to_idx:
+                    pinref_to_idx[pin_name] = len(pindict)
+                else:
+                    logging.warning(f"pin name {pin_name} is not unique")
+                pindict.append(pin)
 
-    return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict 
+    return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
 
 if __name__ == "__main__":
     logging.basicConfig(
         filename="ardw.log",
-        #filemode="w",
+        # filemode="w",
         encoding="utf-8",
         level="DEBUG",
         format="%(asctime)s - %(levelname)s - %(message)s"
@@ -335,9 +433,9 @@ if __name__ == "__main__":
         exit()
 
     # dictionaries from util.js
-    schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict = init_data(pcbdata, schdata)
-
-
+    # see init_data() for documentation
+    schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict = init_data(
+        pcbdata, schdata)
 
     active_connections = 0
 
@@ -396,7 +494,6 @@ if __name__ == "__main__":
     # if True, measurements are added to the current session and the next custom card is highlighted
     # if False, measurements are ignored and custom cards are not highlighted
     active_session_is_recording = False
-
 
     port = 5000
     if len(sys.argv) > 1:
