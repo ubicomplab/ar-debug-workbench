@@ -399,6 +399,10 @@ def handle_tool_debug(data):
 
         socketio.emit(name, data)
 
+@socketio.on("debug")
+def handle_debug(data):
+    print(data)
+
 
 if __name__ == "__main__":
     port = 5000

@@ -1,3 +1,4 @@
+IS_PROJECTOR = true;
 
 var transform = {
   "tx": 0,
@@ -8,7 +9,7 @@ var transform = {
 
 function initSettings() {
   ibom_settings["renderDrawings"] = false;
-  ibom_settings["renderEdgeCuts"] = false;
+  ibom_settings["renderEdgeCuts"] = true;
   ibom_settings["renderFabrication"] = false;
   ibom_settings["renderPads"] = false;
   ibom_settings["renderReferences"] = false;
@@ -105,11 +106,8 @@ function initSocket() {
     transform[adjust["type"]] = adjust["val"];
 
     for (let layerdict of [allcanvas.front, allcanvas.back]) {
-      layerdict.transform.panx = transform.tx * layerdict.transform.s;
-      if (layerdict.layer === "B") {
-        layerdict.transform.panx *= -1;
-      }
-      layerdict.transform.pany = transform.ty * layerdict.transform.s;
+      layerdict.transform.panx = layerdict.layer == "F" ? transform.tx : -transform.tx;
+      layerdict.transform.pany = transform.ty
       ibom_settings.boardRotation = transform.r;
       layerdict.transform.zoom = transform.z;
     }
@@ -117,7 +115,6 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-     // {type, val, coords, color}
      udp_selection = ht(data)
      drawHighlights()
   })
@@ -125,9 +122,11 @@ function initSocket() {
 
 function ht(data) {
   var zoom = allcanvas.front.transform.zoom;
+  var panx = allcanvas.front.transform.panx;
+  var pany = allcanvas.front.transform.pany;
   return {
-    "x": data.x * zoom / 28 + 114,
-    "y": -data.y * zoom / 28 +  78
+    "x": (data.x) / zoom - panx,
+    "y": (-data.y) / zoom - pany
   }
 }
 

@@ -507,7 +507,7 @@ function initPage() {
   });
 
   projector_sliders["z"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "z", "val": intFromText(val, 1, 100, 100, increment) / 100})
+    socket.emit("projector-adjust", {"type": "z", "val": intFromText(val, 1, 1000, 100, increment) / 100})
   }
   projector_sliders["z"]["slider"] = document.getElementById("settings-projector-zoom");
   projector_sliders["z"]["label"] = document.getElementById("settings-projector-zoom-label");
