@@ -2,6 +2,8 @@
 // Layout rendering taken from Interactive HTML BOM /web/ibom.js, /web/render.js, /web/util.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
 
+var IS_PROJECTOR = false;
+
 /** front: layerdict, back: layerdict */
 var allcanvas;
 /** layerdict */
@@ -32,7 +34,8 @@ var ibom_settings = {
   renderEdgeCuts: true,
 }
 
-var udp_selection = null
+/** {type, val, coords, color} */
+var udp_selection = null;
 
 function deg2rad(deg) {
   return deg * Math.PI / 180;
@@ -738,11 +741,11 @@ function prepareCanvas(canvas, flip, transform, rotate) {
   if (flip) {
     ctx.scale(-1, 1);
   }
-//  ctx.translate(transform.x, transform.y);
+  ctx.translate(transform.x, transform.y);
   if (rotate) {
     ctx.rotate(deg2rad(ibom_settings.boardRotation));
   }
-//  ctx.scale(transform.s, transform.s);
+  ctx.scale(transform.s, transform.s);
 }
 
 function prepareLayer(canvasdict) {
@@ -779,27 +782,33 @@ function applyRotation(bbox) {
 }
 
 function recalcLayerScale(layerdict, width, height, rotate) {
-  var bbox;
-  if (rotate) {
-    bbox = applyRotation(pcbdata.edges_bbox);
+  if (IS_PROJECTOR) {
+    layerdict.transform.s = 1;
+    layerdict.transform.x = 0;
+    layerdict.transform.y = 0;
   } else {
-    bbox = pcbdata.edges_bbox;
+    var bbox;
+    if (rotate) {
+      bbox = applyRotation(pcbdata.edges_bbox);
+    } else {
+      bbox = pcbdata.edges_bbox;
+    }
+    var scalefactor = 0.98 * Math.min(
+      width / (bbox.maxx - bbox.minx),
+      height / (bbox.maxy - bbox.miny)
+    );
+    if (scalefactor < 0.1) {
+      scalefactor = 1;
+    }
+    layerdict.transform.s = scalefactor;
+    var flip = (layerdict.layer == "B");
+    if (flip) {
+      layerdict.transform.x = -((bbox.maxx + bbox.minx) * scalefactor + width) * 0.5;
+    } else {
+      layerdict.transform.x = -((bbox.maxx + bbox.minx) * scalefactor - width) * 0.5;
+    }
+    layerdict.transform.y = -((bbox.maxy + bbox.miny) * scalefactor - height) * 0.5;
   }
-  var scalefactor = 0.98 * Math.min(
-    width / (bbox.maxx - bbox.minx),
-    height / (bbox.maxy - bbox.miny)
-  );
-  if (scalefactor < 0.1) {
-    scalefactor = 1;
-  }
-  layerdict.transform.s = scalefactor;
-  var flip = (layerdict.layer == "B");
-  if (flip) {
-    layerdict.transform.x = -((bbox.maxx + bbox.minx) * scalefactor + width) * 0.5;
-  } else {
-    layerdict.transform.x = -((bbox.maxx + bbox.minx) * scalefactor - width) * 0.5;
-  }
-  layerdict.transform.y = -((bbox.maxy + bbox.miny) * scalefactor - height) * 0.5;
   for (var c of ["bg", "fab", "silk", "highlight"]) {
     canvas = layerdict[c];
     if (canvas) {
