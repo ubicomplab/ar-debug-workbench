@@ -605,6 +605,7 @@ var l = 2;
 
 function circleAtPoint(layerdict, coords, color, radius) {
   var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
+  s = 1 / layerdict.transform.zoom;
 
   var canvas = layerdict.highlight;
   var style = getComputedStyle(topmostdiv);
@@ -683,6 +684,7 @@ function drawHighlightsOnLayer(canvasdict, clear = true) {
   }
   if (udp_selection !== null) {
     circleAtPoint(canvasdict, udp_selection, "red", 10)
+    circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
   }
 }
 
@@ -736,11 +738,11 @@ function prepareCanvas(canvas, flip, transform, rotate) {
   if (flip) {
     ctx.scale(-1, 1);
   }
-  ctx.translate(transform.x, transform.y);
+//  ctx.translate(transform.x, transform.y);
   if (rotate) {
     ctx.rotate(deg2rad(ibom_settings.boardRotation));
   }
-  ctx.scale(transform.s, transform.s);
+//  ctx.scale(transform.s, transform.s);
 }
 
 function prepareLayer(canvasdict) {
