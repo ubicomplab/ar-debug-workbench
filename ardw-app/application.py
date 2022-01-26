@@ -38,6 +38,7 @@ def index():
         js=url_for("static", filename="index.js")
     )
 
+
 @app.route("/main")
 def main_page():
     return render_template(
@@ -52,6 +53,7 @@ def main_page():
         mainjs=url_for("static", filename="main.js")
     )
 
+
 @app.route("/projector")
 def projector_page():
     return render_template(
@@ -65,6 +67,7 @@ def projector_page():
         projjs=url_for("static", filename="projector.js")
     )
 
+
 @app.route("/tool-debug")
 def tool_debug_page():
     return render_template(
@@ -72,6 +75,7 @@ def tool_debug_page():
         js=url_for("static", filename="tool-test.js"),
         socketiojs=url_for("static", filename="socket.io.min.js")
     )
+
 
 @app.route("/sch<schid>")
 def get_schematic_svg(schid):
@@ -97,13 +101,21 @@ def get_schematic_svg(schid):
             return send_from_directory(dirpath, filename)
     return ""
 
+
 @app.route("/schdata")
 def get_schdata():
     return json.dumps(schdata)
 
+
 @app.route("/pcbdata")
 def get_pcbdata():
-    return json.dumps(pcbdata)
+    # for some reason pcbdata is getting modified by hitscan, even though it shouldn't
+    # TODO find root issue
+    with open("./data/pcbdata.json", "r") as pcbfile:
+        return json.dumps(json.load(pcbfile))
+
+    # return json.dumps(pcbdata)
+
 
 @app.route("/datadicts")
 def get_datadicts():
@@ -176,6 +188,12 @@ def handle_selection(new_selection):
     if (new_selection["type"] != "deselect"):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
+
+
+@socketio.on("wip-selection")
+def handle_wip_selection(data):
+    logging.info(f"Socket received selection {data}")
+    process_selection(data)
 
 
 @socketio.on("projector-mode")
@@ -373,9 +391,10 @@ def init_data(pcbdata, schdata):
         schids = set()
         for netpin in netinfo["pins"]:
             if netpin["ref"] not in ref_to_id:
-                logging.warning(f"ref {netpin['ref']} with a pin in net {netinfo['name']} is unknown, ignoring")
+                logging.warning(
+                    f"ref {netpin['ref']} with a pin in net {netinfo['name']} is unknown, ignoring")
                 continue
-            
+
             refid = ref_to_id[netpin["ref"]]
             for unitnum in compdict[refid]["units"]:
                 for unitpin in compdict[refid]["units"][unitnum]["pins"]:
@@ -406,6 +425,24 @@ def init_data(pcbdata, schdata):
                 pindict.append(pin)
 
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
+
+# handles a selection event, which can come from the client or from optitrack
+def process_selection(data):
+    if data["source"] == "point":
+        hits = hitscan(data["point"][0], data["point"][1], pcbdata,
+                       pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
+        if len(hits) == 1:
+            # single selection
+            socketio.emit("wip-selection", hits[0])
+        elif len(hits) > 1:
+            # multi selection for client to disambiguate
+            socketio.emit(
+                "wip-selection", {"type": "multi", "point": data["point"], "layer": data["layer"], "hits": hits})
+        else:
+            socketio.emit("wip-selection", {"type": "deselect", "val": None})
+    else:  # "comp", "pin", or "net"
+        # choice from disambiguation menu, simply echo back to all clients
+        socketio.emit("wip-selection", data)
 
 
 if __name__ == "__main__":

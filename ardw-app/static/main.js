@@ -1430,6 +1430,25 @@ function initSocket() {
         break;
     }
   });
+  socket.on("wip-selection", (data) => {
+    switch (data.type) {
+      case "comp":
+        selectComponent(data.val);
+        break;
+      case "pin":
+        selectPins([data.val]);
+        break;
+      case "net":
+        selectNet(data.val);
+        break;
+      case "deselect":
+        deselectAll(true);
+        break;
+      case "multi":
+        multiMenu(data.point, data.layer, data.hits)
+        break;
+    }
+  });
   socket.on("projector-mode", (mode) => {
     if (mode === "calibrate") {
       document.getElementById("settings-projector-calibrate").checked = true;

@@ -272,6 +272,35 @@ function deselectAll(redraw) {
   }
 }
 
+// point is a point on the board for now, hits is the list of options
+function multiMenu(point, layer, hits) {
+
+}
+
+function pageToLayoutCoords(point, layerdict) {
+  var t = layerdict.transform;
+  if (layerdict.layer == "B") {
+    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx + t.x) / -t.s;
+  } else {
+    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx - t.x) / t.s;
+  }
+  point[1] = (devicePixelRatio * point[1] / t.zoom - t.y - t.pany) / t.s;
+  return rotateVector(point, -ibom_settings.boardRotation);
+}
+
+function layoutToPageCoords(point, layer) {
+  var layerdict = (layer == "F" ? allcanvas.front : allcanvas.back);
+  var t = layerdict.transform;
+  var v = rotateVector(point, ibom_settings.boardRotation);
+  if (layer == "B") {
+    v[0] = (v[0] * -t.s + t.panx - t.x) * t.zoom / devicePixelRatio;
+  } else {
+    v[0] = (v[0] * -t.s + t.panx + t.x) * t.zoom / devicePixelRatio;
+  }
+  v[1] = (v[1] * -t.s + t.pany + t.y) * t.zoom / devicePixelRatio;
+  return v;
+}
+
 // <type>Clicked() functions should be called whever the client wants to select something
 // The actual selection and display is handled when the server echoes the selection back,
 // using the select<type>() functions in render.js
@@ -578,6 +607,15 @@ function handleMouseClick(layerdict, e = null) {
       return;
     }
 
+    // send click to server instead of processing here
+    socket.emit("wip-selection", {
+      source: "point",
+      point: v,
+      layer: layerdict.layer,
+      pads: ibom_settings.renderPads,
+      tracks: ibom_settings.renderTracks
+    })
+
     for (let comp of bboxHitScan(layerdict.layer, ...v)) {
       hits.push({ "type": "comp", "val": comp });
     }
@@ -587,10 +625,7 @@ function handleMouseClick(layerdict, e = null) {
     for (let net of netHitScan(layerdict.layer, ...v)) {
       hits.push({ "type": "net", "val": net });
     }
-
-    if (PYTHON_HITSCAN) {
-      socket.emit("python hitscan", { point: v, layer: layerdict.layer, hits: hits })
-    }
+    
   }
 
   if (hits.length == 1) {
@@ -603,6 +638,9 @@ function handleMouseClick(layerdict, e = null) {
     clickmenu.innerHTML = "";
     clickmenu.style.top = e.clientY + "px";
     clickmenu.style.left = e.clientX + "px";
+
+    console.log(`client is (${e.clientX},${e.clientY})`)
+    console.log(`offset is (${e.offsetX},${e.offsetY})`)
 
     for (let hit of hits) {
       appendSelectionDiv(clickmenu, hit.val, hit.type);

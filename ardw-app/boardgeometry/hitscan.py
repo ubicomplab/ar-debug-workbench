@@ -3,13 +3,16 @@ from shapely.geometry import Point
 
 from boardgeometry.geometry import get_pad_polygon
 
+
 def deg2rad(deg):
     return deg * np.pi / 180.
+
 
 def rotate_vec(v, angle_deg):
     angle_rad = deg2rad(angle_deg)
     return (v[0] * np.cos(angle_rad) - v[1] * np.sin(angle_rad),
             v[0] * np.sin(angle_rad) + v[1] * np.cos(angle_rad))
+
 
 def point_in_footprint(x, y, footprint):
     bbox = footprint["bbox"]
@@ -17,6 +20,7 @@ def point_in_footprint(x, y, footprint):
     v = rotate_vec(v, bbox["angle"])
     return bbox["relpos"][0] <= v[0] and v[0] <= bbox["relpos"][0] + bbox["size"][0] and \
         bbox["relpos"][1] <= v[1] and v[1] <= bbox["relpos"][1] + bbox["size"][1]
+
 
 def point_in_pad(x, y, pad):
     v = [x - pad["pos"][0], y - pad["pos"][1]]
@@ -27,6 +31,8 @@ def point_in_pad(x, y, pad):
     return Point(*v).within(get_pad_polygon(pad))
 
 # from ibom, don't know what exactly it does
+
+
 def point_within_dist_to_arc(x, y, xc, yc, radius, start_deg, end_deg, d):
     dx = x - xc
     dy = y - yc
@@ -36,7 +42,7 @@ def point_within_dist_to_arc(x, y, xc, yc, radius, start_deg, end_deg, d):
 
     if r_sq < rmin * rmin or r_sq > rmax * rmax:
         return False
-    
+
     angle1 = deg2rad(start_deg) % (2 * np.pi)
     dx1 = xc + radius * np.cos(angle1) - x
     dy1 = yc + radius * np.sin(angle1) - y
@@ -56,6 +62,8 @@ def point_within_dist_to_arc(x, y, xc, yc, radius, start_deg, end_deg, d):
         return angle >= angle1 and angle <= angle2
 
 # from ibom, don't know what exactly it does
+
+
 def point_within_dist_to_seg(x, y, x1, y1, x2, y2, d):
     a = x - x1
     b = y - y1
@@ -82,6 +90,7 @@ def point_within_dist_to_seg(x, y, x1, y1, x2, y2, d):
         dy = y - yy
     return dx * dx + dy * dy <= d * d
 
+
 def bbox_hitscan(x, y, pcbdata, layer=None):
     result = []
     for i, footprint in enumerate(pcbdata["footprints"]):
@@ -89,6 +98,7 @@ def bbox_hitscan(x, y, pcbdata, layer=None):
                 and point_in_footprint(x, y, footprint):
             result.append(i)
     return result
+
 
 def pin_hitscan(x, y, pcbdata, pinref_to_idx, layer=None, renderPads=True):
     if not renderPads:
@@ -103,17 +113,16 @@ def pin_hitscan(x, y, pcbdata, pinref_to_idx, layer=None, renderPads=True):
                     result.append(pinref_to_idx[pin_name])
     return result
 
+
 def net_hitscan(x, y, pcbdata, layer=None, renderPads=True, renderTracks=False):
     nets_hit = set()
     if "tracks" in pcbdata and layer and renderTracks:
-        # do this
         for track in pcbdata["tracks"][layer]:
-            if "radius" in track and point_within_dist_to_arc():
+            if "radius" in track and point_within_dist_to_arc(x, y, *track["center"], track["radius"], track["startangle"], track["endangle"], track["width"] / 2):
                 nets_hit.add(track["net"])
-            elif point_within_dist_to_seg():
+            elif point_within_dist_to_seg(x, y, *track["start"], *track["end"], track["width"] / 2):
                 nets_hit.add(track["net"])
     if renderPads:
-        # do this
         for footprint in pcbdata["footprints"]:
             for pad in footprint["pads"]:
                 if (not layer or layer in pad["layers"]) \
@@ -122,8 +131,12 @@ def net_hitscan(x, y, pcbdata, layer=None, renderPads=True, renderTracks=False):
 
     return list(nets_hit)
 
+
 def hitscan(x, y, pcbdata, pinref_to_idx, layer=None, renderPads=True, renderTracks=False):
-    hits = [{"type": "comp", "val": hit} for hit in bbox_hitscan(x, y, pcbdata, layer)]
-    hits += [{"type": "pin", "val": hit} for hit in pin_hitscan(x, y, pcbdata, pinref_to_idx, layer, renderPads)]
-    hits += [{"type": "net", "val": hit} for hit in net_hitscan(x, y, pcbdata, layer, renderPads, renderTracks)]
+    hits = [{"type": "comp", "val": hit}
+            for hit in bbox_hitscan(x, y, pcbdata, layer)]
+    hits += [{"type": "pin", "val": hit}
+             for hit in pin_hitscan(x, y, pcbdata, pinref_to_idx, layer, renderPads)]
+    hits += [{"type": "net", "val": hit}
+             for hit in net_hitscan(x, y, pcbdata, layer, renderPads, renderTracks)]
     return hits
