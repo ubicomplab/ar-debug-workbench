@@ -1,8 +1,8 @@
 // Main page stuff plus whatever else is wip (like tools)
 
 // DEBUG
-var DEBUG_LAYOUT_CLICK = true;
-var PYTHON_HITSCAN = true;
+var DEBUG_LAYOUT_CLICK = false;
+var PYTHON_HITSCAN = false;
 
 // zoom and crosshair constants
 var VIEW_MINIMUMS = {
@@ -33,6 +33,8 @@ var projector_sliders = {
   "r": {},
   "z": {}
 };
+
+var adjust_with_keys = false;
 
 var sidebar_custom_selection = {
   "pos": {
@@ -218,10 +220,11 @@ function zoomToSelection(layerdict) {
  * @param {*} lo lower bound (inclusive)
  * @param {*} hi upper bound (inclusive)
  * @param {*} def default value if val is NaN
+ * @param {*} increment increment to be applied to text value
  * @returns integer value
  */
-function intFromText(val, lo, hi, def = 0) {
-  val = parseInt(val);
+function intFromText(val, lo, hi, def = 0, increment = 0) {
+  val = parseInt(val) + increment;
   if (isNaN(val)) {
     return def;
   } else if (val < lo) {
@@ -394,7 +397,7 @@ function initPage() {
 
   // Zoom to find feature
   window.addEventListener("keydown", function (event) {
-    if (document.activeElement !== document.getElementById("search-input")) {
+    if (document.activeElement !== document.getElementById("search-input") && !adjust_with_keys) {
       if (event.key == "f" && settings["find-activate"] === "key") {
         if (settings["find-type"] === "zoom") {
           zoomToSelection(schematic_canvas);
@@ -434,6 +437,16 @@ function initPage() {
     }
   });
 
+  var projector_usekeys_toggle = document.getElementById("settings-projector-usekeys");
+  projector_usekeys_toggle.checked = false;
+  projector_usekeys_toggle.addEventListener("click", () => {
+    if (projector_usekeys_toggle.checked) {
+      adjust_with_keys = true;
+    } else {
+      adjust_with_keys = false;
+    }
+  });
+
   var projector_reset = document.getElementById("settings-projector-reset");
   projector_reset.addEventListener("click", () => {
     socket.emit("projector-adjust", { "type": "tx", "val": 0 });
@@ -442,68 +455,71 @@ function initPage() {
     socket.emit("projector-adjust", { "type": "z", "val": 1 });
   });
 
+  projector_sliders["tx"]["func"] = (val, increment=0) => {
+    socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -200, 200, 0, increment)})
+  }
   projector_sliders["tx"]["slider"] = document.getElementById("settings-projector-tx");
   projector_sliders["tx"]["label"] = document.getElementById("settings-projector-tx-label");
-  projector_sliders["tx"]["slider"].value = 0;
-  projector_sliders["tx"]["label"].value = "0";
-  projector_sliders["tx"]["slider"].addEventListener("input", () => {
-    socket.emit("projector-adjust", { "type": "tx", "val": projector_sliders["tx"]["slider"].value });
+  projector_sliders.tx.slider.value = 0;
+  projector_sliders.tx.label.value = "0";
+  projector_sliders.tx.slider.addEventListener("input", () => {
+    projector_sliders.tx.func(projector_sliders.tx.slider.value);
   });
-  projector_sliders["tx"]["label"].addEventListener("keyup", (e) => {
+  projector_sliders.tx.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
-      let val = intFromText(projector_sliders["tx"]["label"].value, -200, 200);
-      projector_sliders["tx"]["label"].value = val;
-      projector_sliders["tx"]["label"].blur();
-      socket.emit("projector-adjust", { "type": "tx", "val": val });
+      projector_sliders.tx.label.blur();
+      projector_sliders.tx.func(projector_sliders.tx.label.value);
     }
   });
 
+  projector_sliders["ty"]["func"] = (val, increment=0) => {
+    socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -200, 200, 0, increment)})
+  }
   projector_sliders["ty"]["slider"] = document.getElementById("settings-projector-ty");
   projector_sliders["ty"]["label"] = document.getElementById("settings-projector-ty-label");
-  projector_sliders["ty"]["slider"].value = 0;
-  projector_sliders["ty"]["label"].value = 0;
-  projector_sliders["ty"]["slider"].addEventListener("input", () => {
-    socket.emit("projector-adjust", { "type": "ty", "val": projector_sliders["ty"]["slider"].value });
+  projector_sliders.ty.slider.value = 0;
+  projector_sliders.ty.label.value = 0;
+  projector_sliders.ty.slider.addEventListener("input", () => {
+    projector_sliders.ty.func(projector_sliders.ty.slider.value);
   });
-  projector_sliders["ty"]["label"].addEventListener("keyup", (e) => {
+  projector_sliders.ty.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
-      let val = intFromText(projector_sliders["ty"]["label"].value, -200, 200);
-      projector_sliders["ty"]["label"].value = val;
-      projector_sliders["ty"]["label"].blur();
-      socket.emit("projector-adjust", { "type": "ty", "val": val });
+      projector_sliders.ty.label.blur();
+      projector_sliders.ty.func(projector_sliders.ty.label.value);
     }
   });
 
+  projector_sliders["r"]["func"] = (val, increment=0) => {
+    socket.emit("projector-adjust", {"type": "r", "val": intFromText(val, -180, 180, 0, increment)})
+  }
   projector_sliders["r"]["slider"] = document.getElementById("settings-projector-rotation");
   projector_sliders["r"]["label"] = document.getElementById("settings-projector-rotation-label");
-  projector_sliders["r"]["slider"].value = 0;
-  projector_sliders["r"]["label"].value = 0;
-  projector_sliders["r"]["slider"].addEventListener("input", () => {
-    socket.emit("projector-adjust", { "type": "r", "val": projector_sliders["r"]["slider"].value });
+  projector_sliders.r.slider.value = 0;
+  projector_sliders.r.label.value = 0;
+  projector_sliders.r.slider.addEventListener("input", () => {
+    projector_sliders.r.func(projector_sliders.r.slider.value);
   });
-  projector_sliders["r"]["label"].addEventListener("keyup", (e) => {
+  projector_sliders.r.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
-      let val = intFromText(projector_sliders["r"]["label"].value, -180, 180);
-      projector_sliders["r"]["label"].value = val;
-      projector_sliders["r"]["label"].blur();
-      socket.emit("projector-adjust", { "type": "r", "val": val });
+      projector_sliders.r.label.blur();
+      projector_sliders.r.func(projector_sliders.r.label.value);
     }
   });
 
+  projector_sliders["z"]["func"] = (val, increment=0) => {
+    socket.emit("projector-adjust", {"type": "z", "val": intFromText(val, 1, 100, 100, increment) / 100})
+  }
   projector_sliders["z"]["slider"] = document.getElementById("settings-projector-zoom");
   projector_sliders["z"]["label"] = document.getElementById("settings-projector-zoom-label");
-  projector_sliders["z"]["slider"].value = 100;
-  projector_sliders["z"]["label"].value = 100;
-  projector_sliders["z"]["slider"].addEventListener("input", () => {
-    let val = projector_sliders["z"]["slider"].value / 100
-    socket.emit("projector-adjust", { "type": "z", "val": val });
+  projector_sliders.z.slider.value = 100;
+  projector_sliders.z.label.value = 100;
+  projector_sliders.z.slider.addEventListener("input", () => {
+    projector_sliders.z.func(projector_sliders.z.slider.value);
   });
-  projector_sliders["z"]["label"].addEventListener("keyup", (e) => {
+  projector_sliders.z.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
-      let val = intFromText(projector_sliders["z"]["label"].value, 10, 1000, 100) / 100;
-      projector_sliders["z"]["label"].value = val * 100;
-      projector_sliders["z"]["label"].blur();
-      socket.emit("projector-adjust", { "type": "z", "val": val });
+      projector_sliders.z.label.blur();
+      projector_sliders.z.func(projector_sliders.z.label.value);
     }
   });
 
@@ -512,6 +528,37 @@ function initPage() {
       projector_sliders[t]["label"].value = "";
     });
   }
+
+  window.addEventListener("keydown", (e) => {
+    if (adjust_with_keys) {
+      switch (e.key) {
+        case "a":
+          projector_sliders.tx.func(projector_sliders.tx.slider.value, -1);
+          break;
+        case "d":
+          projector_sliders.tx.func(projector_sliders.tx.slider.value, 1);
+          break;
+        case "w":
+          projector_sliders.ty.func(projector_sliders.ty.slider.value, -1);
+          break;
+        case "s":
+          projector_sliders.ty.func(projector_sliders.ty.slider.value, 1);
+          break;
+        case "q":
+          projector_sliders.r.func(projector_sliders.r.slider.value, -1);
+          break;
+        case "e":
+          projector_sliders.r.func(projector_sliders.r.slider.value, 1);
+          break;
+        case "r":
+          projector_sliders.z.func(projector_sliders.z.slider.value, 1);
+          break;
+        case "f":
+          projector_sliders.z.func(projector_sliders.z.slider.value, -1);
+          break;
+      }
+    }
+  })
 
 
   // DEBUG SIDEBAR

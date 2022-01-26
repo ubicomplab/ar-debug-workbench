@@ -124,9 +124,10 @@ function initSocket() {
 }
 
 function ht(data) {
+  var zoom = allcanvas.front.transform.zoom;
   return {
-    "x": data.x / 28 + 114,
-    "y": -data.y / 28 +  78
+    "x": data.x * zoom / 28 + 114,
+    "y": -data.y * zoom / 28 +  78
   }
 }
 

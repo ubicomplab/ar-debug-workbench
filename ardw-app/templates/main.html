@@ -103,9 +103,16 @@
                         </div>
                         <div class="settings-label">Projector</div>
                         <div class="settings-item">
-                            Calibrate
+                            Project Board
                             <label class="toggle">
                                 <input type="checkbox" id="settings-projector-calibrate">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            Adjust with Keys
+                            <label class="toggle">
+                                <input type="checkbox" id="settings-projector-usekeys">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -134,7 +141,7 @@
                             <span>Scale</span>
                             <input type="text" id="settings-projector-zoom-label" value="100">%
                             <br />
-                            <input type="range" id="settings-projector-zoom" value="100" min="10" max="1000" />
+                            <input type="range" id="settings-projector-zoom" value="100" min="1" max="100" />
                         </div>
                     </div>
                 </div>
