@@ -596,14 +596,24 @@ function handleMouseClick(layerdict, e = null) {
     // Click in layout
     var x = e.offsetX;
     var y = e.offsetY;
+    var p2l = pageToLayoutCoords([x, y], layerdict)
+
+    var inv = layoutToPageCoords(pageToLayoutCoords([x,y], layerdict), layerdict.layer)
+    console.log(`inv is (${inv[0]},${inv[1]})`)
+
     var t = layerdict.transform;
     if (layerdict.layer == "B") {
-      x = (devicePixelRatio * x / t.zoom - t.panx + t.x) / -t.s;
+      x_adj = (devicePixelRatio * x / t.zoom - t.panx + t.x) / -t.s;
     } else {
-      x = (devicePixelRatio * x / t.zoom - t.panx - t.x) / t.s;
+      x_adj = (devicePixelRatio * x / t.zoom - t.panx - t.x) / t.s;
     }
-    y = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
-    var v = rotateVector([x, y], -ibom_settings.boardRotation);
+    y_adj = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
+
+    var v = rotateVector([x_adj, y_adj], -ibom_settings.boardRotation);
+
+    console.log(`evt offset is (${x},${y})`)
+    console.log(`v is (${v[0]},${v[1]})`)
+    console.log(`p2l is (${p2l[0]},${p2l[1]})`)
 
     if (DEBUG_LAYOUT_CLICK) {
       console.log(`click in layer ${layerdict.layer} at (${v[0]},${v[1]})`);
@@ -644,6 +654,10 @@ function handleMouseClick(layerdict, e = null) {
 
     console.log(`client is (${e.clientX},${e.clientY})`)
     console.log(`offset is (${e.offsetX},${e.offsetY})`)
+
+    var l2p = layoutToPageCoords(v, "F")
+
+    console.log(`l2p is (${l2p[0]},${l2p[1]})`)
 
     for (let hit of hits) {
       appendSelectionDiv(clickmenu, hit.val, hit.type);
