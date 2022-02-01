@@ -25,9 +25,10 @@ def listen_udp():
     sock.bind(("127.0.0.1", 8052))
     while True:
         data, addr = sock.recvfrom(1024)
-        var = struct.unpack("f" * 2, data)
-        # print(var)
-        socketio.emit("udp", {"x": var[0], "y": var[1]})
+        var = struct.unpack("f" * 6, data)
+        tippos = {"x": var[0], "y": var[1], "z": var[2]}
+        endpos = {"x": var[3], "y": var[4], "z": var[5]}
+        socketio.emit("udp", tippos)
 
 
 logging.basicConfig(
