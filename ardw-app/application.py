@@ -585,9 +585,9 @@ if __name__ == "__main__":
     }
 
     # list of DebugSession
-    session_history: list[DebugSession] = []
+    session_history = []
 
-    active_session: DebugSession = None
+    active_session = None
 
     # if True, measurements are added to the current session and the next custom card is highlighted
     # if False, measurements are ignored and custom cards are not highlighted
