@@ -4,6 +4,7 @@ import numpy as np
 import cv2 as cv
 import math
 import pickle
+import os
 import pygame
 import matplotlib.cm as cm
 from matplotlib.widgets import Button
@@ -106,7 +107,7 @@ class ProjectorLayer(prt.TransformMixin, prt.ThreadLayer):
         elif CALIBRATION and not self.calib:
             self.time_to_wait += 1
             if self.time_to_wait % 1500 == 0:
-                image = pygame.image.load("checkerBoardWithCircle" + str(self.row) + str(self.col) + ".png")
+                image = pygame.image.load(os.path.join("checkerBoard_images", "checkerBoardWithCircle" + str(self.row) + str(self.col) + ".png"))
                 self.display_surface.fill((255, 255, 255))
                 self.display_surface.blit(image, (0, 0))
                 pygame.display.update()

@@ -6,11 +6,58 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="93c75a18-e15b-4931-90ac-6178c2a7114f" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/capturedWorldPoints.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/capturedWorldPoints.pkl" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/collect_training_data_tes.py" beforeDir="false" afterPath="$PROJECT_DIR$/collect_training_data_tes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/extract_opti_cordinate.py" beforeDir="false" afterPath="$PROJECT_DIR$/extract_opti_cordinate.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/projectionMatrix.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/projectionMatrix.pkl" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle00.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle01.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle01.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle02.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle02.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle03.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle03.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle10.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle10.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle11.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle11.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle12.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle12.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle13.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle13.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle20.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle20.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle21.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle21.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle22.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle22.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle23.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle23.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle30.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle30.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle31.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle31.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle32.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle32.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle33.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle33.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle40.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle40.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle41.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle41.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle42.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle42.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle43.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle43.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/collect_training_data.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/collect_training_data_tes.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_10_27_16_26_06.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_11_01_16_27_34.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_11_01_16_29_06.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_11_01_18_34_40.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_11_05_14_11_59.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_11_05_14_13_35.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_11_17_16_01_59.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_11_17_16_10_23.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_12_02_18_51_43.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_12_02_18_51_56.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/opti_21_12_21_15_24_59.txt" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/projector_calib.py" beforeDir="false" afterPath="$PROJECT_DIR$/projector_calib.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -21,18 +68,6 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/collect_training_data_tes.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="170">
-              <caret line="16" column="21" lean-forward="true" selection-start-line="16" selection-start-column="21" selection-end-line="16" selection-end-column="21" />
-              <folding>
-                <element signature="e#0#24#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/opti_lib.py">
           <provider selected="true" editor-type-id="text-editor">
@@ -48,10 +83,22 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/projector_calib.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1632">
-              <caret line="96" column="26" lean-forward="true" selection-start-line="96" selection-start-column="26" selection-end-line="96" selection-end-column="26" />
+            <state relative-caret-position="221">
+              <caret line="100" column="30" lean-forward="true" selection-start-line="100" selection-start-column="30" selection-end-line="100" selection-end-column="30" />
               <folding>
                 <element signature="e#0#31#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/collect_data.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="153">
+              <caret line="9" column="13" lean-forward="true" selection-start-line="9" selection-start-column="13" selection-end-line="9" selection-end-column="13" />
+              <folding>
+                <element signature="e#0#24#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -107,8 +154,8 @@
         <option value="$PROJECT_DIR$/collect_training_data.py" />
         <option value="$PROJECT_DIR$/read_data.py" />
         <option value="$PROJECT_DIR$/extract_opti_cordinate.py" />
-        <option value="$PROJECT_DIR$/projector_calib.py" />
         <option value="$PROJECT_DIR$/collect_training_data_tes.py" />
+        <option value="$PROJECT_DIR$/projector_calib.py" />
       </list>
     </option>
   </component>
@@ -319,12 +366,12 @@
     <frame x="-7" y="0" width="1734" height="1407" extended-state="0" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.16804245" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.16804245" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" sideWeight="0.4985128" visible="true" weight="0.3477237" />
+      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.4985128" visible="true" weight="0.3477237" />
       <window_info anchor="bottom" id="Debug" order="3" sideWeight="0.4991077" weight="0.39717427" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
@@ -582,16 +629,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/projector_calib.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1632">
-          <caret line="96" column="26" lean-forward="true" selection-start-line="96" selection-start-column="26" selection-end-line="96" selection-end-column="26" />
-          <folding>
-            <element signature="e#0#31#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/extract_opti_cordinate.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="596">
@@ -604,8 +641,28 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/collect_training_data_tes.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="170">
-          <caret line="16" column="21" lean-forward="true" selection-start-line="16" selection-start-column="21" selection-end-line="16" selection-end-column="21" />
+        <state relative-caret-position="204">
+          <caret line="12" column="17" lean-forward="true" selection-start-line="12" selection-start-column="17" selection-end-line="12" selection-end-column="17" />
+          <folding>
+            <element signature="e#0#24#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/projector_calib.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="221">
+          <caret line="100" column="30" lean-forward="true" selection-start-line="100" selection-start-column="30" selection-end-line="100" selection-end-column="30" />
+          <folding>
+            <element signature="e#0#31#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/collect_data.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="153">
+          <caret line="9" column="13" lean-forward="true" selection-start-line="9" selection-start-column="13" selection-end-line="9" selection-end-column="13" />
           <folding>
             <element signature="e#0#24#0" expanded="true" />
           </folding>

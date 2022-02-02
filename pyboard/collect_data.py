@@ -5,7 +5,7 @@ from extract_opti_cordinate import extract_cord_layer
 from opti_lib import get_opti_source
 from projector_calib import projection_draw, get_current_pixel_point, get_board_position
 
-CALIBRATE_PROJECTOR = False
+CALIBRATE_PROJECTOR = True
 CALIBRATE_TIP_POS = False
 DEBUG = False
 FILTERED = True
