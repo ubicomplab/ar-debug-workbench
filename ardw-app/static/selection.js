@@ -11,7 +11,6 @@ var current_selection = {
   "val": null
 }
 
-
 /** list of {type, val, coords, color}; mutually exclusive with current_selection */
 var tool_selections = [];
 

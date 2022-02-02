@@ -1,14 +1,13 @@
 // Rendering for schematic (svg) and layout (from pcbdata), including highlights
 // Layout rendering taken from Interactive HTML BOM /web/ibom.js, /web/render.js, /web/util.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
-
-/** If true, layout will be rendered without s/x/y (which make the layout fill/center in its container) */
-var IS_PROJECTOR = false;
-
 // Most of this file should not be modified
 // To render additional elements (such as crosshairs or annotations), look for the
 // drawHighlightsOnLayer() and drawSchematicHighlights() functions near the bottom
 
+
+/** If true, layout will be rendered without s/x/y (which make the layout fill/center in its container) */
+var IS_PROJECTOR = false;
 
 /** Holds data for the layout canvases
  * front: layerdict, back: layerdict */
@@ -49,7 +48,6 @@ var ibom_settings = {
 
 /** {type, val, coords, color} */
 var udp_selection = null;
-
 
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
 function deg2rad(deg) {
@@ -1247,3 +1245,40 @@ function drawToolSelections(layerdict) {
     }
   }
 }
+
+
+const times = [];
+let fps;
+
+function refreshLoop() {
+  window.requestAnimationFrame(() => {
+    const now = performance.now();
+    while (times.length > 0 && times[0] <= now - 1000) {
+      times.shift();
+    }
+    times.push(now);
+    fps = times.length;
+    refreshLoop();
+  });
+}
+refreshLoop();
+
+function drawFPS(layerdict) {
+  var canvas = layerdict.highlight;
+  var ctx = canvas.getContext("2d");
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.rect(20, 10, 40, 16);
+  ctx.fill();
+  ctx.fillStyle = "white";
+  ctx.fillText(`FPS: ${fps}`, 20, 20);
+}
+
+var fps_interval = window.setInterval(() => {
+  if (IS_PROJECTOR) {
+    drawFPS(allcanvas.front);
+  } else {
+    // console.log(fps);
+  }
+}, 500)
+
