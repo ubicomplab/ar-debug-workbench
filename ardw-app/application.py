@@ -34,21 +34,21 @@ def listen_udp():
 
     # N element array of historical tippos_pixel_coord
     # first element is oldest, last element is newest
-    tippos_pixel_coords = np.arange(time_to_wait * framerate * 2).reshape(2, time_to_wait * framerate)
+    tippos_pixel_coords = np.arange((int)(time_to_wait * framerate) * 2).reshape(2, (int)(time_to_wait * framerate))
 
     while True:
         data, addr = sock.recvfrom(1024)
         var = struct.unpack("f" * 8, data)
         tippos_pixel_coord = np.array([var[0], var[1]])
         tippos_opti_coord = [var[2], var[3], var[4]]
-        tippos_opti_coord = [var[5, var[6], var[7]]]
+        tippos_opti_coord = [var[5], var[6], var[7]]
 
         # logic for whether last 50 tippos coords in the same
         tippos_pixel_coords = np.roll(tippos_pixel_coords, -1, axis = 1)
         tippos_pixel_coords[:, -1] = tippos_pixel_coord
 
         # if all the values within tippos_pixel_coords are similar enough
-        if np.all( np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], (time_to_wait * framerate,1)), axis = 1) <= threshold):
+        if np.all( np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], ((int)(time_to_wait * framerate),1)), axis = 1) <= threshold):
             # it's been in the same place
             print("no movement")
 
@@ -600,10 +600,11 @@ if __name__ == "__main__":
     }
 
     # list of DebugSession
-    session_history: list[DebugSession] = []
+    # session_history: list[DebugSession] = []
+    session_history = []
 
-    active_session: DebugSession = None
-
+    # active_session: DebugSession = None
+    active_session = None
     # if True, measurements are added to the current session and the next custom card is highlighted
     # if False, measurements are ignored and custom cards are not highlighted
     active_session_is_recording = False
