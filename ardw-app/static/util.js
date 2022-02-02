@@ -1,6 +1,8 @@
-// Settings, utility functions, and PCB data
+// Settings, utility functions, and some global variables
 
+/** raw schematic json file */
 var schdata;
+/** raw layout json file */
 var pcbdata;
 
 /** schid : index in schdata.schematics */
@@ -20,6 +22,7 @@ var pindict = [];
 var num_schematics;
 var current_schematic; // schid (starts at 1)
 
+/** A handful of application settings */
 var settings = {
   "log-error": true,
   "log-warning": true,
@@ -75,7 +78,7 @@ function forceNumericInput(input) {
   });
 }
 
-// ---- From IBOM web/util.js ---- //
+// ----- From IBOM web/util.js ----- //
 var units = {
   prefixes: {
     giga: ["G", "g", "giga", "Giga", "GIGA"],
@@ -184,6 +187,7 @@ function initUtils() {
 }
 // -------------------- //
 
+// DEPRECATED
 // Populates the PCB data dictionaries
 // Requires populated schdata and pcbdata variables
 function initData() {
@@ -324,6 +328,8 @@ function initData() {
 //      list: [x1, y1, x2, y2]
 //      obj: {"minx", "miny", "maxx", "maxy"}
 //      pcbnew: {"pos", "relpos", "angle", "size"}
+
+/** [x1, y1, x2, y2] => [minx, miny, maxx, maxy] */
 function bboxListSort(bbox) {
   return [
     Math.min(bbox[0], bbox[2]),
@@ -332,6 +338,7 @@ function bboxListSort(bbox) {
     Math.max(bbox[1], bbox[3])
   ];
 }
+/** [x1, y1, x2, y2] => {"minx", "miny", "maxx", "maxy"} */
 function bboxListToObj(bbox) {
   return {
     "minx": Math.min(bbox[0], bbox[2]),
@@ -340,9 +347,11 @@ function bboxListToObj(bbox) {
     "maxy": Math.max(bbox[1], bbox[3])
   };
 }
+/** {"minx", "miny", "maxx", "maxy"} => [x1, y1, x2, y2] */
 function bboxObjToList(bbox) {
   return [bbox.minx, bbox.miny, bbox.maxx, bbox.maxy];
 }
+/** {"pos", "relpos", "angle", "size"} => [x1, y1, x2, y2] */
 function bboxPcbnewToList(bbox) {
   var corner1;
   var corner2;
@@ -365,6 +374,7 @@ function bboxPcbnewToList(bbox) {
     Math.max(corner1[1], corner2[1]) + bbox.pos[1]
   ];
 }
+/** {"pos", "relpos", "angle", "size"} => {"minx", "miny", "maxx", "maxy"} */
 function bboxPcbnewToObj(bbox) {
   return bboxListToObj(bboxPcbnewToList(bbox));
 }

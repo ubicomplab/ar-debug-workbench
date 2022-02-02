@@ -24,7 +24,7 @@ var target_boxes = {
   "B": null
 };
 
-
+/** Updates the bounding boxes that are used internally to zoom to selected components */
 function updateTargetBoxes() {
   // Reset everything
   target_boxes["S"] = null;
@@ -93,8 +93,9 @@ function updateTargetBoxes() {
   }
 }
 
-// Permitting only single selection
+/** Given a component refid, updates interface to reflect the selection */
 function selectComponent(refid) {
+  // Permitting only single selection
   var selected = parseInt(refid);
   if (compdict[selected] == undefined) {
     logerr(`selected refid ${selected} is not in compdict`);
@@ -105,11 +106,8 @@ function selectComponent(refid) {
   current_selection.val = selected;
 
   var comp = compdict[selected];
-  /*
-  if (highlightedComponent !== -1 && !(comp.schids.includes(current_schematic))) {
-    switchSchematic(comp.schids[0]);
-  }
-  */
+
+  // Update the icons on the schematic sheet selection menu
   document.querySelectorAll("#sch-selection>div").forEach((div) => {
     div.classList.remove("has-selection");
     for (let schid of comp.schids) {
@@ -120,15 +118,14 @@ function selectComponent(refid) {
     }
   });
 
+  // Update the search bar text and unit arrows
   document.getElementById("search-input").value = getElementName({ "type": "comp", "val": selected });
-
   let numunits = 0;
   for (let _ in comp.units) {
     numunits++;
   }
   search_nav_current = [1, numunits];
   search_nav_num.innerText = `1 of ${search_nav_current[1]}`;
-
   if (search_nav_current[1] > 1) {
     search_nav_text.innerText = `${comp.ref} ${Object.values(comp.units)[0].num}`;
   } else {
@@ -151,6 +148,7 @@ function selectComponent(refid) {
   drawSchematicHighlights();
 }
 
+/** Given a pin idx inside a list, updates interface to reflect the selection */
 function selectPins(pin_hits) {
   // Permitting only single selection, but likely to change
   var selected = pin_hits[0];
@@ -163,11 +161,8 @@ function selectPins(pin_hits) {
   current_selection.val = selected;
 
   var pin = pindict[selected];
-  /*
-  if (highlightedPin != -1 && pindict[selected].schid != current_schematic) {
-    switchSchematic(pindict[selected].schid);
-  }
-  */
+
+  // Update the icons on the schematic sheet selection menu
   document.querySelectorAll("#sch-selection>div").forEach((div) => {
     div.classList.remove("has-selection");
     if (div.innerText.startsWith(pin.schid + ".")) {
@@ -175,6 +170,7 @@ function selectPins(pin_hits) {
     }
   });
 
+  // Update the search bar text
   document.getElementById("search-input").value = getElementName({ "type": "pin", "val": selected });
   search_nav_current = [1, 1];
   search_nav_num.innerText = "1 of 1";
@@ -196,6 +192,7 @@ function selectPins(pin_hits) {
   drawSchematicHighlights();
 }
 
+/** Given a netname, updates interface to reflect the selection */
 function selectNet(selected) {
   if (!(selected in netdict)) {
     logerr(`selected net ${selected} is not in netdict`);
@@ -205,12 +202,8 @@ function selectNet(selected) {
 
   current_selection.type = "net";
   current_selection.val = selected;
-  /*
-  if (!netdict[selected].includes(current_schematic)) {
-    switchSchematic(netdict[selected][0]);
-  }
-  */
 
+  // Update the icons on the schematic sheet selection menu
   document.querySelectorAll("#sch-selection>div").forEach((div) => {
     div.classList.remove("has-selection");
     for (let schid of netdict[selected]["schids"]) {
@@ -221,11 +214,10 @@ function selectNet(selected) {
     }
   });
 
+  // Update the search bar text
   document.getElementById("search-input").value = getElementName({ "type": "net", "val": selected });
-
   search_nav_current = [1, netdict[selected]["pins"].length];
   search_nav_num.innerText = `${search_nav_current[0]} of ${search_nav_current[1]}`;
-
   var pin1 = pindict[netdict[selected]["pins"][0]];
   search_nav_text.innerText = `${pin1.ref}.${pin1.num}`;
 
@@ -245,6 +237,7 @@ function selectNet(selected) {
   drawSchematicHighlights();
 }
 
+/** Remove any current selection (set redraw=False if highlights are getting redrawn later) */
 function deselectAll(redraw) {
   current_selection.type = null;
   current_selection.val = null;
@@ -272,9 +265,69 @@ function deselectAll(redraw) {
   }
 }
 
-// <type>Clicked() functions should be called whever the client wants to select something
-// The actual selection and display is handled when the server echoes the selection back,
-// using the select<type>() functions in render.js
+/**
+ * Creates and displays the disambiguation menu
+ * point is [x,y] click location (clientXY for schematic, layout coords for layout)
+ * layer is "S"/"F"/"B"
+ * hits is list of options {type, val} to display and click on
+ */
+function multiMenu(point, layer, hits) {
+  // console.log(`multi menu from ${layer}`)
+  if (layer != "S") {
+    point = layoutToClientCoords(point, layer);
+  }
+
+  // Clear existing children and position menu at click
+  // TODO make sure menu can't go out of #display
+
+  var clickmenu = document.getElementById("sch-multi-click");
+  clickmenu.innerHTML = "";
+  clickmenu.style.left = point[0] + "px";
+  clickmenu.style.top = point[1] + "px";
+
+  for (let hit of hits) {
+    appendSelectionDiv(clickmenu, hit.val, hit.type);
+  }
+  clickmenu.classList.remove("hidden");
+}
+
+/** Converts page offset coords (eg. from event.offsetX) to layout coords*/
+function offsetToLayoutCoords(point, layerdict) {
+  var t = layerdict.transform;
+  if (layerdict.layer == "B") {
+    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx + t.x) / -t.s;
+  } else {
+    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx - t.x) / t.s;
+  }
+  point[1] = (devicePixelRatio * point[1] / t.zoom - t.y - t.pany) / t.s;
+  return rotateVector(point, -ibom_settings.boardRotation);
+}
+
+/** Converts layout coords to page client coords (eg. from event.clientX) */
+function layoutToClientCoords(point, layer) {
+  var layerdict = (layer == "F" ? allcanvas.front : allcanvas.back);
+  var t = layerdict.transform;
+  var v = rotateVector(point, ibom_settings.boardRotation);
+  if (layer == "B") {
+    v[0] = (v[0] * -t.s + t.panx - t.x) * t.zoom / devicePixelRatio;
+  } else {
+    v[0] = (v[0] * t.s + t.panx + t.x) * t.zoom / devicePixelRatio;
+  }
+  v[1] = (v[1] * t.s + t.pany + t.y) * t.zoom / devicePixelRatio;
+  var offset_parent = layerdict.bg.offsetParent;
+  // Last step is converting from offset coords to client coords
+  return [v[0] + offset_parent.offsetLeft, v[1] + offset_parent.offsetTop]
+}
+
+/** \<type\>Clicked() functions should be called whever the client wants to select something
+ * The actual selection and display is handled when the server echoes the selection back,
+ * using the select\<type\>() functions in render.js */ 
+var clickedType = {
+  "comp": componentClicked,
+  "pin": pinClicked,
+  "net": netClicked,
+  "deselect": deselectClicked
+}
 function componentClicked(refid) {
   refid = parseInt(refid);
   if (compdict[refid] == undefined) {
@@ -300,13 +353,8 @@ function netClicked(netname) {
 function deselectClicked() {
   socket.emit("selection", { "type": "deselect", "val": null });
 }
-var clickedType = {
-  "comp": componentClicked,
-  "pin": pinClicked,
-  "net": netClicked,
-  "deselect": deselectClicked
-}
 
+/** A function from IBOM used in netHitScan() */
 function pointWithinDistanceToSegment(x, y, x1, y1, x2, y2, d) {
   var A = x - x1;
   var B = y - y1;
@@ -343,6 +391,7 @@ function modulo(n, mod) {
   return ((n % mod) + mod) % mod;
 }
 
+/** A function from IBOM used in netHitScan() */
 function pointWithinDistanceToArc(x, y, xc, yc, radius, startangle, endangle, d) {
   var dx = x - xc;
   var dy = y - yc;
@@ -372,6 +421,7 @@ function pointWithinDistanceToArc(x, y, xc, yc, radius, startangle, endangle, d)
     return (angle >= angle1 && angle <= angle2);
 }
 
+/** A function from IBOM used in several hitscan functions */
 function pointWithinPad(x, y, pad) {
   var v = [x - pad.pos[0], y - pad.pos[1]];
   v = rotateVector(v, -pad.angle);
@@ -382,6 +432,15 @@ function pointWithinPad(x, y, pad) {
   return emptyContext2d.isPointInPath(getCachedPadPath(pad), ...v);
 }
 
+/** A function from IBOM used in bboxHitScan() */
+function pointWithinFootprintBbox(x, y, bbox) {
+  var v = [x - bbox.pos[0], y - bbox.pos[1]];
+  v = rotateVector(v, bbox.angle);
+  return bbox.relpos[0] <= v[0] && v[0] <= bbox.relpos[0] + bbox.size[0] &&
+    bbox.relpos[1] <= v[1] && v[1] <= bbox.relpos[1] + bbox.size[1];
+}
+
+/** DEPRECATED (checks which nets were hit) */
 function netHitScan(layer, x, y) {
   var netsHit = [];
   // Check track segments
@@ -420,6 +479,7 @@ function netHitScan(layer, x, y) {
   return netsHit;
 }
 
+/** DEPRECATED (checks which pins were hit) */
 function pinHitScan(layer, x, y) {
   var pinsHit = [];
   if (ibom_settings.renderPads) {
@@ -438,13 +498,7 @@ function pinHitScan(layer, x, y) {
   return pinsHit;
 }
 
-function pointWithinFootprintBbox(x, y, bbox) {
-  var v = [x - bbox.pos[0], y - bbox.pos[1]];
-  v = rotateVector(v, bbox.angle);
-  return bbox.relpos[0] <= v[0] && v[0] <= bbox.relpos[0] + bbox.size[0] &&
-    bbox.relpos[1] <= v[1] && v[1] <= bbox.relpos[1] + bbox.size[1];
-}
-
+/** DEPRECATED (checks which components were hit) */
 function bboxHitScan(layer, x, y) {
   var result = [];
   for (var i = 0; i < pcbdata.footprints.length; i++) {
@@ -485,6 +539,7 @@ function isClickInBox(coords, box) {
   return box[0] <= coords.x && coords.x <= box[2] && box[1] <= coords.y && coords.y <= box[3];
 }
 
+/** Gets the schematic coordinates of a click event */
 function getMousePos(layerdict, evt) {
   var canvas = layerdict.bg;
   var transform = layerdict.transform;
@@ -501,6 +556,7 @@ function getMousePos(layerdict, evt) {
   return { x: x, y: y };
 }
 
+/** Creates a menu item div with text and a listener to select a specific comp/pin/net */
 function appendSelectionDiv(parent, val, type) {
   var div = document.createElement("div");
   div.addEventListener("click", () => {
@@ -511,6 +567,7 @@ function appendSelectionDiv(parent, val, type) {
   parent.appendChild(div);
 }
 
+/** Handles mouse clicks in both the schematic and the layout */
 function handleMouseClick(layerdict, e = null) {
   if (e === null) {
     // This click is from an external device
@@ -526,13 +583,12 @@ function handleMouseClick(layerdict, e = null) {
     e.offsetY = e.pageY - e.currentTarget.offsetTop;
   }
 
-  var clickmenu = document.getElementById("sch-multi-click");
-  var hits = [];
-
   if (layerdict.layer === "S") {
     // Click in schematic
     var coords = getMousePos(layerdict, e)
     // console.log(`click in sch at (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
+
+    var hits = [];
     for (var refid in compdict) {
       if (!compdict[refid].schids.includes(current_schematic)) continue;
       for (var unitnum in compdict[refid].units) {
@@ -560,62 +616,31 @@ function handleMouseClick(layerdict, e = null) {
         }
       }
     }
-  } else {
-    // Click in layout
-    var x = e.offsetX;
-    var y = e.offsetY;
-    var t = layerdict.transform;
-    if (layerdict.layer == "B") {
-      x = (devicePixelRatio * x / t.zoom - t.panx + t.x) / -t.s;
+
+    if (hits.length == 1) {
+      // Single click, just select what was clicked
+      clickedType[hits[0].type](hits[0].val);
+    } else if (hits.length > 1) {
+      multiMenu([e.clientX, e.clientY], layerdict.layer, hits)
     } else {
-      x = (devicePixelRatio * x / t.zoom - t.panx - t.x) / t.s;
+      // Clicked on nothing
+      document.getElementById("sch-multi-click").classList.add("hidden");
+      document.getElementById("search-content").classList.add("hidden");
+      deselectClicked();
     }
-    y = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
-    var v = rotateVector([x, y], -ibom_settings.boardRotation);
-
-    if (DEBUG_LAYOUT_CLICK) {
-      console.log(`click in layer ${layerdict.layer} at (${v[0]},${v[1]})`);
-      return;
-    }
-
-    for (let comp of bboxHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "comp", "val": comp });
-    }
-    for (let pin of pinHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "pin", "val": pin });
-    }
-    for (let net of netHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "net", "val": net });
-    }
-
-    if (PYTHON_HITSCAN) {
-      socket.emit("python hitscan", { point: v, layer: layerdict.layer, hits: hits })
-    }
-  }
-
-  if (hits.length == 1) {
-    // Single click, just select what was clicked
-    clickedType[hits[0].type](hits[0].val);
-  } else if (hits.length > 1) {
-    // Multi click
-    // Clear existing children and position menu at click
-    // TODO make sure menu can't go out of #display
-    clickmenu.innerHTML = "";
-    clickmenu.style.top = e.clientY + "px";
-    clickmenu.style.left = e.clientX + "px";
-
-    for (let hit of hits) {
-      appendSelectionDiv(clickmenu, hit.val, hit.type);
-    }
-    clickmenu.classList.remove("hidden");
   } else {
-    // Clicked on nothing
-    clickmenu.classList.add("hidden");
-    document.getElementById("search-content").classList.add("hidden");
-    deselectClicked();
+    // Click in layout, send to server instead of processing here
+    socket.emit("selection", {
+      source: "point",
+      point: offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict),
+      layer: layerdict.layer,
+      pads: ibom_settings.renderPads,
+      tracks: ibom_settings.renderTracks
+    })
   }
 }
 
+/** Switches the schematic sheet */
 function switchSchematic(schid) {
   current_schematic = schid;
 

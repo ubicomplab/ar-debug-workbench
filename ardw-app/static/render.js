@@ -2,16 +2,29 @@
 // Layout rendering taken from Interactive HTML BOM /web/ibom.js, /web/render.js, /web/util.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
 
+/** If true, layout will be rendered without s/x/y (which make the layout fill/center in its container) */
 var IS_PROJECTOR = false;
 
-/** front: layerdict, back: layerdict */
+// Most of this file should not be modified
+// To render additional elements (such as crosshairs or annotations), look for the
+// drawHighlightsOnLayer() and drawSchematicHighlights() functions near the bottom
+
+
+/** Holds data for the layout canvases
+ * front: layerdict, back: layerdict */
 var allcanvas;
-/** layerdict */
+
+/** Holds data for the schematic canvas
+ * layerdict */
 var schematic_canvas;
 
+/** The parent div of the whole page; contains CSS properties used when rendering things */
 var topmostdiv = document.getElementById("topmostdiv");
+
+/** An empty canvas context for performing calculations */
 var emptyContext2d = document.createElement("canvas").getContext("2d");
 
+/** The render settings used by the layout (some are DEPRECATED) */
 var ibom_settings = {
   canvaslayout: "default",
   bomlayout: "default",
@@ -37,6 +50,8 @@ var ibom_settings = {
 /** {type, val, coords, color} */
 var udp_selection = null;
 
+
+// ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
 function deg2rad(deg) {
   return deg * Math.PI / 180;
 }
@@ -554,148 +569,6 @@ function drawNets(canvas, layer, highlight) {
   }
 }
 
-function crosshairOnBox(layerdict, box, color=null) {
-  var canvas = layerdict.highlight;
-  var style = getComputedStyle(topmostdiv);
-  var ctx = canvas.getContext("2d");
-  var line_width;
-  var stroke_style;
-  if (layerdict.layer === "S") {
-    stroke_style = style.getPropertyValue("--schematic-crosshair-line-color");
-    line_width = style.getPropertyValue("--schematic-crosshair-line-width");
-  } else {
-    stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
-    line_width = style.getPropertyValue("--pcb-crosshair-line-width");
-  }
-  if (color !== null) {
-    stroke_style = color;
-  }
-  // scale line_width based on effective zoom
-  line_width /= layerdict.transform.s * layerdict.transform.zoom;
-
-  ctx.strokeStyle = stroke_style;
-  ctx.lineWidth = line_width;
-  ctx.beginPath();
-  ctx.moveTo((box[0] + box[2]) / 2, -CROSSHAIR_LENGTH);
-  ctx.lineTo((box[0] + box[2]) / 2, box[1]);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo((box[0] + box[2]) / 2, box[3]);
-  ctx.lineTo((box[0] + box[2]) / 2, CROSSHAIR_LENGTH);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(-CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
-  ctx.lineTo(box[0], (box[1] + box[3]) / 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(box[2], (box[1] + box[3]) / 2);
-  ctx.lineTo(CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
-  ctx.stroke();
-}
-
-function drawCrosshair(layerdict) {
-  var box = target_boxes[layerdict.layer];
-  if (box === null || box.length === 0) {
-    return;
-  }
-
-  crosshairOnBox(layerdict, bboxListSort(box));
-}
-
-var r = 30;
-var t = 15;
-var l = 2;
-
-function circleAtPoint(layerdict, coords, color, radius) {
-  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
-  s = 1 / layerdict.transform.zoom;
-
-  var canvas = layerdict.highlight;
-  var style = getComputedStyle(topmostdiv);
-  var ctx = canvas.getContext("2d");
-
-  ctx.fillStyle = color;
-  ctx.strokeStyle = "black";
-  ctx.lineWidth = l * s;
-  ctx.beginPath();
-  ctx.arc(coords.x, coords.y, radius * s, 0, 2 * Math.PI);
-  ctx.fill();
-  ctx.stroke();
-}
-
-function toolIconAtPoint(layerdict, coords, color) {
-  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
-
-  var canvas = layerdict.highlight;
-  var style = getComputedStyle(topmostdiv);
-  var ctx = canvas.getContext("2d");
-
-  var flip = layerdict.layer === "B" ? -1 : 1;
-
-  ctx.fillStyle = color;
-  ctx.strokeStyle = "black";
-  ctx.lineWidth = l * s;
-  ctx.beginPath();
-  ctx.arc(coords.x + r * s * flip, coords.y - r * s, r * s, 0, 2 * Math.PI);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "black";
-  ctx.beginPath();
-  ctx.moveTo(coords.x, coords.y);
-  ctx.lineTo(coords.x, coords.y - t * s);
-  ctx.lineTo(coords.x + t * s * flip, coords.y);
-  ctx.fill();
-}
-
-function boxFromPoint(coords, size=1) {
-  return [coords.x - size / 2, coords.y - size / 2, coords.x + size / 2, coords.y + size / 2];
-}
-
-function drawToolSelections(layerdict) {
-  for (let selection of tool_selections) {
-    if (selection.coords.layer == layerdict.layer) {
-      if (settings["tool-selection-display"] == "xhair") {
-        crosshairOnBox(layerdict, boxFromPoint(selection.coords), selection.color);
-      } else {
-        toolIconAtPoint(layerdict, selection.coords, selection.color);
-      }
-    }
-  }
-}
-
-function drawHighlightsOnLayer(canvasdict, clear = true) {
-  if (clear) {
-    clearCanvas(canvasdict.highlight);
-  }
-  if (current_selection.type === "comp") {
-    drawFootprints(canvasdict.highlight, canvasdict.layer,
-      canvasdict.transform.s * canvasdict.transform.zoom, true);
-  }
-  if (current_selection.type === "pin") {
-    drawPins(canvasdict.highlight, canvasdict.layer);
-  }
-  if (current_selection.type === "net") {
-    drawNets(canvasdict.highlight, canvasdict.layer, true);
-  }
-  if (draw_crosshair) {
-    drawCrosshair(canvasdict);
-  }
-  // NOW
-  if (tool_selections.length > 0) {
-    drawToolSelections(canvasdict);
-  }
-  if (udp_selection !== null) {
-    circleAtPoint(canvasdict, udp_selection, "red", 10)
-    circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
-  }
-}
-
-function drawHighlights() {
-  drawHighlightsOnLayer(allcanvas.front);
-  drawHighlightsOnLayer(allcanvas.back);
-}
-
 function drawBackground(canvasdict, clear = true) {
   if (clear) {
     clearCanvas(canvasdict.bg);
@@ -765,6 +638,7 @@ function rotateVector(v, angle) {
   ];
 }
 
+/** Rotates a bounding box by the board rotation setting */
 function applyRotation(bbox) {
   var corners = [
     [bbox.minx, bbox.miny],
@@ -781,6 +655,11 @@ function applyRotation(bbox) {
   }
 }
 
+/**
+ * Calculates the scaling and translating factors (transform.s/x/y)
+ * so that the layout fills and is centered in the space it has,
+ * independent of user zoom and panning (transform.zoom/panx/pany)
+ */
 function recalcLayerScale(layerdict, width, height, rotate) {
   if (IS_PROJECTOR) {
     layerdict.transform.s = 1;
@@ -820,80 +699,7 @@ function recalcLayerScale(layerdict, width, height, rotate) {
   }
 }
 
-function drawCanvasImg(layerdict, x = 0, y = 0, backgroundColor = null) {
-  var canvas = layerdict.bg;
-  prepareCanvas(canvas, false, layerdict.transform);
-  clearCanvas(canvas, backgroundColor);
-  canvas.getContext("2d").drawImage(layerdict.img, x, y);
-}
-
-function drawSchBox(ctx, box) {
-  var style = getComputedStyle(topmostdiv);
-
-  ctx.beginPath();
-  ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
-  ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
-  ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
-  ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
-  ctx.fill();
-  ctx.stroke();
-}
-
-function pinBoxFromPos(pos) {
-  pos = pos.map((p) => parseInt(p));
-
-  return [
-    pos[0] - PIN_BBOX_SIZE,
-    pos[1] - PIN_BBOX_SIZE,
-    pos[0] + PIN_BBOX_SIZE,
-    pos[1] + PIN_BBOX_SIZE
-  ];
-}
-
-function drawSchematicHighlights() {
-  var canvas = schematic_canvas.highlight;
-  prepareCanvas(canvas, false, schematic_canvas.transform);
-  clearCanvas(canvas);
-  var ctx = canvas.getContext("2d");
-  if (current_selection.type === "comp") {
-    if (compdict[current_selection.val] == undefined) {
-      logerr(`highlighted refid ${current_selection.val} not in compdict`);
-      return;
-    }
-    for (var unitnum in compdict[current_selection.val].units) {
-      var unit = compdict[current_selection.val].units[unitnum];
-      if (unit.schid == current_schematic) {
-        var box = unit.bbox.map((b) => parseFloat(b));
-        drawSchBox(ctx, box);
-      }
-    }
-  }
-  if (current_selection.type === "pin") {
-    if (pindict[current_selection.val] == undefined) {
-      logerr(`highlighted pinidx ${current_selection.val} not in pindict`);
-      return;
-    }
-    var pin = pindict[current_selection.val];
-    if (pin.schid == current_schematic) {
-      drawSchBox(ctx, pinBoxFromPos(pin.pos));
-    } else {
-      logwarn(`current pin ${pin.ref} / ${pin.num} is on schid ${pin.schid},` +
-        `but we are on schid ${current_schematic}`);
-    }
-  }
-  if (current_selection.type === "net") {
-    for (var pin of pindict) {
-      if (pin.schid == current_schematic && pin.net == current_selection.val) {
-        drawSchBox(ctx, pinBoxFromPos(pin.pos));
-      }
-    }
-  }
-  if (draw_crosshair) {
-    console.log("draw sch x")
-    drawCrosshair(schematic_canvas);
-  }
-}
-
+/** Redraw a specific canvas (if canvas was not resized) */
 function redrawCanvas(layerdict) {
   if (layerdict.layer === "S") {
     // schematic
@@ -907,6 +713,7 @@ function redrawCanvas(layerdict) {
   }
 }
 
+/** Fully redraw a specific canvas */
 function resizeCanvas(layerdict) {
   if (layerdict === undefined) {
     return;
@@ -922,12 +729,79 @@ function resizeCanvas(layerdict) {
   redrawCanvas(layerdict);
 }
 
+/** Triggers a full redraw of schematic and layout views */
 function resizeAll() {
   resizeCanvas(allcanvas.front);
   resizeCanvas(allcanvas.back);
   resizeCanvas(schematic_canvas);
 }
 
+/** Resets zoom and pan to default (fill screen and center) */
+function resetTransform(layerdict) {
+  if (layerdict.layer === "S") {
+    layerdict.transform.zoom = sch_zoom_default;
+    var t = layerdict.transform;
+
+    var vw = layerdict.bg.width / (t.zoom * t.s);
+    var vh = layerdict.bg.height / (t.zoom * t.s);
+
+    var centerx = schdata.schematics[schid_to_idx[current_schematic]].dimensions.x / 2;
+    var centery = schdata.schematics[schid_to_idx[current_schematic]].dimensions.y / 2;
+
+    layerdict.transform.panx = ((vw / 2) - centerx) * t.s - t.x;
+    layerdict.transform.pany = ((vh / 2) - centery) * t.s - t.y;
+  } else {
+    layerdict.transform.panx = 0;
+    layerdict.transform.pany = 0;
+    layerdict.transform.zoom = 1;
+  }
+  redrawCanvas(layerdict);
+}
+
+/** Triggers redraw of highlights on layout */
+function drawHighlights() {
+  drawHighlightsOnLayer(allcanvas.front);
+  drawHighlightsOnLayer(allcanvas.back);
+}
+// ----- End of layout render functions ----- //
+
+
+// ----- Functions for rendering the schematic (DO NOT MODIFY) ----- //
+/** Draws an image file (ie. schematic svg) on the canvas background */
+function drawCanvasImg(layerdict, x = 0, y = 0, backgroundColor = null) {
+  var canvas = layerdict.bg;
+  prepareCanvas(canvas, false, layerdict.transform);
+  clearCanvas(canvas, backgroundColor);
+  canvas.getContext("2d").drawImage(layerdict.img, x, y);
+}
+
+/** Draws a rectangle on the given context
+ * box: [x1, y1, x2, y2] */
+function drawSchBox(ctx, box) {
+  var style = getComputedStyle(topmostdiv);
+  ctx.beginPath();
+  ctx.rect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+  ctx.fillStyle = style.getPropertyValue("--schematic-highlight-fill-color");
+  ctx.strokeStyle = style.getPropertyValue("--schematic-highlight-line-color");
+  ctx.lineWidth = style.getPropertyValue("--schematic-highlight-line-width");
+  ctx.fill();
+  ctx.stroke();
+}
+
+/** Returns a box: [x1, y1, x2, y2] around a pin pos */
+function pinBoxFromPos(pos) {
+  pos = pos.map((p) => parseInt(p));
+  return [
+    pos[0] - PIN_BBOX_SIZE,
+    pos[1] - PIN_BBOX_SIZE,
+    pos[0] + PIN_BBOX_SIZE,
+    pos[1] + PIN_BBOX_SIZE
+  ];
+}
+// ----- End of schematic render functions ----- //
+
+
+// ----- Functions for initialization and handling clicks (DO NOT MODIFY) ----- //
 function handlePointerDown(e, layerdict) {
   if (e.button != 0 && e.button != 1) {
     return;
@@ -958,27 +832,6 @@ function handlePointerLeave(e, layerdict) {
   }
 
   delete layerdict.pointerStates[e.pointerId];
-}
-
-function resetTransform(layerdict) {
-  if (layerdict.layer === "S") {
-    layerdict.transform.zoom = sch_zoom_default;
-    var t = layerdict.transform;
-
-    var vw = layerdict.bg.width / (t.zoom * t.s);
-    var vh = layerdict.bg.height / (t.zoom * t.s);
-
-    var centerx = schdata.schematics[schid_to_idx[current_schematic]].dimensions.x / 2;
-    var centery = schdata.schematics[schid_to_idx[current_schematic]].dimensions.y / 2;
-
-    layerdict.transform.panx = ((vw / 2) - centerx) * t.s - t.x;
-    layerdict.transform.pany = ((vh / 2) - centery) * t.s - t.y;
-  } else {
-    layerdict.transform.panx = 0;
-    layerdict.transform.pany = 0;
-    layerdict.transform.zoom = 1;
-  }
-  redrawCanvas(layerdict);
 }
 
 function handlePointerUp(e, layerdict) {
@@ -1134,18 +987,7 @@ function addMouseHandlers(div, layerdict) {
   }
 }
 
-function setRedrawOnDrag(value) {
-  ibom_settings.redrawOnDrag = value;
-  writeStorage("redrawOnDrag", value);
-}
-
-function setBoardRotation(value) {
-  ibom_settings.boardRotation = value * 5;
-  writeStorage("boardRotation", ibom_settings.boardRotation);
-  document.getElementById("rotationDegree").textContent = ibom_settings.boardRotation;
-  resizeAll();
-}
-
+/** Initializes the layout view and populates allcanvas */
 function initLayout() {
   allcanvas = {
     front: {
@@ -1185,6 +1027,7 @@ function initLayout() {
   };
 }
 
+/** Initializes the schematic view and populates schematic_canvas */
 function initSchematic() {
   schematic_canvas = {
     transform: {
@@ -1219,8 +1062,188 @@ function initSchematic() {
   switchSchematic(1);
 }
 
+/** Initializes the mouse handlers for layout and schematic
+ * Must be run after initLayout() and initSchematic() */
 function initMouseHandlers() {
   addMouseHandlers(document.getElementById("front-canvas"), allcanvas.front);
   addMouseHandlers(document.getElementById("back-canvas"), allcanvas.back);
   addMouseHandlers(document.getElementById("schematic-canvas"), schematic_canvas);
+}
+// ----- End click handling functions ----- //
+
+
+/**
+ * Draw the highlight layer for a layout canvas
+ * For now, this is also the place to add extra visual components,
+ * such as crosshairs and tooltips (put at the bottom of the function)
+ */
+ function drawHighlightsOnLayer(canvasdict, clear = true) {
+  if (clear) {
+    clearCanvas(canvasdict.highlight);
+  }
+  if (current_selection.type === "comp") {
+    drawFootprints(canvasdict.highlight, canvasdict.layer,
+      canvasdict.transform.s * canvasdict.transform.zoom, true);
+  }
+  if (current_selection.type === "pin") {
+    drawPins(canvasdict.highlight, canvasdict.layer);
+  }
+  if (current_selection.type === "net") {
+    drawNets(canvasdict.highlight, canvasdict.layer, true);
+  }
+
+  if (draw_crosshair) {
+    drawCrosshair(canvasdict);
+  }
+  if (tool_selections.length > 0) {
+    drawToolSelections(canvasdict);
+  }
+
+  if (udp_selection !== null) {
+    circleAtPoint(canvasdict, udp_selection, "red", 10)
+    // circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
+  }
+}
+
+/**
+ * Draw the highlight layer for the schematic canvas
+ * For now, this is also the place to add extra visual components,
+ * such as corsshairs and tooltips (put at the bottom of the function)
+ */
+function drawSchematicHighlights() {
+  var canvas = schematic_canvas.highlight;
+  prepareCanvas(canvas, false, schematic_canvas.transform);
+  clearCanvas(canvas);
+  var ctx = canvas.getContext("2d");
+  if (current_selection.type === "comp") {
+    if (compdict[current_selection.val] == undefined) {
+      logerr(`highlighted refid ${current_selection.val} not in compdict`);
+      return;
+    }
+    for (var unitnum in compdict[current_selection.val].units) {
+      var unit = compdict[current_selection.val].units[unitnum];
+      if (unit.schid == current_schematic) {
+        var box = unit.bbox.map((b) => parseFloat(b));
+        drawSchBox(ctx, box);
+      }
+    }
+  }
+  if (current_selection.type === "pin") {
+    if (pindict[current_selection.val] == undefined) {
+      logerr(`highlighted pinidx ${current_selection.val} not in pindict`);
+      return;
+    }
+    var pin = pindict[current_selection.val];
+    if (pin.schid == current_schematic) {
+      drawSchBox(ctx, pinBoxFromPos(pin.pos));
+    } else {
+      logwarn(`current pin ${pin.ref} / ${pin.num} is on schid ${pin.schid},` +
+        `but we are on schid ${current_schematic}`);
+    }
+  }
+  if (current_selection.type === "net") {
+    for (var pin of pindict) {
+      if (pin.schid == current_schematic && pin.net == current_selection.val) {
+        drawSchBox(ctx, pinBoxFromPos(pin.pos));
+      }
+    }
+  }
+  if (draw_crosshair) {
+    console.log("draw sch x")
+    drawCrosshair(schematic_canvas);
+  }
+}
+
+
+function crosshairOnBox(layerdict, box, color=null) {
+  var canvas = layerdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+  var line_width;
+  var stroke_style;
+  if (layerdict.layer === "S") {
+    stroke_style = style.getPropertyValue("--schematic-crosshair-line-color");
+    line_width = style.getPropertyValue("--schematic-crosshair-line-width");
+  } else {
+    stroke_style = style.getPropertyValue("--pcb-crosshair-line-color");
+    line_width = style.getPropertyValue("--pcb-crosshair-line-width");
+  }
+  if (color !== null) {
+    stroke_style = color;
+  }
+  // scale line_width based on effective zoom
+  line_width /= layerdict.transform.s * layerdict.transform.zoom;
+
+  ctx.strokeStyle = stroke_style;
+  ctx.lineWidth = line_width;
+  ctx.beginPath();
+  ctx.moveTo((box[0] + box[2]) / 2, -CROSSHAIR_LENGTH);
+  ctx.lineTo((box[0] + box[2]) / 2, box[1]);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo((box[0] + box[2]) / 2, box[3]);
+  ctx.lineTo((box[0] + box[2]) / 2, CROSSHAIR_LENGTH);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
+  ctx.lineTo(box[0], (box[1] + box[3]) / 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(box[2], (box[1] + box[3]) / 2);
+  ctx.lineTo(CROSSHAIR_LENGTH, (box[1] + box[3]) / 2);
+  ctx.stroke();
+}
+
+function drawCrosshair(layerdict) {
+  var box = target_boxes[layerdict.layer];
+  if (box === null || box.length === 0) {
+    return;
+  }
+
+  crosshairOnBox(layerdict, bboxListSort(box));
+}
+
+var r = 30;
+var t = 15;
+var l = 2;
+
+function toolIconAtPoint(layerdict, coords, color) {
+  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
+
+  var canvas = layerdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  var flip = layerdict.layer === "B" ? -1 : 1;
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = l * s;
+  ctx.beginPath();
+  ctx.arc(coords.x + r * s * flip, coords.y - r * s, r * s, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.moveTo(coords.x, coords.y);
+  ctx.lineTo(coords.x, coords.y - t * s);
+  ctx.lineTo(coords.x + t * s * flip, coords.y);
+  ctx.fill();
+}
+
+function boxFromPoint(coords, size=1) {
+  return [coords.x - size / 2, coords.y - size / 2, coords.x + size / 2, coords.y + size / 2];
+}
+
+function drawToolSelections(layerdict) {
+  for (let selection of tool_selections) {
+    if (selection.coords.layer == layerdict.layer) {
+      if (settings["tool-selection-display"] == "xhair") {
+        crosshairOnBox(layerdict, boxFromPoint(selection.coords), selection.color);
+      } else {
+        toolIconAtPoint(layerdict, selection.coords, selection.color);
+      }
+    }
+  }
 }

@@ -1461,19 +1461,22 @@ function initSocket() {
   socket.on("connect", () => {
     console.log("connected")
   });
-  socket.on("selection", (selection) => {
-    switch (selection.type) {
+  socket.on("selection", (data) => {
+    switch (data.type) {
       case "comp":
-        selectComponent(selection.val);
+        selectComponent(data.val);
         break;
       case "pin":
-        selectPins([selection.val]);
+        selectPins([data.val]);
         break;
       case "net":
-        selectNet(selection.val);
+        selectNet(data.val);
         break;
       case "deselect":
         deselectAll(true);
+        break;
+      case "multi":
+        multiMenu(data.point, data.layer, data.hits)
         break;
     }
   });
@@ -1539,7 +1542,7 @@ function ht(data) {
 }
 
 window.onload = () => {
-  let data_urls = ["schdata", "pcbdata"]
+  let data_urls = ["schdata", "pcbdata", "datadicts"]
   data_urls = data_urls.map((name) => ("http://" + window.location.host + "/" + name))
 
   Promise.all(data_urls.map((url) => fetch(url))).then((responses) =>
@@ -1549,8 +1552,15 @@ window.onload = () => {
     schdata = datas[0];
     pcbdata = datas[1];
 
+    schid_to_idx = datas[2]["schid_to_idx"]
+    ref_to_id = datas[2]["ref_to_id"]
+    pinref_to_idx = datas[2]["pinref_to_idx"]
+    compdict = datas[2]["compdict"]
+    netdict = datas[2]["netdict"]
+    pindict = datas[2]["pindict"]
+
     initUtils();
-    initData();
+    // initData();
 
     initPage();
 
