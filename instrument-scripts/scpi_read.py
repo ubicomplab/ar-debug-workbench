@@ -22,7 +22,7 @@ import pyvisa
 # known instruments
 # we expect all SCPI-enabled instruments to accept the same basic commands, but we can use this list to assign an instrument type
 supported_dmms = ["MODEL DMM6500", "DMM6500"]
-supported_oscs = []
+supported_oscs = ["MODEL MSO4104", "MSO4104"]
 
 instruments = []
 
@@ -45,7 +45,7 @@ def initializeInstruments():
         if instruments[counter].query("*IDN?").split(",")[1] in supported_dmms:
             print("Resource "+str(counter)+" is a DMM")
         elif instruments[counter].query("*IDN?").split(",")[1] in supported_oscs:
-            print("Resource "+str(counter)+" is an osciliscope")
+            print("Resource "+str(counter)+" is an oscilliscope")
 
     
     # inst.write("*rst; status:preset; *cls")
@@ -59,7 +59,11 @@ def queryValue(instrumentType, function):
             return value
 
     elif instrumentType == "osc":
-        return
+        if function == "voltage":
+            # TODO need to fix later so it doesn't just take the first instrument 
+            value = float(instruments[0].query(':MEASure:VOLTage:DC?'))
+            print("Measured value = " + str(value) + " VDC")
+            return value
 
     else:
         print("Invalid instrument type provided to queryValue")
