@@ -140,12 +140,10 @@ def handle_connect():
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
 
-    if selection["comp"] != -1:
-        emit("selection", {"type": "comp", "val": selection["comp"]})
-    elif selection["pin"] != -1:
-        emit("selection", {"type": "pin", "val": selection["pin"]})
-    elif selection["net"] != None:
-        emit("selection", {"type": "net", "val": selection["net"]})
+    for k, v in selection.items():
+        if v is not None:
+            emit("selection", {"type": k, "val": v})
+            break
 
     emit("projector-mode", projector_mode)
     for k, v in projector_calibration.items():
@@ -177,20 +175,20 @@ def handle_disconnect():
     active_connections -= 1
     logging.info(f"Client disconnected ({active_connections} active)")
 
-
+"""
 @socketio.on("selection")
 def handle_selection(new_selection):
     global selection
     logging.info(f"Received selection update {new_selection}")
-    selection["comp"] = -1
-    selection["pin"] = -1
+    selection["comp"] = None
+    selection["pin"] = None
     selection["net"] = None
     if (new_selection["type"] != "deselect"):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
+"""
 
-
-@socketio.on("wip-selection")
+@socketio.on("selection")
 def handle_wip_selection(data):
     logging.info(f"Socket received selection {data}")
     process_selection(data)
@@ -428,21 +426,32 @@ def init_data(pcbdata, schdata):
 
 # handles a selection event, which can come from the client or from optitrack
 def process_selection(data):
-    if data["source"] == "point":
+    if "point" in data:
+        # a point/click
         hits = hitscan(data["point"][0], data["point"][1], pcbdata,
                        pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
         if len(hits) == 1:
             # single selection
-            socketio.emit("wip-selection", hits[0])
+            make_selection(hits[0])
         elif len(hits) > 1:
             # multi selection for client to disambiguate
             socketio.emit(
-                "wip-selection", {"type": "multi", "point": data["point"], "layer": data["layer"], "hits": hits})
+                "selection", {"type": "multi", "point": data["point"], "layer": data["layer"], "hits": hits})
         else:
-            socketio.emit("wip-selection", {"type": "deselect", "val": None})
-    else:  # "comp", "pin", or "net"
-        # choice from disambiguation menu, simply echo back to all clients
-        socketio.emit("wip-selection", data)
+            make_selection({"type": "deselect", "val": None})
+    else:
+        # choice made from schematic or disambiguation menu, simply echo back to all clients
+        make_selection(data)
+
+def make_selection(new_selection):
+    global selection
+    logging.info(f"Making selection {new_selection}")
+    selection["comp"] = None
+    selection["pin"] = None
+    selection["net"] = None
+    if (new_selection["type"] != "deselect"):
+        selection[new_selection["type"]] = new_selection["val"]
+    socketio.emit("selection", new_selection)
 
 
 if __name__ == "__main__":
@@ -478,8 +487,8 @@ if __name__ == "__main__":
 
     # Server tracks current selections and settings
     selection = {
-        "comp": -1,
-        "pin": -1,
+        "comp": None,
+        "pin": None,
         "net": None
     }
     app_settings = {}

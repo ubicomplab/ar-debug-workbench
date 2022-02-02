@@ -265,12 +265,34 @@ function deselectAll(redraw) {
   }
 }
 
-// point is a point on the board for now, hits is the list of options
+/**
+ * Creates and displays the disambiguation menu
+ * point is [x,y] click location (clientXY for schematic, layout coords for layout)
+ * layer is "S"/"F"/"B"
+ * hits is list of options {type, val} to display and click on
+ */
 function multiMenu(point, layer, hits) {
+  console.log(`multi menu from ${layer}`)
+  if (layer != "S") {
+    point = layoutToClientCoords(point, layer);
+  }
 
+  // Clear existing children and position menu at click
+  // TODO make sure menu can't go out of #display
+
+  var clickmenu = document.getElementById("sch-multi-click");
+  clickmenu.innerHTML = "";
+  clickmenu.style.left = point[0] + "px";
+  clickmenu.style.top = point[1] + "px";
+
+  for (let hit of hits) {
+    appendSelectionDiv(clickmenu, hit.val, hit.type);
+  }
+  clickmenu.classList.remove("hidden");
 }
 
-function pageToLayoutCoords(point, layerdict) {
+/** Converts page offset coords (eg. from event.offsetX) to layout coords*/
+function offsetToLayoutCoords(point, layerdict) {
   var t = layerdict.transform;
   if (layerdict.layer == "B") {
     point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx + t.x) / -t.s;
@@ -281,17 +303,20 @@ function pageToLayoutCoords(point, layerdict) {
   return rotateVector(point, -ibom_settings.boardRotation);
 }
 
-function layoutToPageCoords(point, layer) {
+/** Converts layout coords to page client coords (eg. from event.clientX) */
+function layoutToClientCoords(point, layer) {
   var layerdict = (layer == "F" ? allcanvas.front : allcanvas.back);
   var t = layerdict.transform;
   var v = rotateVector(point, ibom_settings.boardRotation);
   if (layer == "B") {
     v[0] = (v[0] * -t.s + t.panx - t.x) * t.zoom / devicePixelRatio;
   } else {
-    v[0] = (v[0] * -t.s + t.panx + t.x) * t.zoom / devicePixelRatio;
+    v[0] = (v[0] * t.s + t.panx + t.x) * t.zoom / devicePixelRatio;
   }
-  v[1] = (v[1] * -t.s + t.pany + t.y) * t.zoom / devicePixelRatio;
-  return v;
+  v[1] = (v[1] * t.s + t.pany + t.y) * t.zoom / devicePixelRatio;
+  var offset_parent = layerdict.bg.offsetParent;
+  // Last step is converting from offset coords to client coords
+  return [v[0] + offset_parent.offsetLeft, v[1] + offset_parent.offsetTop]
 }
 
 /** \<type\>Clicked() functions should be called whever the client wants to select something
@@ -558,13 +583,12 @@ function handleMouseClick(layerdict, e = null) {
     e.offsetY = e.pageY - e.currentTarget.offsetTop;
   }
 
-  var clickmenu = document.getElementById("sch-multi-click");
-  var hits = [];
-
   if (layerdict.layer === "S") {
     // Click in schematic
     var coords = getMousePos(layerdict, e)
     // console.log(`click in sch at (${coords.x.toFixed(2)}, ${coords.y.toFixed(2)})`);
+
+    var hits = [];
     for (var refid in compdict) {
       if (!compdict[refid].schids.includes(current_schematic)) continue;
       for (var unitnum in compdict[refid].units) {
@@ -592,82 +616,27 @@ function handleMouseClick(layerdict, e = null) {
         }
       }
     }
-  } else {
-    // Click in layout
-    var x = e.offsetX;
-    var y = e.offsetY;
-    var p2l = pageToLayoutCoords([x, y], layerdict)
 
-    var inv = layoutToPageCoords(pageToLayoutCoords([x,y], layerdict), layerdict.layer)
-    console.log(`inv is (${inv[0]},${inv[1]})`)
-
-    var t = layerdict.transform;
-    if (layerdict.layer == "B") {
-      x_adj = (devicePixelRatio * x / t.zoom - t.panx + t.x) / -t.s;
+    if (hits.length == 1) {
+      // Single click, just select what was clicked
+      clickedType[hits[0].type](hits[0].val);
+    } else if (hits.length > 1) {
+      multiMenu([e.clientX, e.clientY], layerdict.layer, hits)
     } else {
-      x_adj = (devicePixelRatio * x / t.zoom - t.panx - t.x) / t.s;
+      // Clicked on nothing
+      document.getElementById("sch-multi-click").classList.add("hidden");
+      document.getElementById("search-content").classList.add("hidden");
+      deselectClicked();
     }
-    y_adj = (devicePixelRatio * y / t.zoom - t.y - t.pany) / t.s;
-
-    var v = rotateVector([x_adj, y_adj], -ibom_settings.boardRotation);
-
-    console.log(`evt offset is (${x},${y})`)
-    console.log(`v is (${v[0]},${v[1]})`)
-    console.log(`p2l is (${p2l[0]},${p2l[1]})`)
-
-    if (DEBUG_LAYOUT_CLICK) {
-      console.log(`click in layer ${layerdict.layer} at (${v[0]},${v[1]})`);
-      return;
-    }
-
-    // send click to server instead of processing here
-    socket.emit("wip-selection", {
+  } else {
+    // Click in layout, send to server instead of processing here
+    socket.emit("selection", {
       source: "point",
-      point: v,
+      point: offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict),
       layer: layerdict.layer,
       pads: ibom_settings.renderPads,
       tracks: ibom_settings.renderTracks
     })
-
-    for (let comp of bboxHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "comp", "val": comp });
-    }
-    for (let pin of pinHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "pin", "val": pin });
-    }
-    for (let net of netHitScan(layerdict.layer, ...v)) {
-      hits.push({ "type": "net", "val": net });
-    }
-    
-  }
-
-  if (hits.length == 1) {
-    // Single click, just select what was clicked
-    clickedType[hits[0].type](hits[0].val);
-  } else if (hits.length > 1) {
-    // Multi click
-    // Clear existing children and position menu at click
-    // TODO make sure menu can't go out of #display
-    clickmenu.innerHTML = "";
-    clickmenu.style.top = e.clientY + "px";
-    clickmenu.style.left = e.clientX + "px";
-
-    console.log(`client is (${e.clientX},${e.clientY})`)
-    console.log(`offset is (${e.offsetX},${e.offsetY})`)
-
-    var l2p = layoutToPageCoords(v, "F")
-
-    console.log(`l2p is (${l2p[0]},${l2p[1]})`)
-
-    for (let hit of hits) {
-      appendSelectionDiv(clickmenu, hit.val, hit.type);
-    }
-    clickmenu.classList.remove("hidden");
-  } else {
-    // Clicked on nothing
-    clickmenu.classList.add("hidden");
-    document.getElementById("search-content").classList.add("hidden");
-    deselectClicked();
   }
 }
 

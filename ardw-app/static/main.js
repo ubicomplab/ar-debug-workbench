@@ -1414,23 +1414,7 @@ function initSocket() {
   socket.on("connect", () => {
     console.log("connected")
   });
-  socket.on("selection", (selection) => {
-    switch (selection.type) {
-      case "comp":
-        selectComponent(selection.val);
-        break;
-      case "pin":
-        selectPins([selection.val]);
-        break;
-      case "net":
-        selectNet(selection.val);
-        break;
-      case "deselect":
-        deselectAll(true);
-        break;
-    }
-  });
-  socket.on("wip-selection", (data) => {
+  socket.on("selection", (data) => {
     switch (data.type) {
       case "comp":
         selectComponent(data.val);
