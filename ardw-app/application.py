@@ -12,6 +12,7 @@ import sys
 import struct
 import socket
 import threading
+import numpy as np
 
 from example_tool import ExampleTool
 from tools import DebugCard, DebugSession
@@ -25,12 +26,22 @@ def listen_udp():
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", 8052))
+
+    # N element array of historical tippos_pixel_coord
+    # first element is oldest, last element is newest
+    N = 50
+    tippos_pixel_coords = np.arange(N)
     while True:
         data, addr = sock.recvfrom(1024)
-        var = struct.unpack("f" * 6, data)
-        tippos = {"x": var[0], "y": var[1], "z": var[2]}
-        endpos = {"x": var[3], "y": var[4], "z": var[5]}
-        socketio.emit("udp", tippos)
+        var = struct.unpack("f" * 8, data)
+        tippos_pixel_coord = {"x": var[0], "y": var[1]}
+        tippos_opti_coord = {"x": var[2], "y": var[3], "z": var[4]}
+        endpos_opti_coord = {"x": var[5], "y": var[6], "z": var[7]}
+
+        # logic for whether last 50 tippos
+        #tippos_pixel_coords = np.roll(tippos_pixel_coords, -1)
+        #tippos_pixel_coord
+        socketio.emit("udp", tippos_pixel_coord)
 
 
 if getattr(sys, 'frozen', False):
