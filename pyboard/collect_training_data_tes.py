@@ -1,35 +1,54 @@
 import pyrealtime as prt
 import struct
 
-from extract_opti_cordinate import extract_cord
+from extract_opti_cordinate import extract_cord_layer
 from opti_lib import get_opti_source
-from projector_calib import ProjectorLayer, projection_draw, get_current_pixel_point
+from projector_calib import projection_draw, get_current_pixel_point, get_board_position
 
-CALIBRATE = False
+CALIBRATE_PROJECTOR = False
+CALIBRATE_TIP_POS = False
 DEBUG = False
-FILTERED = False
+FILTERED = True
 SEND_OVER_UDP = True
+USE_BOARD = False
+RECORD = False
 
 
 def encode_udp(data):
-    # print(data)
-    return struct.pack("f" * 2, data[0], data[1])
+    if USE_BOARD:
+        return struct.pack("f" * 11, data['red_tip_pixel'][0], data['red_tip_pixel'][1],
+                           data['tip_pos_opti'][0], data['tip_pos_opti'][1], data['tip_pos_opti'][2],
+                           data['opti']['red']['pos'][0], data['opti']['red']['pos'][1], data['opti']['red']['pos'][2],
+                           data['board'][0], data['board'][1], data['board'][2])
+    return struct.pack("f" * 8, data['red_tip_pixel'][0], data['red_tip_pixel'][1],
+                       data['tip_pos_opti'][0], data['tip_pos_opti'][1], data['tip_pos_opti'][2],
+                       data['opti']['red']['pos'][0], data['opti']['red']['pos'][1], data['opti']['red']['pos'][2])
 
 
 def main():
-    opti = get_opti_source(show_plot=False, use_board=False, use_tray=False)
-    tip_pos = extract_cord(opti)
-    pixel_point = get_current_pixel_point(tip_pos, calibrate=CALIBRATE)
-    # current_pixel_point = ProjectorLayer(tip_pos, name="projector")
-    # buffered_data = prt.BufferLayer(pixel_point, buffer_size=10)
-    # prt.ScatterPlotLayer(buffered_data, xlim=(0, 1920), ylim=(-1080, 0))
-
-    if FILTERED:
-        pixel_point = prt.ExponentialFilter(pixel_point, alpha=0.1)
-    if not CALIBRATE and DEBUG:
-        draw = projection_draw(pixel_point, win_width=1920, win_height=1080)
-    if SEND_OVER_UDP:
-        prt.UDPWriteLayer(pixel_point, port=8052, encoder=encode_udp)
+    opti = get_opti_source(show_plot=False, use_board=USE_BOARD, use_tray=False)
+    if RECORD:
+        prt.RecordLayer(opti, file_prefix="opti")
+    if not CALIBRATE_TIP_POS:
+        tip_pos = extract_cord_layer(opti, use_board=USE_BOARD)
+        red_pixel_point = get_current_pixel_point(tip_pos, calibrate=CALIBRATE_PROJECTOR, marker="RED")
+        # gray_pixel_point = get_current_pixel_point(tip_pos, calibrate=CALIBRATE, marker="GRAY")
+        if USE_BOARD:
+            board_pos = get_board_position(tip_pos)
+        if FILTERED:
+            red_pixel_point = prt.ExponentialFilter(red_pixel_point, alpha=0.1)
+            # gray_pixel_point = prt.ExponentialFilter(gray_pixel_point, alpha=0.1)
+        if not CALIBRATE_PROJECTOR and DEBUG:
+            draw = projection_draw(red_pixel_point, win_width=1920, win_height=1080)
+        if SEND_OVER_UDP:
+            data = prt.MergeLayer(None)
+            data.set_input(red_pixel_point, "red_tip_pixel")
+            data.set_input(tip_pos, "tip_pos_opti")
+            data.set_input(opti, "opti")
+            # data.set_input(gray_pixel_point, "grey_tip_pixel")
+            if USE_BOARD:
+                data.set_input(board_pos, "board")
+            prt.UDPWriteLayer(data, port=8052, encoder=encode_udp)
     prt.LayerManager.session().run(show_monitor=False)
 
 

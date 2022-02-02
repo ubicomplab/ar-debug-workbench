@@ -6,6 +6,8 @@ import pyrealtime as prt
 import pickle
 import os
 from settings import DATA_ROOT
+
+USE_BOARD = False
 calib = 1
 
 
@@ -29,21 +31,14 @@ def extract_cord(data):
     grey_markers_adj = grey_pos + grey_rot.apply(grey_tip)
     red_markers_adj = red_pos + red_rot.apply(red_tip)
 
-    # return [grey_pos, grey_rot.as_quat(), red_pos, red_rot.as_quat(), grey_markers_adj, red_markers_adj]
-    # return np.hstack((red_markers_adj[0], red_markers_adj[1]))
-    return [red_markers_adj[0], 0, red_markers_adj[2]]
-    # return red_markers_adj
-
-    # return [grey_markers_adj, red_markers_adj]
+    if USE_BOARD:
+        board_pos = data['board']['pos']
+        return [red_markers_adj[0], red_markers_adj[1], red_markers_adj[2], grey_markers_adj[0], grey_markers_adj[1], grey_markers_adj[2], board_pos[0], board_pos[1], board_pos[2]]
+    return [red_markers_adj[0], red_markers_adj[1], red_markers_adj[2], grey_markers_adj[0], grey_markers_adj[1], grey_markers_adj[2]]
 
 
-def encode_udp_tip_opti(data):
-    # return struct.pack("f" * 6, float(data[0][0]), float(data[0][1]), float(data[0][2]), float(data[1][0]),
-    #                    float(data[1][1]), float(data[1][2]))
-    return struct.pack("f" * 20, float(data[0][0]), float(data[0][1]), float(data[0][2]),
-                       float(data[1][0]), float(data[1][1]), float(data[1][2]), float(data[1][3]),
-                       float(data[2][0]), float(data[2][1]), float(data[2][2]),
-                       float(data[3][0]), float(data[3][1]), float(data[3][2]), float(data[3][3]),
-                       float(data[4][0]), float(data[4][1]), float(data[4][2]),
-                       float(data[5][0]), float(data[5][1]), float(data[5][2])
-                       )
+def extract_cord_layer(data, use_board=False):
+    global USE_BOARD
+    USE_BOARD = use_board
+    pos = extract_cord(data)
+    return pos

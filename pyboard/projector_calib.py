@@ -94,6 +94,8 @@ class ProjectorLayer(prt.TransformMixin, prt.ThreadLayer):
         super().__init__(*arg, **kwargs)
 
     def transform(self, data):
+        data = [data[0], data[1], 0]
+        # print(data)
         if not CALIBRATION:
             if not self.calib:
                 self.projectionMatrix = pickle.load(open("projectionMatrix.pkl", 'rb'))
@@ -138,9 +140,30 @@ class ProjectorLayer(prt.TransformMixin, prt.ThreadLayer):
         return pixel
 
 
-def get_current_pixel_point(data, calibrate=False):
+
+
+@prt.transformer
+def get_red_probe_data(data):
+    return data[0:3]
+
+
+@prt.transformer
+def get_gray_probe_data(data):
+    return data[3:6]
+
+
+@prt.transformer
+def get_board_position(data):
+    return data[6:9]
+
+
+def get_current_pixel_point(data, calibrate=False, marker="RED"):
     global CALIBRATION
     CALIBRATION = calibrate
+    if marker == "RED":
+        data = get_red_probe_data(data)
+    else:
+        data = get_red_probe_data(data)
     current_pixel_point = ProjectorLayer(data, name="projector")
     return current_pixel_point
 

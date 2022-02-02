@@ -6,13 +6,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="93c75a18-e15b-4931-90ac-6178c2a7114f" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/../ardw-app/.idea/ardw-app.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../ardw-app/application.py" beforeDir="false" afterPath="$PROJECT_DIR$/../ardw-app/application.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../ardw-app/static/main.js" beforeDir="false" afterPath="$PROJECT_DIR$/../ardw-app/static/main.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../ardw-app/static/projector.js" beforeDir="false" afterPath="$PROJECT_DIR$/../ardw-app/static/projector.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/capturedWorldPoints.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/capturedWorldPoints.pkl" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/collect_training_data_tes.py" beforeDir="false" afterPath="$PROJECT_DIR$/collect_training_data_tes.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extract_opti_cordinate.py" beforeDir="false" afterPath="$PROJECT_DIR$/extract_opti_cordinate.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/projectionMatrix.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/projectionMatrix.pkl" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/projector_calib.py" beforeDir="false" afterPath="$PROJECT_DIR$/projector_calib.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -25,8 +24,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/collect_training_data_tes.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="234">
-              <caret line="28" column="31" lean-forward="true" selection-start-line="28" selection-start-column="31" selection-end-line="28" selection-end-column="31" />
+            <state relative-caret-position="170">
+              <caret line="16" column="21" lean-forward="true" selection-start-line="16" selection-start-column="21" selection-end-line="16" selection-end-column="21" />
               <folding>
                 <element signature="e#0#24#0" expanded="true" />
               </folding>
@@ -35,21 +34,12 @@
         </entry>
       </file>
       <file pinned="false" current-in-tab="false">
-        <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/network_layers.py">
+        <entry file="file://$PROJECT_DIR$/opti_lib.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="268">
-              <caret line="172" column="8" selection-start-line="172" selection-start-column="8" selection-end-line="172" selection-end-column="8" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/read_data.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="391">
-              <caret line="23" selection-start-line="23" selection-end-line="25" selection-end-column="42" />
+            <state relative-caret-position="1003">
+              <caret line="59" selection-start-line="59" selection-end-line="62" selection-end-column="37" />
               <folding>
-                <element signature="e#556#584#0" expanded="true" />
+                <element signature="e#0#34#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -58,8 +48,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/projector_calib.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1768">
-              <caret line="104" column="29" selection-start-line="104" selection-start-column="17" selection-end-line="104" selection-end-column="29" />
+            <state relative-caret-position="1632">
+              <caret line="96" column="26" lean-forward="true" selection-start-line="96" selection-start-column="26" selection-end-line="96" selection-end-column="26" />
               <folding>
                 <element signature="e#0#31#0" expanded="true" />
               </folding>
@@ -70,8 +60,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/extract_opti_cordinate.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="238">
-              <caret line="14" column="18" selection-start-line="14" selection-start-column="11" selection-end-line="14" selection-end-column="18" />
+            <state relative-caret-position="596">
+              <caret line="39" column="4" selection-start-line="39" selection-start-column="4" selection-end-line="39" selection-end-column="4" />
               <folding>
                 <element signature="e#0#13#0" expanded="true" />
               </folding>
@@ -105,6 +95,7 @@
       <find>self.counter +</find>
       <find>counter</find>
       <find>calibrate_projector</find>
+      <find>projection_draw</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -114,9 +105,9 @@
     <option name="CHANGED_PATHS">
       <list>
         <option value="$PROJECT_DIR$/collect_training_data.py" />
+        <option value="$PROJECT_DIR$/read_data.py" />
         <option value="$PROJECT_DIR$/extract_opti_cordinate.py" />
         <option value="$PROJECT_DIR$/projector_calib.py" />
-        <option value="$PROJECT_DIR$/read_data.py" />
         <option value="$PROJECT_DIR$/collect_training_data_tes.py" />
       </list>
     </option>
@@ -133,7 +124,6 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
@@ -145,6 +135,7 @@
           <select />
         </subPane>
       </pane>
+      <pane id="Scope" />
     </panes>
   </component>
   <component name="ProjectViewState">
@@ -173,7 +164,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.read_data">
+  <component name="RunManager" selected="Python.collect_training_data_tes">
     <configuration name="collect_training_data" type="PythonConfigurationType" factoryName="Python">
       <module name="pyboard" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -325,16 +316,16 @@
     <servers />
   </component>
   <component name="ToolWindowManager">
-    <frame x="-7" y="0" width="974" height="1047" extended-state="0" />
+    <frame x="-7" y="0" width="1734" height="1407" extended-state="0" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.37820512" />
+      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.16804245" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" sideWeight="0.4985128" visible="true" weight="0.4595186" />
-      <window_info anchor="bottom" id="Debug" order="3" sideWeight="0.4991077" weight="0.39758125" />
+      <window_info active="true" anchor="bottom" id="Run" order="2" sideWeight="0.4985128" visible="true" weight="0.3477237" />
+      <window_info anchor="bottom" id="Debug" order="3" sideWeight="0.4991077" weight="0.39717427" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" />
@@ -522,27 +513,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/prt_natnet.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="374">
-          <caret line="24" column="29" selection-start-line="24" selection-start-column="29" selection-end-line="24" selection-end-column="29" />
-        </state>
-      </provider>
-    </entry>
     <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/layer.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="268">
           <caret line="304" column="6" selection-start-line="304" selection-start-column="6" selection-end-line="304" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/opti_lib.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="476">
-          <caret line="28" column="4" selection-start-line="28" selection-start-column="4" selection-end-line="28" selection-end-column="4" />
-          <folding>
-            <element signature="e#0#34#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -574,22 +548,12 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/extract_opti_cordinate.py">
+    <entry file="file://$PROJECT_DIR$/read_data.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="238">
-          <caret line="14" column="18" selection-start-line="14" selection-start-column="11" selection-end-line="14" selection-end-column="18" />
+        <state relative-caret-position="391">
+          <caret line="23" selection-start-line="23" selection-end-line="25" selection-end-column="42" />
           <folding>
-            <element signature="e#0#13#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/projector_calib.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1768">
-          <caret line="104" column="29" selection-start-line="104" selection-start-column="17" selection-end-line="104" selection-end-column="29" />
-          <folding>
-            <element signature="e#0#31#0" expanded="true" />
+            <element signature="e#556#584#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -601,20 +565,47 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/read_data.py">
+    <entry file="file://$PROJECT_DIR$/prt_natnet.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="391">
-          <caret line="23" selection-start-line="23" selection-end-line="25" selection-end-column="42" />
+        <state relative-caret-position="85">
+          <caret line="7" column="8" selection-start-line="7" selection-start-column="8" selection-end-line="7" selection-end-column="8" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/opti_lib.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1003">
+          <caret line="59" selection-start-line="59" selection-end-line="62" selection-end-column="37" />
           <folding>
-            <element signature="e#556#584#0" expanded="true" />
+            <element signature="e#0#34#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/projector_calib.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1632">
+          <caret line="96" column="26" lean-forward="true" selection-start-line="96" selection-start-column="26" selection-end-line="96" selection-end-column="26" />
+          <folding>
+            <element signature="e#0#31#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/extract_opti_cordinate.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="596">
+          <caret line="39" column="4" selection-start-line="39" selection-start-column="4" selection-end-line="39" selection-end-column="4" />
+          <folding>
+            <element signature="e#0#13#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/collect_training_data_tes.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="234">
-          <caret line="28" column="31" lean-forward="true" selection-start-line="28" selection-start-column="31" selection-end-line="28" selection-end-column="31" />
+        <state relative-caret-position="170">
+          <caret line="16" column="21" lean-forward="true" selection-start-line="16" selection-start-column="21" selection-end-line="16" selection-end-column="21" />
           <folding>
             <element signature="e#0#24#0" expanded="true" />
           </folding>
