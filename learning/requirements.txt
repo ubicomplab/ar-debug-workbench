@@ -1,0 +1,4 @@
+numpy
+pyquaternion
+seaborn
+numpy-quaternion
