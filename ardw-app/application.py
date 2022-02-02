@@ -51,6 +51,7 @@ def listen_udp():
         if np.all( np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], ((int)(time_to_wait * framerate),1)), axis = 1) <= threshold):
             # it's been in the same place
             print("no movement")
+            process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
 
         
         tippos_pixel_coord_dict = {"x": var[0], "y": var[1]}
@@ -497,7 +498,7 @@ def process_selection(data):
         # a point/click
         hits = hitscan(data["point"][0], data["point"][1], pcbdata,
                        pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
-        if len(hits) == 1:
+        if len(hits) == 1 or "optitrack" in data:
             # single selection
             make_selection(hits[0])
         elif len(hits) > 1:
