@@ -27,21 +27,36 @@ def listen_udp():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", 8052))
 
+    #TODO: add in some mechanism to enfore frame rate limit
+    framerate = 60 #fps
+    time_to_wait = 2.
+    threshold = 5 #pixels
+
     # N element array of historical tippos_pixel_coord
     # first element is oldest, last element is newest
-    N = 50
-    tippos_pixel_coords = np.arange(N)
+    tippos_pixel_coords = np.arange(time_to_wait * framerate * 2).reshape(2, time_to_wait * framerate)
+
     while True:
         data, addr = sock.recvfrom(1024)
         var = struct.unpack("f" * 8, data)
-        tippos_pixel_coord = {"x": var[0], "y": var[1]}
-        tippos_opti_coord = {"x": var[2], "y": var[3], "z": var[4]}
-        endpos_opti_coord = {"x": var[5], "y": var[6], "z": var[7]}
+        tippos_pixel_coord = np.array([var[0], var[1]])
+        tippos_opti_coord = [var[2], var[3], var[4]]
+        tippos_opti_coord = [var[5, var[6], var[7]]]
 
-        # logic for whether last 50 tippos
-        #tippos_pixel_coords = np.roll(tippos_pixel_coords, -1)
-        #tippos_pixel_coord
-        socketio.emit("udp", tippos_pixel_coord)
+        # logic for whether last 50 tippos coords in the same
+        tippos_pixel_coords = np.roll(tippos_pixel_coords, -1, axis = 1)
+        tippos_pixel_coords[:, -1] = tippos_pixel_coord
+
+        # if all the values within tippos_pixel_coords are similar enough
+        if np.all( np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], (time_to_wait * framerate,1)), axis = 1) <= threshold):
+            # it's been in the same place
+            print("no movement")
+
+        
+        tippos_pixel_coord_dict = {"x": var[0], "y": var[1]}
+        tippos_opti_coord_dict = {"x": var[2], "y": var[3], "z": var[4]}
+        endpos_opti_coord_dict = {"x": var[5], "y": var[6], "z": var[7]}
+        socketio.emit("udp", tippos_pixel_coord_dict)
 
 
 if getattr(sys, 'frozen', False):
