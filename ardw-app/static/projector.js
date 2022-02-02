@@ -1,5 +1,13 @@
+// This is the primary file for the projector webpage (the projector view)
+// It calls initialization functions from other files for the page.
+// It also contains some custom functions for the projector page,
+// mainly for handling socket selection events
+
+
+// Set to true so that functions in render.js ignore the resize transform (s/x/y)
 IS_PROJECTOR = true;
 
+/** Projector view transform from server/main page */
 var transform = {
   "tx": 0,
   "ty": 0,
@@ -7,6 +15,7 @@ var transform = {
   "z": 1
 };
 
+/** Sets various ibom settings to false to avoid displaying unwanted things */
 function initSettings() {
   ibom_settings["renderDrawings"] = false;
   ibom_settings["renderEdgeCuts"] = true;
@@ -19,6 +28,7 @@ function initSettings() {
   ibom_settings["renderZones"] = false;
 }
 
+/** Highlights the selected component */
 function projectorSelectComponent(refid) {
   var selected = parseInt(refid);
   if (compdict[selected] == undefined) {
@@ -32,6 +42,7 @@ function projectorSelectComponent(refid) {
   drawHighlights();
 }
 
+/** Highlights the selected pin */
 function projectorSelectPins(pin_hits) {
   // Permitting only single selection, but likely to change
   var selected = pin_hits[0];
@@ -46,6 +57,7 @@ function projectorSelectPins(pin_hits) {
   drawHighlights();
 }
 
+/** Highlights the selected net */
 function projectorSelectNet(netname) {
   if (!(netname in netdict)) {
     logerr(`selected net ${netname} is not in netdict`);
@@ -58,6 +70,7 @@ function projectorSelectNet(netname) {
   drawHighlights();
 }
 
+/** Removes any highlights */
 function projectorDeselectAll() {
   current_selection.type = null;
   current_selection.val = null;
@@ -69,6 +82,7 @@ function projectorDeselectAll() {
   drawHighlights();
 }
 
+/** Initializes all socket listeners for the projector */
 function initSocket() {
   socket = io();
   socket.on("connect", () => {
@@ -115,12 +129,14 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-     udp_selection = ht(data)
+     udp_selection = optitrackPixelToLayoutCoords(data)
      drawHighlights()
   })
 }
 
-function ht(data) {
+/** Converts the optitrack pixel coords to layout pixel coords
+ * by applying the layout canvas transform */
+function optitrackPixelToLayoutCoords(data) {
   var zoom = allcanvas.front.transform.zoom;
   var panx = allcanvas.front.transform.panx;
   var pany = allcanvas.front.transform.pany;
@@ -131,18 +147,15 @@ function ht(data) {
 }
 
 window.onload = () => {
-  let data_urls = ["schdata", "pcbdata"]
+  let data_urls = ["schdata", "pcbdata", "datadicts"]
   data_urls = data_urls.map((name) => ("http://" + window.location.host + "/" + name))
 
   Promise.all(data_urls.map((url) => fetch(url))).then((responses) =>
     Promise.all(responses.map((res) => res.json()))
   ).then((datas) => {
-
-    schdata = datas[0];
-    pcbdata = datas[1];
+    initData(datas);
 
     initUtils();
-    initData();
 
     initLayout();
 
@@ -151,7 +164,6 @@ window.onload = () => {
     initSocket();
 
     resizeAll();
-
   }).catch((e) => console.log(e))
 }
 window.onresize = resizeAll;

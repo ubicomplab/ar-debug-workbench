@@ -1,8 +1,22 @@
-// Element selection and highlighting
+// This file is included on all webpages.
+// It contains functions for selecting schematic sheets and components,
+// including schematic hitscan and the general click handler.
+// This file should generally not be modified.
 
-var SCH_CLICK_BUFFER = 20; // how much of a buffer there is around the bbox of sch components
-var PIN_BBOX_SIZE = 50; // how big the bbox around a pin is
 
+/** Buffer added around the hitbox of schematic components */
+var SCH_CLICK_BUFFER = 20;
+
+/** Bounding box side length of schematic pins (which have a single coordinate) */
+var PIN_BBOX_SIZE = 50;
+
+/**
+ * The socket that communicates with the server
+ * - socket.emit(label, data) sends an event to the server
+ * - socket.on(label, data) receives an event from the server
+ * 
+ * socket.on() calls should be in the primary file of a page (eg. main.js)
+ */
 var socket;
 
 /** current desktop selection, mutually exclusive with tool_selections */
@@ -14,14 +28,19 @@ var current_selection = {
 /** list of {type, val, coords, color}; mutually exclusive with current_selection */
 var tool_selections = [];
 
-var sch_zoom_default; // different for each schematic sheet
+/** Maximum zoom level where entire schematic fits in the available space
+ * Note this differs for each schematic sheet */
+var sch_zoom_default;
 
+/** If true, a crosshair is drawn to show the selection */
 var draw_crosshair = false;
+/** The boxes that the crosshair or zoom-to-find function target */
 var target_boxes = {
   "S": null,
   "F": null,
   "B": null
 };
+
 
 /** Updates the bounding boxes that are used internally to zoom to selected components */
 function updateTargetBoxes() {
@@ -290,34 +309,6 @@ function multiMenu(point, layer, hits) {
   clickmenu.classList.remove("hidden");
 }
 
-/** Converts page offset coords (eg. from event.offsetX) to layout coords*/
-function offsetToLayoutCoords(point, layerdict) {
-  var t = layerdict.transform;
-  if (layerdict.layer == "B") {
-    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx + t.x) / -t.s;
-  } else {
-    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx - t.x) / t.s;
-  }
-  point[1] = (devicePixelRatio * point[1] / t.zoom - t.y - t.pany) / t.s;
-  return rotateVector(point, -ibom_settings.boardRotation);
-}
-
-/** Converts layout coords to page client coords (eg. from event.clientX) */
-function layoutToClientCoords(point, layer) {
-  var layerdict = (layer == "F" ? allcanvas.front : allcanvas.back);
-  var t = layerdict.transform;
-  var v = rotateVector(point, ibom_settings.boardRotation);
-  if (layer == "B") {
-    v[0] = (v[0] * -t.s + t.panx - t.x) * t.zoom / devicePixelRatio;
-  } else {
-    v[0] = (v[0] * t.s + t.panx + t.x) * t.zoom / devicePixelRatio;
-  }
-  v[1] = (v[1] * t.s + t.pany + t.y) * t.zoom / devicePixelRatio;
-  var offset_parent = layerdict.bg.offsetParent;
-  // Last step is converting from offset coords to client coords
-  return [v[0] + offset_parent.offsetLeft, v[1] + offset_parent.offsetTop]
-}
-
 /** \<type\>Clicked() functions should be called whever the client wants to select something
  * The actual selection and display is handled when the server echoes the selection back,
  * using the select\<type\>() functions in render.js */ 
@@ -327,6 +318,7 @@ var clickedType = {
   "net": netClicked,
   "deselect": deselectClicked
 }
+/** See clickedType */
 function componentClicked(refid) {
   refid = parseInt(refid);
   if (compdict[refid] == undefined) {
@@ -335,6 +327,7 @@ function componentClicked(refid) {
   }
   socket.emit("selection", { "type": "comp", "val": refid });
 }
+/** See clickedType */
 function pinClicked(pinidx) {
   if (pindict[pinidx] == undefined) {
     logerr(`clicked pinidx ${pinidx} is not in pindict`);
@@ -342,6 +335,7 @@ function pinClicked(pinidx) {
   }
   socket.emit("selection", { "type": "pin", "val": pinidx });
 }
+/** See clickedType */
 function netClicked(netname) {
   if (!(netname in netdict)) {
     logerr(`clicked net ${netname} is not in netdict`);
@@ -349,6 +343,7 @@ function netClicked(netname) {
   }
   socket.emit("selection", { "type": "net", "val": netname });
 }
+/** See clickedType */
 function deselectClicked() {
   socket.emit("selection", { "type": "deselect", "val": null });
 }

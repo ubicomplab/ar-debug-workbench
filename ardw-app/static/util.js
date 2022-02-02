@@ -1,4 +1,7 @@
-// Settings, utility functions, and some global variables
+// This file is included on all webpages.
+// It contains settings, data, and other general global variables,
+// as well as a handful of utility functions.
+
 
 /** raw schematic json file */
 var schdata;
@@ -161,6 +164,7 @@ function parseValue(val, ref) {
   return null;
 }
 
+/** Initializes some IBOM unit parsing (TODO may be unnecessary now) */
 function initUtils() {
   var allPrefixes = units.prefixes.giga
     .concat(units.prefixes.mega)
@@ -187,141 +191,18 @@ function initUtils() {
 }
 // -------------------- //
 
-// DEPRECATED
-// Populates the PCB data dictionaries
-// Requires populated schdata and pcbdata variables
-function initData() {
-  if (schdata === undefined || pcbdata === undefined) {
-    logerr("Failed to load necessary data");
-    return;
-  }
+/** Populates the appropriate variables with data from the server,
+ * from array corresponding to urls ["schdata", "pcbdata", "datadicts"] */
+function initData(data) {
+  schdata = data[0];
+  pcbdata = data[1];
 
-  ref_to_id = {};
-  var bomdict = {};
-  for (var bomentry of pcbdata.bom.both.slice()) {
-    // Entries may have multiple components
-    for (var ref of bomentry[3]) {
-      ref_to_id[ref[0]] = ref[1];
-      singular = [bomentry[0], bomentry[1], bomentry[2], [ref], bomentry[4], bomentry[5]];
-      bomdict[ref[1]] = singular;
-    }
-  }
-
-  num_schematics = schdata.schematics[0].orderpos.total
-  current_schematic = 1
-
-  // Build compdict of {refid : ref, libcomp, schids = [], units = {unit : schid, bbox = [], pins = []}}
-  schid_to_idx = {};
-  compdict = {};
-  for (var i in schdata.schematics) {
-    var sch = schdata.schematics[i];
-    var schid = parseInt(sch.orderpos.sheet);
-    schid_to_idx[schid] = i; // this is necessary bc schdata schematics may be out of order
-    if (sch.components === undefined) {
-      logwarn(`Schematic ${schid}/${num_schematics} ${sch.name} has no components, skipping`);
-      continue;
-    }
-    for (var comp of sch.components) {
-      var refid = ref_to_id[comp.ref];
-
-      if (refid === undefined) {
-        // We have a component not found in the pcbnew data
-        logwarn(`Component ${comp.ref} found in schematic but not in layout (was ignored)`);
-        continue;
-      }
-
-      var unit = parseInt(comp.unit);
-
-      if (refid in compdict) {
-        if (!(compdict[refid].schids.includes(schid))) {
-          compdict[refid].schids.push(schid);
-        }
-        if (unit in compdict[refid].units) {
-          logwarn(`Component ${comp.ref} has unit ${unit} multiple times, ignoring repeats`)
-          continue;
-        }
-      } else {
-        compdict[refid] = {
-          "ref": comp.ref,
-          "libcomp": comp.libcomp,
-          "schids": [schid],
-          //"bomentry": bomdict[refid],
-          "units": {}
-        };
-      }
-
-      compdict[refid].units[unit] = {
-        "num": unit,
-        "schid": schid,
-        "bbox": comp.bbox,
-        "pins": comp.pins
-      };
-    }
-  }
-
-  // For each pin in each net, assign the appropriate net to the pin in compdict
-  // Also, populate netdict with {name : schids, pins}
-  netdict = {};
-  for (var i in schdata.nets) {
-    var netinfo = schdata.nets[i];
-    var schids = [];
-    for (var netpin of netinfo.pins) {
-      var refid = ref_to_id[netpin.ref];
-      if (compdict[refid] == undefined) {
-        logwarn(`ref ${netpin.ref} with a pin in net ${netinfo.name} wasn't found (was ignored)`);
-        continue;
-      }
-      for (var unitnum in compdict[refid].units) {
-        for (var unitpinidx in compdict[refid].units[unitnum].pins) {
-          // netpin.pin should match unitpin.num, not unitpin.name
-          if (netpin.pin == compdict[refid].units[unitnum].pins[unitpinidx].num) {
-            // Storing the net (as netname) in the pin for future use in pindict
-            compdict[refid].units[unitnum].pins[unitpinidx]["net"] = netinfo.name;
-
-            var schid = compdict[refid].units[unitnum].schid
-            if (!schids.includes(schid)) {
-              schids.push(schid);
-            }
-          }
-        }
-      }
-    }
-    if (schids.length == 0) {
-      logwarn(`net ${netinfo.name} has no valid pins (left out of netlist)`);
-      continue;
-    }
-    netdict[netinfo.name] = {
-      "schids": schids,
-      "pins": []
-    }
-  }
-
-  // All pins get put into one big "dict" with arbitrary pinidx
-  pinref_to_idx = {};
-  pinidx = 0;
-  pindict = [];
-  for (var refid in compdict) {
-    for (var unitnum in compdict[refid].units) {
-      var unit = compdict[refid].units[unitnum];
-      for (var pin of unit.pins) {
-        pin["ref"] = compdict[refid].ref;
-        pin["schid"] = unit.schid;
-        if (pin["net"] == undefined) {
-          pin["net"] = null;
-        } else if (pin["net"] in netdict) {
-          netdict[pin["net"]]["pins"].push(pinidx);
-        }
-        let pin_name = `${pin["ref"]}.${pin["num"]}`;
-        if (pinref_to_idx[pin_name] !== undefined) {
-          logwarn(`pin name ${pin_name} is not unique`);
-        } else {
-          pinref_to_idx[pin_name] = pinidx;
-        }
-        pindict.push(pin);
-        pinidx++;
-      }
-    }
-  }
+  schid_to_idx = data[2]["schid_to_idx"]
+  ref_to_id = data[2]["ref_to_id"]
+  pinref_to_idx = data[2]["pinref_to_idx"]
+  compdict = data[2]["compdict"]
+  netdict = data[2]["netdict"]
+  pindict = data[2]["pindict"]
 }
 
 // Functions to convert between different bbox formats
@@ -377,4 +258,32 @@ function bboxPcbnewToList(bbox) {
 /** {"pos", "relpos", "angle", "size"} => {"minx", "miny", "maxx", "maxy"} */
 function bboxPcbnewToObj(bbox) {
   return bboxListToObj(bboxPcbnewToList(bbox));
+}
+
+
+/** Converts page offset coords (eg. from event.offsetX) to layout coords*/
+function offsetToLayoutCoords(point, layerdict) {
+  var t = layerdict.transform;
+  if (layerdict.layer == "B") {
+    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx + t.x) / -t.s;
+  } else {
+    point[0] = (devicePixelRatio * point[0] / t.zoom - t.panx - t.x) / t.s;
+  }
+  point[1] = (devicePixelRatio * point[1] / t.zoom - t.y - t.pany) / t.s;
+  return rotateVector(point, -ibom_settings.boardRotation);
+}
+/** Converts layout coords to page client coords (eg. from event.clientX) */
+function layoutToClientCoords(point, layer) {
+  var layerdict = (layer == "F" ? allcanvas.front : allcanvas.back);
+  var t = layerdict.transform;
+  var v = rotateVector(point, ibom_settings.boardRotation);
+  if (layer == "B") {
+    v[0] = (v[0] * -t.s + t.panx - t.x) * t.zoom / devicePixelRatio;
+  } else {
+    v[0] = (v[0] * t.s + t.panx + t.x) * t.zoom / devicePixelRatio;
+  }
+  v[1] = (v[1] * t.s + t.pany + t.y) * t.zoom / devicePixelRatio;
+  var offset_parent = layerdict.bg.offsetParent;
+  // Last step is converting from offset coords to client coords
+  return [v[0] + offset_parent.offsetLeft, v[1] + offset_parent.offsetTop]
 }

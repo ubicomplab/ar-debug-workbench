@@ -1,9 +1,10 @@
-// Rendering for schematic (svg) and layout (from pcbdata), including highlights
+// This file is included on all webpages.
+// It contains rendering for schematic (svg) and layout (from pcbdata), including highlights.
 // Layout rendering taken from Interactive HTML BOM /web/ibom.js, /web/render.js, /web/util.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
-// Most of this file should not be modified
+// Most of this file should not be modified.
 // To render additional elements (such as crosshairs or annotations), look for the
-// drawHighlightsOnLayer() and drawSchematicHighlights() functions near the bottom
+// drawHighlightsOnLayer() and drawSchematicHighlights() functions near the bottom.
 
 
 /** If true, layout will be rendered without s/x/y (which make the layout fill/center in its container) */
@@ -23,14 +24,14 @@ var topmostdiv = document.getElementById("topmostdiv");
 /** An empty canvas context for performing calculations */
 var emptyContext2d = document.createElement("canvas").getContext("2d");
 
-/** The render settings used by the layout (some are DEPRECATED) */
+/** The render settings used by the layout (some are deprecated) */
 var ibom_settings = {
-  canvaslayout: "default",
-  bomlayout: "default",
-  bommode: "ungrouped",
-  checkboxes: [],
-  checkboxStoredRefs: {},
-  darkMode: false,
+  // canvaslayout: "default",
+  // bomlayout: "default",
+  // bommode: "ungrouped",
+  // checkboxes: [],
+  // checkboxStoredRefs: {},
+  // darkMode: false,
   highlightpin1: false,
   redrawOnDrag: true,
   boardRotation: 0,
@@ -1060,7 +1061,7 @@ function initSchematic() {
   switchSchematic(1);
 }
 
-/** Initializes the mouse handlers for layout and schematic
+/** Initializes the mouse handlers for layout and schematic.
  * Must be run after initLayout() and initSchematic() */
 function initMouseHandlers() {
   addMouseHandlers(document.getElementById("front-canvas"), allcanvas.front);
