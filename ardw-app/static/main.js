@@ -1561,10 +1561,15 @@ function initSocket() {
     debugSessionEvent(data);
   })
 
+  printcounter = 0
   socket.on("udp", (data) => {
     // console.log(data)
-    console.log(`tip   at ${data["tippos_pixel"].x.toFixed(1)}, ${data["tippos_pixel"].y.toFixed(1)}`)
-//    console.log(`board at ${data["boardpos_pixel"].x.toFixed(1)}, ${data["boardpos_pixel"].y.toFixed(1)}`)
+    if (printcounter % 30 == 0) {
+      console.log(`tip   at ${data["tippos_pixel"].x.toFixed(1)}, ${data["tippos_pixel"].y.toFixed(1)}`)
+      console.log(`board at ${data["boardpos_pixel"].x.toFixed(1)}, ${data["boardpos_pixel"].y.toFixed(1)}`)
+      printcounter = 0;
+    }
+    printcounter++;
   })
 }
 

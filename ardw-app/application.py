@@ -38,7 +38,8 @@ def listen_udp():
     # first element is oldest, last element is newest
     tippos_pixel_coords = np.arange((int)(time_to_wait * framerate) * 2).reshape(2, (int)(time_to_wait * framerate))
 
-    nextframe = time.time() + 1. / framerate
+    #nextframe = time.time() + 1. / framerate
+    printcounter = 0
     while True:
         data, addr = sock.recvfrom(1024)
         var = struct.unpack("f" * 10, data)
@@ -57,23 +58,26 @@ def listen_udp():
             #process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
             pass
 
-        tippos_pixel_coord_dict = {"x": var[0], "y": var[1]}
-        tippos_opti_coord_dict = {"x": var[2], "y": var[3], "z": var[4]}
-        endpos_opti_coord_dict = {"x": var[5], "y": var[6], "z": var[7]}
-        boardpos_pixel_coord_dict = {"x": var[8], "y": var[9]}
+        # if printcounter % 30 == 0:
+        #     print(var[0], var[1])
+        #     printcounter = 0
+        # printcounter += 1
+
         socketio.emit("udp", {
-            "tippos_pixel": tippos_pixel_coord_dict,
-            #"tippos_opti": tippos_opti_coord_dict,
-            #"endpos_opti": endpos_opti_coord_dict,
-            #"boardpos_pixel": boardpos_pixel_coord_dict
+            "tippos_pixel": {"x": var[0], "y": var[1]},
+            #"tippos_opti": {"x": var[2], "y": var[3], "z": var[4]},
+            #"endpos_opti": {"x": var[5], "y": var[6], "z": var[7]},
+            "boardpos_pixel": {"x": var[8], "y": var[9]}
         })
 
-        diff = nextframe - time.time()
-        if diff > 0:
-            time.sleep(diff)
+        #diff = nextframe - time.time()
+        #if diff > 0:
+            #time.sleep(diff)
+        #    pass
         #else:
             #logging.warning(f"low framerate: {-diff}ms behind")
-        nextframe += 1. / framerate
+        #    pass
+        #nextframe += 1. / framerate
 
 
 if getattr(sys, 'frozen', False):

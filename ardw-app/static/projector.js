@@ -129,12 +129,14 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-//    optitrackBoardposUpdate(data["boardpos_pixel"])
+//    udpboardpos = data["boardpos_pixel"]
+    optitrackBoardposUpdate(data["boardpos_pixel"])
     udp_selection = optitrackPixelToLayoutCoords(data["tippos_pixel"])
     drawHighlights()
   })
   socket.on("toggleboardpos", (val) => {
     trackboard = val;
+    optitrackBoardposUpdate(udpboardpos)
   })
 }
 
@@ -148,17 +150,23 @@ function optitrackPixelToLayoutCoords(point) {
   }
 }
 
-trackboard = false;
+trackboard = true;
+udpboardpos = {}
 
 /** Updates the board position to match the given boardpos */
 function optitrackBoardposUpdate(boardpos) {
-  var x = boardpos.x + 0;
-  var y = boardpos.y + 0;
+  var t = allcanvas.front.transform;
+  var x = (boardpos.x - 600) / t.zoom;
+  var y = -(boardpos.y + 445) / t.zoom;
   if (trackboard) {
     socket.emit("projector-adjust", {"type": "tx", "val": x});
     socket.emit("projector-adjust", {"type": "ty", "val": y});
   }
 }
+
+// board 599 -443 at 0,0,400%
+// board 998 -444 at 100,0,400%
+// board 1393, -440 at 200, 0, 400%
 
 
 window.onload = () => {
