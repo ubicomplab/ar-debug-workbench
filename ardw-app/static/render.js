@@ -1099,7 +1099,7 @@ function initMouseHandlers() {
   }
 
   if (udp_selection !== null) {
-    circleAtPoint(canvasdict, udp_selection, "red", 10)
+    circleAtPoint(canvasdict, udp_selection, "red", 3)
     // circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
   }
 
@@ -1209,6 +1209,23 @@ function drawCrosshair(layerdict) {
 var r = 30;
 var t = 15;
 var l = 2;
+
+function circleAtPoint(layerdict, coords, color, radius) {
+  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
+  s = 1 / layerdict.transform.zoom;
+
+  var canvas = layerdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = l * s;
+  ctx.beginPath();
+  ctx.arc(coords.x, coords.y, radius * s, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+}
 
 function toolIconAtPoint(layerdict, coords, color) {
   var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
