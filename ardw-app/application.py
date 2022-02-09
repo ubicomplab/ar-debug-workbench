@@ -12,6 +12,8 @@ import sys
 import struct
 import socket
 import threading
+import time
+
 import numpy as np
 
 from example_tool import ExampleTool
@@ -36,9 +38,10 @@ def listen_udp():
     # first element is oldest, last element is newest
     tippos_pixel_coords = np.arange((int)(time_to_wait * framerate) * 2).reshape(2, (int)(time_to_wait * framerate))
 
+    nextframe = time.time() + 1. / framerate
     while True:
         data, addr = sock.recvfrom(1024)
-        var = struct.unpack("f" * 11, data)
+        var = struct.unpack("f" * 10, data)
         tippos_pixel_coord = np.array([var[0], var[1]])
         tippos_opti_coord = [var[2], var[3], var[4]]
         tippos_opti_coord = [var[5], var[6], var[7]]
@@ -56,13 +59,20 @@ def listen_udp():
         tippos_pixel_coord_dict = {"x": var[0], "y": var[1]}
         tippos_opti_coord_dict = {"x": var[2], "y": var[3], "z": var[4]}
         endpos_opti_coord_dict = {"x": var[5], "y": var[6], "z": var[7]}
-        boardpos_pixel_coord_dict = {"x": var[8], "y": var[9], "z": var[10]}
+        boardpos_pixel_coord_dict = {"x": var[8], "y": var[9]}
         socketio.emit("udp", {
             "tippos_pixel": tippos_pixel_coord_dict,
             #"tippos_opti": tippos_opti_coord_dict,
             #"endpos_opti": endpos_opti_coord_dict,
             "boardpos_pixel": boardpos_pixel_coord_dict
         })
+
+        now = time.time()
+        if now < nextframe:
+            time.sleep(nextframe - now)
+        else:
+            logging.warning("low framerate")
+        nextframe += 1. / framerate
 
 
 if getattr(sys, 'frozen', False):
@@ -379,6 +389,10 @@ def handle_tool_debug(data):
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
+
+@socketio.on("toggleboardpos")
+def handle_toggle(data):
+    socketio.emit("toggleboardpos", data)
 
 
 @socketio.on("python hitscan")

@@ -133,6 +133,9 @@ function initSocket() {
     udp_selection = optitrackPixelToLayoutCoords(data["tippos_pixel"])
     drawHighlights()
   })
+  socket.on("toggleboardpos", (val) => {
+    trackboard = val;
+  })
 }
 
 /** Converts the optitrack pixel coords to layout pixel coords
@@ -145,12 +148,16 @@ function optitrackPixelToLayoutCoords(point) {
   }
 }
 
+trackboard = false;
+
 /** Updates the board position to match the given boardpos */
 function optitrackBoardposUpdate(boardpos) {
   var x = boardpos.x + 0;
   var y = boardpos.y + 0;
-  socket.emit("projector-adjust", {"type": "tx", "val": x});
-  socket.emit("projector-adjust", {"type": "ty", "val": y})
+  if (trackboard) {
+    socket.emit("projector-adjust", {"type": "tx", "val": x});
+    socket.emit("projector-adjust", {"type": "ty", "val": y});
+  }
 }
 
 
