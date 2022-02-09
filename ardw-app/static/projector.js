@@ -129,7 +129,7 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-    optitrackBoardposUpdate(data["boardpos_pixel"])
+//    optitrackBoardposUpdate(data["boardpos_pixel"])
     udp_selection = optitrackPixelToLayoutCoords(data["tippos_pixel"])
     drawHighlights()
   })

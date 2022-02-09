@@ -1102,6 +1102,10 @@ function initMouseHandlers() {
     circleAtPoint(canvasdict, udp_selection, "red", 10)
     // circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
   }
+
+  if (IS_PROJECTOR) {
+    drawFPS(allcanvas.front);
+  }
 }
 
 /**

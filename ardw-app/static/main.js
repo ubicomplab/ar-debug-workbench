@@ -1563,7 +1563,8 @@ function initSocket() {
 
   socket.on("udp", (data) => {
     // console.log(data)
-    console.log(`board at ${data["boardpos_pixel"].x.toFixed(1)}, ${data["boardpos_pixel"].y.toFixed(1)}`)
+    console.log(`tip   at ${data["tippos_pixel"].x.toFixed(1)}, ${data["tippos_pixel"].y.toFixed(1)}`)
+//    console.log(`board at ${data["boardpos_pixel"].x.toFixed(1)}, ${data["boardpos_pixel"].y.toFixed(1)}`)
   })
 }
 

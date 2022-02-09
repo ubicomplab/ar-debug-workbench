@@ -51,10 +51,11 @@ def listen_udp():
         tippos_pixel_coords[:, -1] = tippos_pixel_coord
 
         # if all the values within tippos_pixel_coords are similar enough
-        if np.all( np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], ((int)(time_to_wait * framerate),1)), axis = 1) <= threshold):
+        if np.all(np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], ((int)(time_to_wait * framerate),1)), axis = 1) <= threshold):
             # it's been in the same place
-            logging.info("no movement")
-            process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
+            #logging.info("no movement")
+            #process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
+            pass
 
         tippos_pixel_coord_dict = {"x": var[0], "y": var[1]}
         tippos_opti_coord_dict = {"x": var[2], "y": var[3], "z": var[4]}
@@ -64,14 +65,14 @@ def listen_udp():
             "tippos_pixel": tippos_pixel_coord_dict,
             #"tippos_opti": tippos_opti_coord_dict,
             #"endpos_opti": endpos_opti_coord_dict,
-            "boardpos_pixel": boardpos_pixel_coord_dict
+            #"boardpos_pixel": boardpos_pixel_coord_dict
         })
 
-        now = time.time()
-        if now < nextframe:
-            time.sleep(nextframe - now)
-        else:
-            logging.warning("low framerate")
+        diff = nextframe - time.time()
+        if diff > 0:
+            time.sleep(diff)
+        #else:
+            #logging.warning(f"low framerate: {-diff}ms behind")
         nextframe += 1. / framerate
 
 
@@ -544,7 +545,7 @@ def make_selection(new_selection):
 if __name__ == "__main__":
     logging.basicConfig(
         filename="ardw.log",
-        # filemode="w",
+        filemode="w",
         # encoding="utf-8",
         level="DEBUG",
         format="%(asctime)s - %(levelname)s - %(message)s"
