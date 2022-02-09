@@ -498,7 +498,7 @@ def process_selection(data):
         # a point/click
         hits = hitscan(data["point"][0], data["point"][1], pcbdata,
                        pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
-        if len(hits) == 1 or "optitrack" in data:
+        if len(hits) == 1 or ("optitrack" in data and len(hits) >= 1):
             # single selection
             make_selection(hits[0])
         elif len(hits) > 1:
