@@ -129,22 +129,30 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-     udp_selection = optitrackPixelToLayoutCoords(data)
-     drawHighlights()
+    optitrackBoardposUpdate(data["boardpos_pixel"])
+    udp_selection = optitrackPixelToLayoutCoords(data["tippos_pixel"])
+    drawHighlights()
   })
 }
 
 /** Converts the optitrack pixel coords to layout pixel coords
  * by applying the layout canvas transform */
-function optitrackPixelToLayoutCoords(data) {
-  var zoom = allcanvas.front.transform.zoom;
-  var panx = allcanvas.front.transform.panx;
-  var pany = allcanvas.front.transform.pany;
+function optitrackPixelToLayoutCoords(point) {
+  var t = allcanvas.front.transform;
   return {
-    "x": (data.x) / zoom - panx,
-    "y": (-data.y) / zoom - pany
+    "x": (point.x) / t.zoom - t.panx,
+    "y": (-point.y) / t.zoom - t.pany
   }
 }
+
+/** Updates the board position to match the given boardpos */
+function optitrackBoardposUpdate(boardpos) {
+  var x = boardpos.x + 0;
+  var y = boardpos.y + 0;
+  socket.emit("projector-adjust", {"type": "tx", "val": x});
+  socket.emit("projector-adjust", {"type": "ty", "val": y})
+}
+
 
 window.onload = () => {
   let data_urls = ["schdata", "pcbdata", "datadicts"]

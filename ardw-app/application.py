@@ -38,7 +38,7 @@ def listen_udp():
 
     while True:
         data, addr = sock.recvfrom(1024)
-        var = struct.unpack("f" * 8, data)
+        var = struct.unpack("f" * 11, data)
         tippos_pixel_coord = np.array([var[0], var[1]])
         tippos_opti_coord = [var[2], var[3], var[4]]
         tippos_opti_coord = [var[5], var[6], var[7]]
@@ -50,14 +50,19 @@ def listen_udp():
         # if all the values within tippos_pixel_coords are similar enough
         if np.all( np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], ((int)(time_to_wait * framerate),1)), axis = 1) <= threshold):
             # it's been in the same place
-            print("no movement")
+            logging.info("no movement")
             process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
 
-        
         tippos_pixel_coord_dict = {"x": var[0], "y": var[1]}
         tippos_opti_coord_dict = {"x": var[2], "y": var[3], "z": var[4]}
         endpos_opti_coord_dict = {"x": var[5], "y": var[6], "z": var[7]}
-        socketio.emit("udp", tippos_pixel_coord_dict)
+        boardpos_pixel_coord_dict = {"x": var[8], "y": var[9], "z": var[10]}
+        socketio.emit("udp", {
+            "tippos_pixel": tippos_pixel_coord_dict,
+            #"tippos_opti": tippos_opti_coord_dict,
+            #"endpos_opti": endpos_opti_coord_dict,
+            "boardpos_pixel": boardpos_pixel_coord_dict
+        })
 
 
 if getattr(sys, 'frozen', False):
