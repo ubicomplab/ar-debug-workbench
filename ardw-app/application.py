@@ -29,7 +29,7 @@ def listen_udp():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", 8052))
 
-    #TODO: add in some mechanism to enfore frame rate limit
+    #TODO: add in some mechanism to enforce frame rate limit
     framerate = 60 #fps
     time_to_wait = 2.
     threshold = 5 #pixels
@@ -38,7 +38,7 @@ def listen_udp():
     # first element is oldest, last element is newest
     tippos_pixel_coords = np.arange((int)(time_to_wait * framerate) * 2).reshape(2, (int)(time_to_wait * framerate))
 
-    #nextframe = time.time() + 1. / framerate
+    nextframe = time.time() + 1. / framerate
     printcounter = 0
     while True:
         data, addr = sock.recvfrom(1024)
@@ -54,8 +54,8 @@ def listen_udp():
         # if all the values within tippos_pixel_coords are similar enough
         if np.all(np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], ((int)(time_to_wait * framerate),1)), axis = 1) <= threshold):
             # it's been in the same place
-            #logging.info("no movement")
-            #process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
+            logging.info("no movement")
+            process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
             pass
 
         # if printcounter % 30 == 0:
@@ -70,14 +70,14 @@ def listen_udp():
             "boardpos_pixel": {"x": var[8], "y": var[9]}
         })
 
-        #diff = nextframe - time.time()
-        #if diff > 0:
-            #time.sleep(diff)
-        #    pass
-        #else:
-            #logging.warning(f"low framerate: {-diff}ms behind")
-        #    pass
-        #nextframe += 1. / framerate
+        diff = nextframe - time.time()
+        if diff > 0:
+            time.sleep(diff)
+            pass
+        else:
+            logging.warning(f"low framerate: {-diff}ms behind")
+            pass
+        nextframe += 1. / framerate
 
 
 if getattr(sys, 'frozen', False):
