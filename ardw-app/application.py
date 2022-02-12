@@ -32,7 +32,7 @@ def optitrack_to_layout_coords(point):
 # TODO derive history_len from history.shape
 def history_within_threshold(history, threshold):
     history_len = np.shape(history)[1]
-    return np.all(np.linalg.norm(np.transpose(history) - np.tile(history[:,0], history_len, 1), axis=1) <= threshold)
+    return np.all(np.linalg.norm(np.transpose(history) - np.tile(history[:,0], (history_len, 1)), axis=1) <= threshold)
 
 
 def pt_dist(pt1, pt2):
@@ -51,13 +51,15 @@ def listen_udp():
     framerate = 30 #fps
     time_to_wait = 2.
 
-    # maximum pixel difference within time_to_wait for the probe to be considered stationary
+    # maximum pixel difference within time_to_wait for the probe tip or end to be considered stationary
     # TODO low pass filter
-    threshold_stationary = 5 #pixels
+    threshold_stationary = 5
 
-    # minimum pixel difference from baseline for the probe endpos to be considered as repositioned
-    threshold_multi_inside = 20 #pixels
-    threshold_multi_outside = 20 #pixels
+    # maximum pixel difference for probe tip to be considered within disambiguation menu
+    threshold_multi_tippos = 20
+
+    # minimum pixel difference for the probe end to be making a selection in the disambiguation menu
+    threshold_multi_endpos = 20 #pixels
 
     history_len = int(framerate * time_to_wait)
 
@@ -68,16 +70,14 @@ def listen_udp():
     endpos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
 
     nextframe = time.time() + 1. / framerate
-    printcounter = 0
     while True:
         data, addr = sock.recvfrom(1024)
         var = struct.unpack("f" * 6, data)
         tippos_pixel_coord = np.array([var[0], var[1]])
-        endpos_pixel_coord = [var[2], var[3]]
+        endpos_pixel_coord = np.array([var[2], var[3]])
         board_pixel_coord = [var[4], var[5]]
 
-        # logic for whether last 50 tippos coords in the same
-        tippos_pixel_history = np.roll(tippos_pixel_history, -1, axis = 1)
+        tippos_pixel_history = np.roll(tippos_pixel_history, -1, axis=1)
         tippos_pixel_history[:, -1] = tippos_pixel_coord
 
         endpos_pixel_history = np.roll(endpos_pixel_history, -1, axis=1)
@@ -93,42 +93,42 @@ def listen_udp():
                 process_selection({"point": tippos_layout_coord, "optitrack": True, "layer": "F", "pads": True, "tracks": False},
                                   raw_data={"tip": tippos_pixel_coord, "end": endpos_pixel_coord},
                                   from_optitrack=True)
-            else:
-                # we have an active multimenu
-                if pt_dist(tippos_pixel_coord, multimenu_baseline["tip"]) > threshold_multi_outside:
-                    # we've moved our tip too far, cancel multimenu
-                    multimenu_active = False
-                    multimenu_options = []
-                    multimenu_baseline = None
-                else:
-                    # our tip is still roughly in the same place
-                    if history_within_threshold(endpos_pixel_history, threshold_stationary):
-                        # endpos has been stable
-                        enddiff_x = multimenu_baseline["end"][0] - endpos_pixel_coord[0]
-                        enddiff_y = multimenu_baseline["end"][1] - endpos_pixel_coord[1]
-
-                        pass
-                    pass
-
-        # if printcounter % 30 == 0:
-        #     print(var[0], var[1])
-        #     printcounter = 0
-        # printcounter += 1
+            elif pt_dist(tippos_pixel_coord, multimenu_baseline["tip"]) > threshold_multi_tippos:
+                # we have an active multimenu but we've moved our tip too far, so deselect and cancel multimenu
+                logging.info("closing multimenu because tip moved")
+                process_selection({"type": "deselect", "val": None})
+            elif history_within_threshold(endpos_pixel_history, threshold_stationary):
+                # our tip is still roughly in the same place and our end has been stable
+                enddiff = multimenu_baseline["end"] - endpos_pixel_coord
+                if np.linalg.norm(enddiff) > threshold_multi_endpos:
+                    logging.info(f"making multimenu selection with diff {enddiff[0]}, {enddiff[1]}")
+                    if np.abs(enddiff)[0] >= np.abs(enddiff)[1]:
+                        # x change is greater
+                        if enddiff[0] < 0:
+                            process_selection(multimenu_options[0])
+                            logging.info("making multimenu selection 0")
+                        else:
+                            process_selection(multimenu_options[2])
+                            logging.info("making multimenu selection 2")
+                    else:
+                        # y change is greater
+                        if enddiff[1] < 0:
+                            process_selection(multimenu_options[1])
+                            logging.info("making multimenu selection 1")
+                        else:
+                            process_selection(multimenu_options[3])
+                            logging.info("making multimenu selection 3")
 
         socketio.emit("udp", {
             "tippos_layout": {"x": tippos_layout_coord[0], "y": tippos_layout_coord[1]},
-            #"tippos_opti": {"x": var[2], "y": var[3], "z": var[4]},
-            #"endpos_opti": {"x": var[5], "y": var[6], "z": var[7]},
             "boardpos_pixel": {"x": board_pixel_coord[0], "y": board_pixel_coord[1]}
         })
 
         diff = nextframe - time.time()
         if diff > 0:
             time.sleep(diff)
-            pass
         else:
-            logging.warning(f"low framerate: {-diff}ms behind")
-            pass
+            logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
         nextframe += 1. / framerate
 
 
@@ -311,21 +311,8 @@ def handle_disconnect():
     active_connections -= 1
     logging.info(f"Client disconnected ({active_connections} active)")
 
-"""
 @socketio.on("selection")
-def handle_selection(new_selection):
-    global selection
-    logging.info(f"Received selection update {new_selection}")
-    selection["comp"] = None
-    selection["pin"] = None
-    selection["net"] = None
-    if (new_selection["type"] != "deselect"):
-        selection[new_selection["type"]] = new_selection["val"]
-    socketio.emit("selection", new_selection)
-"""
-
-@socketio.on("selection")
-def handle_wip_selection(data):
+def handle_selection(data):
     logging.info(f"Socket received selection {data}")
     process_selection(data)
 
@@ -568,26 +555,42 @@ def init_data(pcbdata, schdata):
 
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
+
+# timestamp of last selection
+last_selection = 0
+
+# buffer between permitted selection events in s
+SELECTION_BUFFER = 0.2
+
 # handles a selection event, which can come from the client or from optitrack
 def process_selection(data, raw_data=None, from_optitrack=False):
-    global socketio, multimenu_active, multimenu_options, multimenu_baseline
+    global socketio, multimenu_active, multimenu_options, multimenu_baseline, last_selection
+
+    now = time.time()
+    if now - last_selection < SELECTION_BUFFER:
+        # we processed a selection within the last <buffer> s, ignore this one
+        #logging.info(f"repeat selection, ignoring ({now} vs {last_selection})")
+        return
+
+    #logging.info("non-repeat selection")
+    # it's been long enough since the last selection, so proceed
+    last_selection = now
 
     if "point" in data:
         # a point/click
         hits = hitscan(data["point"][0], data["point"][1], pcbdata,
                        pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
-        if from_optitrack:
-            printname = "probe"
-        else:
-            printname = "app"
-        logging.info(f"{printname} selection at point ({data['point'][0]},{data['point'][1]}) with {len(hits)} hits")
+
+        logging.info(f"{'probe' if from_optitrack else 'app'} selection at point ({data['point'][0]},{data['point'][1]}) with {len(hits)} hits")
         if len(hits) == 1:
             # single selection
             make_selection(hits[0])
         elif len(hits) > 1:
-            # multi selection for client to disambiguate
+            # multi selection for client to disambiguate (max of 4)
             multimenu_active = True
-            multimenu_options = hits
+            if len(hits) < 4:
+                hits += [{"type": "deselect", "val": None}] * (4 - len(hits))
+            multimenu_options = hits[:4]
             multimenu_baseline = raw_data
             socketio.emit(
                 "selection", {"type": "multi", "point": data["point"], "layer": data["layer"], "hits": hits, "from_optitrack": from_optitrack})
@@ -598,6 +601,7 @@ def process_selection(data, raw_data=None, from_optitrack=False):
         # choice made from schematic or disambiguation menu, simply echo back to all clients
         multimenu_active = False
         multimenu_options = []
+        multimenu_baseline = None
         make_selection(data)
 
 def make_selection(new_selection):

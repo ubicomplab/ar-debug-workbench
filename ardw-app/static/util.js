@@ -59,6 +59,8 @@ function getElementName(element) {
       return `Pin ${pindict[element.val].ref}.${pindict[element.val].num}`;
     case "net":
       return `Net ${element.val}`;
+    case "deselect":
+      return "Cancel"
   }
 }
 
