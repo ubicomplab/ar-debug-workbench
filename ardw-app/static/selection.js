@@ -618,12 +618,14 @@ function handleMouseClick(layerdict, e = null) {
       multiMenu([e.clientX, e.clientY], layerdict.layer, hits)
     } else {
       // Clicked on nothing
-      document.getElementById("sch-multi-click").classList.add("hidden");
-      document.getElementById("search-content").classList.add("hidden");
+//      document.getElementById("sch-multi-click").classList.add("hidden");
+//      document.getElementById("search-content").classList.add("hidden");
       deselectClicked();
     }
   } else {
     // Click in layout, send to server instead of processing here
+    var coords = offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict)
+    console.log(`layout click at (${coords[0]},${coords[1]}`)
     socket.emit("selection", {
       source: "point",
       point: offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict),

@@ -50,6 +50,11 @@ var ibom_settings = {
 /** {type, val, coords, color} */
 var udp_selection = null;
 
+/** if not null, display multimenu
+ *  {hits: [], layer: str} */
+var multimenu_active = null;
+
+
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
 function deg2rad(deg) {
   return deg * Math.PI / 180;
@@ -1099,12 +1104,15 @@ function initMouseHandlers() {
   }
 
   if (udp_selection !== null) {
-    circleAtPoint(canvasdict, udp_selection, "red", 3)
+    circleAtPoint(canvasdict, udp_selection, "purple", 6)
     // circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
   }
 
   if (IS_PROJECTOR) {
     drawFPS(allcanvas.front);
+  }
+  if (multimenu_active !== null && canvasdict.layer == multimenu_active.layer) {
+    drawMultiMenu(canvasdict, multimenu_active.hits)
   }
 }
 
@@ -1288,6 +1296,7 @@ refreshLoop();
 function drawFPS(layerdict) {
   var canvas = layerdict.highlight;
   var ctx = canvas.getContext("2d");
+  ctx.font = "10px sans-serif";
   ctx.fillStyle = "black";
   ctx.beginPath();
   ctx.rect(20, 10, 40, 16);
@@ -1303,4 +1312,30 @@ var fps_interval = window.setInterval(() => {
     // console.log(fps);
   }
 }, 500)
+
+function drawMultiMenu(canvasdict, hits) {
+  if (hits.length > 4) {
+    console.log("Error: too many hits")
+    return;
+  }
+  var canvas = canvasdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  var flip = canvasdict.layer === "B" ? -1 : 1;
+
+  var centerpoint = [250, 100]
+  var offset_len = 25
+  var offset_deltas = [[-offset_len, 0], [0, -offset_len], [offset_len, 0], [0, offset_len]]
+
+  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.font = "5px sans-serif";
+
+  for (let i in hits) {
+    let hit = hits[i];
+    let text = getElementName(hit);
+    ctx.fillText(getElementName(hit), centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1])
+  }
+}
 

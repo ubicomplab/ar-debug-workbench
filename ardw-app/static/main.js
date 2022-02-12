@@ -1495,6 +1495,8 @@ function initSocket() {
     console.log("connected")
   });
   socket.on("selection", (data) => {
+    document.getElementById("sch-multi-click").classList.add("hidden");
+    document.getElementById("search-content").classList.add("hidden");
     switch (data.type) {
       case "comp":
         selectComponent(data.val);
@@ -1563,6 +1565,7 @@ function initSocket() {
 
   printcounter = 0
   socket.on("udp", (data) => {
+    return;
     // console.log(data)
     if (printcounter % 30 == 0) {
       console.log(`tip   at ${data["tippos_pixel"].x.toFixed(1)}, ${data["tippos_pixel"].y.toFixed(1)}`)

@@ -89,6 +89,7 @@ function initSocket() {
     console.log("connected")
   });
   socket.on("selection", (selection) => {
+    multimenu_active = null;
     switch (selection.type) {
       case "comp":
         projectorSelectComponent(selection.val);
@@ -101,6 +102,11 @@ function initSocket() {
         break;
       case "deselect":
         projectorDeselectAll();
+        break;
+      case "multi":
+        if (selection.from_optitrack) {
+          multimenu_active = {"hits": selection.hits, "layer": selection.layer}
+        }
         break;
     }
   });
@@ -129,9 +135,8 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-//    udpboardpos = data["boardpos_pixel"]
     optitrackBoardposUpdate(data["boardpos_pixel"])
-    udp_selection = optitrackPixelToLayoutCoords(data["tippos_pixel"])
+    udp_selection = data["tippos_layout"]
     drawHighlights()
   })
   socket.on("toggleboardpos", (val) => {
@@ -140,19 +145,10 @@ function initSocket() {
   })
 }
 
-/** Converts the optitrack pixel coords to layout pixel coords
- * by applying the layout canvas transform */
-function optitrackPixelToLayoutCoords(point) {
-  var t = allcanvas.front.transform;
-  return {
-    "x": (point.x) / t.zoom - t.panx,
-    "y": (-point.y) / t.zoom - t.pany
-  }
-}
-
-trackboard = true;
+trackboard = false;
 udpboardpos = {}
 
+// TODO uses magic numbers, instead use layout coords from server
 /** Updates the board position to match the given boardpos */
 function optitrackBoardposUpdate(boardpos) {
   var t = allcanvas.front.transform;

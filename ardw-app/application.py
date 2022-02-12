@@ -22,41 +22,93 @@ from tools import DebugCard, DebugSession
 from boardgeometry.hitscan import hitscan
 
 
+def optitrack_to_layout_coords(point):
+    global projector_calibration
+    return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
+            -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
+
+
+# returns true iff all the points in history are within threshold of each other
+# TODO derive history_len from history.shape
+def history_within_threshold(history, threshold):
+    history_len = np.shape(history)[1]
+    return np.all(np.linalg.norm(np.transpose(history) - np.tile(history[:,0], history_len, 1), axis=1) <= threshold)
+
+
+def pt_dist(pt1, pt2):
+    xdiff = pt1[0] - pt2[0]
+    ydiff = pt1[1] - pt2[1]
+    return np.sqrt(xdiff * xdiff + ydiff * ydiff)
+
+
 def listen_udp():
-    global socketio
+    global socketio, multimenu_active, multimenu_options, multimenu_baseline
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", 8052))
 
-    #TODO: add in some mechanism to enforce frame rate limit
-    framerate = 60 #fps
+    framerate = 30 #fps
     time_to_wait = 2.
-    threshold = 5 #pixels
+
+    # maximum pixel difference within time_to_wait for the probe to be considered stationary
+    # TODO low pass filter
+    threshold_stationary = 5 #pixels
+
+    # minimum pixel difference from baseline for the probe endpos to be considered as repositioned
+    threshold_multi_inside = 20 #pixels
+    threshold_multi_outside = 20 #pixels
+
+    history_len = int(framerate * time_to_wait)
 
     # N element array of historical tippos_pixel_coord
     # first element is oldest, last element is newest
-    tippos_pixel_coords = np.arange((int)(time_to_wait * framerate) * 2).reshape(2, (int)(time_to_wait * framerate))
+    tippos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
+
+    endpos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
 
     nextframe = time.time() + 1. / framerate
     printcounter = 0
     while True:
         data, addr = sock.recvfrom(1024)
-        var = struct.unpack("f" * 10, data)
+        var = struct.unpack("f" * 6, data)
         tippos_pixel_coord = np.array([var[0], var[1]])
-        tippos_opti_coord = [var[2], var[3], var[4]]
-        tippos_opti_coord = [var[5], var[6], var[7]]
+        endpos_pixel_coord = [var[2], var[3]]
+        board_pixel_coord = [var[4], var[5]]
 
         # logic for whether last 50 tippos coords in the same
-        tippos_pixel_coords = np.roll(tippos_pixel_coords, -1, axis = 1)
-        tippos_pixel_coords[:, -1] = tippos_pixel_coord
+        tippos_pixel_history = np.roll(tippos_pixel_history, -1, axis = 1)
+        tippos_pixel_history[:, -1] = tippos_pixel_coord
 
-        # if all the values within tippos_pixel_coords are similar enough
-        if np.all(np.linalg.norm(np.transpose(tippos_pixel_coords) - np.tile(tippos_pixel_coords[:,0], ((int)(time_to_wait * framerate),1)), axis = 1) <= threshold):
+        endpos_pixel_history = np.roll(endpos_pixel_history, -1, axis=1)
+        endpos_pixel_history[:, -1] = endpos_pixel_coord
+
+        tippos_layout_coord = optitrack_to_layout_coords(tippos_pixel_coord)
+
+        # if all the values within tippos_pixel_history are similar enough
+        if history_within_threshold(tippos_pixel_history, threshold_stationary):
             # it's been in the same place
-            logging.info("no movement")
-            process_selection({"point": list(tippos_pixel_coord), "optitrack": True, "layer": "F", "pads": False, "tracks": False})
-            pass
+            if not multimenu_active:
+                # no multimenu currently active, so we just select
+                process_selection({"point": tippos_layout_coord, "optitrack": True, "layer": "F", "pads": True, "tracks": False},
+                                  raw_data={"tip": tippos_pixel_coord, "end": endpos_pixel_coord},
+                                  from_optitrack=True)
+            else:
+                # we have an active multimenu
+                if pt_dist(tippos_pixel_coord, multimenu_baseline["tip"]) > threshold_multi_outside:
+                    # we've moved our tip too far, cancel multimenu
+                    multimenu_active = False
+                    multimenu_options = []
+                    multimenu_baseline = None
+                else:
+                    # our tip is still roughly in the same place
+                    if history_within_threshold(endpos_pixel_history, threshold_stationary):
+                        # endpos has been stable
+                        enddiff_x = multimenu_baseline["end"][0] - endpos_pixel_coord[0]
+                        enddiff_y = multimenu_baseline["end"][1] - endpos_pixel_coord[1]
+
+                        pass
+                    pass
 
         # if printcounter % 30 == 0:
         #     print(var[0], var[1])
@@ -64,10 +116,10 @@ def listen_udp():
         # printcounter += 1
 
         socketio.emit("udp", {
-            "tippos_pixel": {"x": var[0], "y": var[1]},
+            "tippos_layout": {"x": tippos_layout_coord[0], "y": tippos_layout_coord[1]},
             #"tippos_opti": {"x": var[2], "y": var[3], "z": var[4]},
             #"endpos_opti": {"x": var[5], "y": var[6], "z": var[7]},
-            "boardpos_pixel": {"x": var[8], "y": var[9]}
+            "boardpos_pixel": {"x": board_pixel_coord[0], "y": board_pixel_coord[1]}
         })
 
         diff = nextframe - time.time()
@@ -517,22 +569,35 @@ def init_data(pcbdata, schdata):
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
 # handles a selection event, which can come from the client or from optitrack
-def process_selection(data):
+def process_selection(data, raw_data=None, from_optitrack=False):
+    global socketio, multimenu_active, multimenu_options, multimenu_baseline
+
     if "point" in data:
         # a point/click
         hits = hitscan(data["point"][0], data["point"][1], pcbdata,
                        pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
-        if len(hits) == 1 or ("optitrack" in data and len(hits) >= 1):
+        if from_optitrack:
+            printname = "probe"
+        else:
+            printname = "app"
+        logging.info(f"{printname} selection at point ({data['point'][0]},{data['point'][1]}) with {len(hits)} hits")
+        if len(hits) == 1:
             # single selection
             make_selection(hits[0])
         elif len(hits) > 1:
             # multi selection for client to disambiguate
+            multimenu_active = True
+            multimenu_options = hits
+            multimenu_baseline = raw_data
             socketio.emit(
-                "selection", {"type": "multi", "point": data["point"], "layer": data["layer"], "hits": hits})
-        else:
+                "selection", {"type": "multi", "point": data["point"], "layer": data["layer"], "hits": hits, "from_optitrack": from_optitrack})
+        elif not from_optitrack:
+            # only allow deselection from app, not from probe
             make_selection({"type": "deselect", "val": None})
     else:
         # choice made from schematic or disambiguation menu, simply echo back to all clients
+        multimenu_active = False
+        multimenu_options = []
         make_selection(data)
 
 def make_selection(new_selection):
@@ -633,6 +698,11 @@ if __name__ == "__main__":
     # if True, measurements are added to the current session and the next custom card is highlighted
     # if False, measurements are ignored and custom cards are not highlighted
     active_session_is_recording = False
+
+    # if true, we're currently displaying (and listening for) a multimenu on the projector view
+    multimenu_active = False
+    multimenu_options = []
+    multimenu_baseline = None
 
     port = 5000
     if len(sys.argv) > 1:
