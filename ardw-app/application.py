@@ -22,6 +22,13 @@ from tools import DebugCard, DebugSession
 from boardgeometry.hitscan import hitscan
 
 
+# alpha value for the EWMA filter on optitrack data
+EWMA_ALPHA = 0.3
+
+# buffer between permitted selection events in s
+SELECTION_BUFFER = 0.75
+
+
 def optitrack_to_layout_coords(point):
     global projector_calibration
     return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
@@ -69,13 +76,22 @@ def listen_udp():
 
     endpos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
 
+    prev_var = None
+
     nextframe = time.time() + 1. / framerate
     while True:
         data, addr = sock.recvfrom(1024)
-        var = struct.unpack("f" * 6, data)
-        tippos_pixel_coord = np.array([var[0], var[1]])
-        endpos_pixel_coord = np.array([var[2], var[3]])
-        board_pixel_coord = [var[4], var[5]]
+        var = np.array(struct.unpack("f" * 6, data))
+
+        # EWMA filter to reduce noise
+        # TODO tune EWMA_ALPHA or switch to more complex low-pass/Kalman filter
+        if prev_var is not None:
+            var = var + EWMA_ALPHA * (prev_var - var)
+        prev_var = var
+
+        tippos_pixel_coord = var[0:2]
+        endpos_pixel_coord = var[2:4]
+        board_pixel_coord = var[4:6]
 
         tippos_pixel_history = np.roll(tippos_pixel_history, -1, axis=1)
         tippos_pixel_history[:, -1] = tippos_pixel_coord
@@ -556,11 +572,8 @@ def init_data(pcbdata, schdata):
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
 
-# timestamp of last selection
+# timestamp of last selection, in seconds
 last_selection = 0
-
-# buffer between permitted selection events in s
-SELECTION_BUFFER = 0.2
 
 # handles a selection event, which can come from the client or from optitrack
 def process_selection(data, raw_data=None, from_optitrack=False):
