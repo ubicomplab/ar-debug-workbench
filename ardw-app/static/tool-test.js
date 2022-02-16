@@ -90,21 +90,21 @@ window.onload = () => {
   });
   document.getElementById("dmm-measure").addEventListener("click", () => {
     var data = {
-      "name": "tool-measure",
-      "type": "dmm",
-      "val": 5.2,
-      "unit": "V",
-      "pos_coords": {
-        "x": 179,
-        "y": 86,
-      },
-      "neg_coords": {
-        "x": 168,
-        "y": 86
-      },
-      "side": "F",
-      "status": "debug"
-    };
+      "name": "measurement",
+      "device": "dmm",
+      "measurement": {
+        "pos": {
+          "type": "pin",
+          "val": 148
+        },
+        "neg": {
+          "type": "pin",
+          "val": 124
+        },
+        "unit": "V",
+        "val": 5.2
+      }
+    }
     console.log(data);
     socket.emit("tool-debug", data);
   });

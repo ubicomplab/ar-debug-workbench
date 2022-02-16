@@ -38,7 +38,6 @@ def optitrack_to_layout_coords(point):
 
 
 # returns true iff all the points in history are within threshold of each other
-# TODO derive history_len from history.shape
 def history_within_threshold(history, threshold):
     history_len = np.shape(history)[1]
     return np.all(np.linalg.norm(np.transpose(history) - np.tile(history[:,0], (history_len, 1)), axis=1) <= threshold)
@@ -51,7 +50,7 @@ def pt_dist(pt1, pt2):
 
 
 def listen_udp():
-    global socketio, multimenu_active, multimenu_options, multimenu_baseline
+    global socketio, multimenu_active, multimenu_options, multimenu_baseline, last_selection
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -144,6 +143,7 @@ def listen_udp():
                         else:
                             process_selection(multimenu_options[3])
                             logging.info("making multimenu selection 3")
+                    last_selection = time.time()
 
         socketio.emit("udp", {
             "tippos_layout": {"x": tippos_layout_coord[0], "y": tippos_layout_coord[1]},
@@ -295,8 +295,6 @@ def get_datadicts():
 # -- end app routing --
 
 # -- socket --
-
-
 @socketio.on("connect")
 def handle_connect():
     global active_connections, selection, projector_mode, projector_calibration, active_session
@@ -317,17 +315,17 @@ def handle_connect():
         for val, ready in tools[tool]["ready-elements"].items():
             if ready:
                 emit("tool-connect", {"type": tool,
-                     "val": val, "status": "success"})
+                     "val": val, "ready": tools[tool]["ready"]})
 
     if active_session is not None:
         data = active_session.asdict()
         data["event"] = "new"
         emit("debug-session", data)
 
-        for i in range(len(active_session.cards)):
+        for i, card in enumerate(active_session.cards):
             data = {
                 "event": "custom",
-                "card": active_session.cards[i].asdict(),
+                "card": card.asdict(),
                 "id": i
             }
             emit("debug-session", data)
@@ -371,7 +369,7 @@ def handle_tool_request(data):
         # TODO note that tool doesn't need to be ready, just needs to have already been requested
     else:
         logging.info(f"Adding tool; TODO")
-        # tools[data["type"]]["ready"] = True
+        tools[data["type"]]["ready"] = True
         # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
         socketio.emit("tool-request", data)
 
@@ -400,26 +398,17 @@ def handle_debug_session(data):
         socketio.emit("debug-session", newdata)
     elif data["event"] == "custom":
         # client is sending a new custom card
-        card = DebugCard(
-            data["card"]["pos"],
-            data["card"]["neg"],
-            data["card"]["val"],
-            data["card"]["unit"],
-            data["card"]["lo"],
-            data["card"]["hi"]
-        )
-        if active_session.has(card, exact=True) != -1:
-            logging.error("Request for custom card that already exists")
-        else:
-            # for now, allow adding custom card w/ unit after adding same card w/o unit
-            newdata = {
-                "event": "custom",
-                "update": False,
-                "id": len(active_session.cards),
-                "card": card.asdict()
-            }
-            active_session.cards.append(card)
-            socketio.emit("debug-session", newdata)
+        card = DebugCard(**data["card"])
+
+        # for now, just add the card without checking for duplicates
+        newdata = {
+            "event": "custom",
+            "update": False,
+            "id": len(active_session.cards),
+            "card": card.asdict()
+        }
+        active_session.cards.append(card)
+        socketio.emit("debug-session", newdata)
     elif data["event"] == "record":
         # client is turning recording on or off
         if data["record"] != active_session_is_recording:
@@ -436,27 +425,22 @@ def handle_debug_session(data):
         socketio.emit("debug-session", data)
     elif data["event"] == "export":
         # client wants to export
-        logging.info("Session export is WIP")
+        active_session.export()
 
 
 @socketio.on("tool-debug")
 def handle_tool_debug(data):
+    # the tool-debug message imitates server-initiated behavior
     global tools
     logging.info(f"Received tool debug msg {data}")
     name = data.pop("name")
     if name == "log":
         logging.info(str(tools))
-    else:
-        if data["status"] == "success":
-            tools[data["type"]]["ready-elements"][data["val"]] = True
-            allready = True
-            for ready in tools[data["type"]]["ready-elements"].values():
-                if not ready:
-                    allready = False
-                    break
-            tools[data["type"]]["ready"] = allready
-
-        socketio.emit(name, data)
+    elif name == "tool-connect":
+        tool_connect(data["type"], data["val"])
+    elif name == "measurement":
+        tool_measure(data["device"], data["measurement"])
+    
 
 @socketio.on("debug")
 def handle_debug(data):
@@ -466,13 +450,6 @@ def handle_debug(data):
 def handle_toggle(data):
     socketio.emit("toggleboardpos", data)
 
-
-@socketio.on("python hitscan")
-def handle_python_hitscan(data):
-    python_hits = hitscan(data["point"][0], data["point"][1], pcbdata,
-                          pinref_to_idx, layer=data["layer"], renderPads=True, renderTracks=False)
-    logging.info(f"expected hits: {data['hits']}")
-    logging.info(f"  actual hits: {python_hits}")
 # -- end socket --
 
 
@@ -654,6 +631,65 @@ def make_selection(new_selection):
     socketio.emit("selection", new_selection)
 
 
+# handles a tool connection event, which comes from optitrack or other server code
+# device is "ptr", "dmm", or "osc", and element is key in the "ready-elements" dict
+# for the specified device in the tools dict
+def tool_connect(device, element, success=True):
+    global tools
+
+    data = {
+        "status": "success" if success else "failed",
+        "type": device,
+        "val": element,
+        "ready": False
+    }
+    if success:
+        tools[device]["ready-elements"][element] = True
+        is_ready = True
+        for element_ready in tools[device]["ready-elements"]:
+            if not element_ready:
+                is_ready = False
+                break
+        if is_ready:
+            tools[device]["ready"] = True
+            data["ready"] = True
+
+    socketio.emit("tool-connect", data)
+    
+
+# handles a tool measurement event, which comes from optitrack
+# device is "dmm" or "osc"
+# measurement is {pos, neg, unit, val}, ie. optitrack hitscan is done already
+def tool_measure(device, measurement):
+    global tools, active_session, active_session_is_recording
+
+    if not active_session_is_recording:
+        logging.warning("measurement while there was no debug session")
+        return
+
+    if not tools[device]["ready"]:
+        logging.warning("measurement before tool was setup, ignoring")
+        return
+
+    # TODO do something different for osc
+    card, id, update = active_session.measure(**measurement)
+    data = {
+        "event": "measurement",
+        "card": card.asdict(),
+        "id": id,
+        "update": update
+    }
+    socketio.emit("debug-session", data)
+
+
+def autoconnect_tools(enabled):
+    global tools
+    for device in enabled:
+        tools[device]["ready"] = True
+        for element in tools[device]["ready-elements"]:
+            tools[device]["ready-elements"][element] = True
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         filename="ardw.log",
@@ -699,7 +735,6 @@ if __name__ == "__main__":
         "r": 0,
         "z": 1
     }
-    ibom_settings = {}
 
     # Server tracks connected tools
     tools = {
@@ -750,6 +785,9 @@ if __name__ == "__main__":
     port = 5000
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
+
+    # we just assume ptr and dmm are already connected
+    autoconnect_tools(["ptr", "dmm"])
 
     socketio.run(app, port=port, debug=True)
 
