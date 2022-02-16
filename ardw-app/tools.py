@@ -99,4 +99,4 @@ class DebugSession:
         }
 
     def __repr__(self) -> str:
-        return str(self.asdict)
+        return str(self.asdict())
