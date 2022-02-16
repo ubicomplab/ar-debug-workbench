@@ -1,9 +1,10 @@
-// Rendering for schematic (svg) and layout (from pcbdata), including highlights
+// This file is included on all webpages.
+// It contains rendering for schematic (svg) and layout (from pcbdata), including highlights.
 // Layout rendering taken from Interactive HTML BOM /web/ibom.js, /web/render.js, /web/util.js
 // https://github.com/openscopeproject/InteractiveHtmlBom
-// Most of this file should not be modified
+// Most of this file should not be modified.
 // To render additional elements (such as crosshairs or annotations), look for the
-// drawHighlightsOnLayer() and drawSchematicHighlights() functions near the bottom
+// drawHighlightsOnLayer() and drawSchematicHighlights() functions near the bottom.
 
 
 /** If true, layout will be rendered without s/x/y (which make the layout fill/center in its container) */
@@ -23,14 +24,14 @@ var topmostdiv = document.getElementById("topmostdiv");
 /** An empty canvas context for performing calculations */
 var emptyContext2d = document.createElement("canvas").getContext("2d");
 
-/** The render settings used by the layout (some are DEPRECATED) */
+/** The render settings used by the layout (some are deprecated) */
 var ibom_settings = {
-  canvaslayout: "default",
-  bomlayout: "default",
-  bommode: "ungrouped",
-  checkboxes: [],
-  checkboxStoredRefs: {},
-  darkMode: false,
+  // canvaslayout: "default",
+  // bomlayout: "default",
+  // bommode: "ungrouped",
+  // checkboxes: [],
+  // checkboxStoredRefs: {},
+  // darkMode: false,
   highlightpin1: false,
   redrawOnDrag: true,
   boardRotation: 0,
@@ -48,6 +49,11 @@ var ibom_settings = {
 
 /** {type, val, coords, color} */
 var udp_selection = null;
+
+/** if not null, display multimenu
+ *  {hits: [], layer: str} */
+var multimenu_active = null;
+
 
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
 function deg2rad(deg) {
@@ -1060,7 +1066,7 @@ function initSchematic() {
   switchSchematic(1);
 }
 
-/** Initializes the mouse handlers for layout and schematic
+/** Initializes the mouse handlers for layout and schematic.
  * Must be run after initLayout() and initSchematic() */
 function initMouseHandlers() {
   addMouseHandlers(document.getElementById("front-canvas"), allcanvas.front);
@@ -1098,8 +1104,15 @@ function initMouseHandlers() {
   }
 
   if (udp_selection !== null) {
-    circleAtPoint(canvasdict, udp_selection, "red", 10)
+    circleAtPoint(canvasdict, udp_selection, "purple", 6)
     // circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
+  }
+
+  if (IS_PROJECTOR) {
+    drawFPS(allcanvas.front);
+  }
+  if (multimenu_active !== null && canvasdict.layer == multimenu_active.layer) {
+    drawMultiMenu(canvasdict, multimenu_active.hits)
   }
 }
 
@@ -1205,6 +1218,23 @@ var r = 30;
 var t = 15;
 var l = 2;
 
+function circleAtPoint(layerdict, coords, color, radius) {
+  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
+  s = 1 / layerdict.transform.zoom;
+
+  var canvas = layerdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = l * s;
+  ctx.beginPath();
+  ctx.arc(coords.x, coords.y, radius * s, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+}
+
 function toolIconAtPoint(layerdict, coords, color) {
   var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
 
@@ -1266,6 +1296,7 @@ refreshLoop();
 function drawFPS(layerdict) {
   var canvas = layerdict.highlight;
   var ctx = canvas.getContext("2d");
+  ctx.font = "10px sans-serif";
   ctx.fillStyle = "black";
   ctx.beginPath();
   ctx.rect(20, 10, 40, 16);
@@ -1281,4 +1312,30 @@ var fps_interval = window.setInterval(() => {
     // console.log(fps);
   }
 }, 500)
+
+function drawMultiMenu(canvasdict, hits) {
+  if (hits.length > 4) {
+    console.log("Error: too many hits")
+    return;
+  }
+  var canvas = canvasdict.highlight;
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  var flip = canvasdict.layer === "B" ? -1 : 1;
+
+  var centerpoint = [250, 100]
+  var offset_len = 25
+  var offset_deltas = [[-offset_len, 0], [0, -offset_len], [offset_len, 0], [0, offset_len]]
+
+  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.font = "5px sans-serif";
+
+  for (let i in hits) {
+    let hit = hits[i];
+    let text = getElementName(hit);
+    ctx.fillText(getElementName(hit), centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1])
+  }
+}
 
