@@ -616,14 +616,52 @@ def make_selection(new_selection):
 # handles a tool connection event, which comes from optitrack or other server code
 # device is "ptr", "dmm", or "osc", and element is key in the "ready-elements" dict
 # for the specified device in the tools dict
-def connect_tool(device, element):
+def tool_connect(device, element, success=True):
     global tools
-    tools[device]["ready-elements"][element] = True
-    tools[device]["ready"] = True
-    for element_ready in tools[device]["ready-elements"]:
-        if not element_ready:
-            tools[device]["ready"] = False
-            break
+
+    data = {
+        "status": "success" if success else "failed",
+        "type": device,
+        "val": element,
+        "ready": False
+    }
+    if success:
+        tools[device]["ready-elements"][element] = True
+        is_ready = True
+        for element_ready in tools[device]["ready-elements"]:
+            if not element_ready:
+                is_ready = False
+                break
+        if is_ready:
+            tools[device]["ready"] = True
+            data["ready"] = True
+
+    socketio.emit("tool-connect", data)
+    
+
+# handles a tool measurement event, which comes from optitrack
+# device is "dmm" or "osc"
+# measurement is {pos, neg, unit, val}, ie. optitrack hitscan is done already
+def tool_measure(device, measurement):
+    global tools, active_session, active_session_is_recording
+
+    if not active_session_is_recording:
+        logging.warning("measurement while there was no debug session")
+        return
+
+    if not tools[device]["ready"]:
+        logging.warning("measurement before tool was setup, ignoring")
+        return
+
+    # TODO do something different for osc
+    card, id, update = active_session.measure(**measurement)
+    data = {
+        "event": "measurement",
+        "card": card,
+        "id": id,
+        "update": update
+    }
+    socketio.emit("debug-session", data)
 
 
 if __name__ == "__main__":

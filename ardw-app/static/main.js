@@ -465,7 +465,8 @@ function toolConnect(data) {
           popup_buttons.appendChild(div);
         }
 
-        if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
+        // if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
+        if (data.ready) {
           console.log("dmm ready to use")
           tools.dmm.ready = true;
 

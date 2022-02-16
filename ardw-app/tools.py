@@ -74,14 +74,17 @@ class DebugSession:
                 return i
         return -1
 
+    # returns tuple of card result, id, update bool
     def measure(self, pos, neg, val, unit):
         measurement_card = DebugCard(pos, neg, val, unit)
         match = self.find_match(measurement_card)
         if match != -1:
             self.cards[match].val = val
             self.cards[match].unit = unit
+            return self.cards[match], match, True
         else:
             self.cards.append(measurement_card)
+            return measurement_card, len(self.cards) - 1, False
 
     def export(self):
         logging.info("Export is WIP")
