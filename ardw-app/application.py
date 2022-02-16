@@ -36,7 +36,6 @@ def optitrack_to_layout_coords(point):
 
 
 # returns true iff all the points in history are within threshold of each other
-# TODO derive history_len from history.shape
 def history_within_threshold(history, threshold):
     history_len = np.shape(history)[1]
     return np.all(np.linalg.norm(np.transpose(history) - np.tile(history[:,0], (history_len, 1)), axis=1) <= threshold)
@@ -304,17 +303,17 @@ def handle_connect():
         for val, ready in tools[tool]["ready-elements"].items():
             if ready:
                 emit("tool-connect", {"type": tool,
-                     "val": val, "status": "success"})
+                     "val": val, "ready": tools[tool]["ready"]})
 
     if active_session is not None:
         data = active_session.asdict()
         data["event"] = "new"
         emit("debug-session", data)
 
-        for i in range(len(active_session.cards)):
+        for i, card in enumerate(active_session.cards):
             data = {
                 "event": "custom",
-                "card": active_session.cards[i].asdict(),
+                "card": card.asdict(),
                 "id": i
             }
             emit("debug-session", data)
@@ -388,18 +387,16 @@ def handle_debug_session(data):
     elif data["event"] == "custom":
         # client is sending a new custom card
         card = DebugCard(**data["card"])
-        if active_session.has(card, exact=True) != -1:
-            logging.error("Request for custom card that already exists")
-        else:
-            # for now, allow adding custom card w/ unit after adding same card w/o unit
-            newdata = {
-                "event": "custom",
-                "update": False,
-                "id": len(active_session.cards),
-                "card": card.asdict()
-            }
-            active_session.cards.append(card)
-            socketio.emit("debug-session", newdata)
+
+        # for now, just add the card without checking for duplicates
+        newdata = {
+            "event": "custom",
+            "update": False,
+            "id": len(active_session.cards),
+            "card": card.asdict()
+        }
+        active_session.cards.append(card)
+        socketio.emit("debug-session", newdata)
     elif data["event"] == "record":
         # client is turning recording on or off
         if data["record"] != active_session_is_recording:
@@ -421,22 +418,17 @@ def handle_debug_session(data):
 
 @socketio.on("tool-debug")
 def handle_tool_debug(data):
+    # the tool-debug message imitates server-initiated behavior
     global tools
     logging.info(f"Received tool debug msg {data}")
     name = data.pop("name")
     if name == "log":
         logging.info(str(tools))
-    else:
-        if data["status"] == "success":
-            tools[data["type"]]["ready-elements"][data["val"]] = True
-            allready = True
-            for ready in tools[data["type"]]["ready-elements"].values():
-                if not ready:
-                    allready = False
-                    break
-            tools[data["type"]]["ready"] = allready
-
-        socketio.emit(name, data)
+    elif name == "tool-connect":
+        tool_connect(data["type"], data["val"])
+    elif name == "measurement":
+        tool_measure(data["device"], data["measurement"])
+    
 
 @socketio.on("debug")
 def handle_debug(data):
@@ -657,11 +649,19 @@ def tool_measure(device, measurement):
     card, id, update = active_session.measure(**measurement)
     data = {
         "event": "measurement",
-        "card": card,
+        "card": card.asdict(),
         "id": id,
         "update": update
     }
     socketio.emit("debug-session", data)
+
+
+def autoconnect_tools(enabled):
+    global tools
+    for device in enabled:
+        tools[device]["ready"] = True
+        for element in tools[device]["ready-elements"]:
+            tools[device]["ready-elements"][element] = True
 
 
 if __name__ == "__main__":
@@ -709,7 +709,6 @@ if __name__ == "__main__":
         "r": 0,
         "z": 1
     }
-    ibom_settings = {}
 
     # Server tracks connected tools
     tools = {
@@ -760,6 +759,9 @@ if __name__ == "__main__":
     port = 5000
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
+
+    # we just assume ptr and dmm are already connected
+    autoconnect_tools(["ptr", "dmm"])
 
     socketio.run(app, port=port, debug=True)
 

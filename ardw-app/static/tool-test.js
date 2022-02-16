@@ -89,25 +89,10 @@ window.onload = () => {
     socket.emit("tool-debug", data);
   });
   document.getElementById("dmm-measure").addEventListener("click", () => {
-    var data_depr = {
-      "name": "tool-measure",
-      "type": "dmm",
-      "val": 5.2,
-      "unit": "V",
-      "pos_coords": {
-        "x": 179,
-        "y": 86,
-      },
-      "neg_coords": {
-        "x": 168,
-        "y": 86
-      },
-      "side": "F",
-      "status": "debug"
-    };
     var data = {
-      "event": "measurement",
-      "card": {
+      "name": "measurement",
+      "device": "dmm",
+      "measurement": {
         "pos": {
           "type": "pin",
           "val": 148
@@ -118,8 +103,7 @@ window.onload = () => {
         },
         "unit": "V",
         "val": 5.2
-      },
-      "id": 1
+      }
     }
     console.log(data);
     socket.emit("tool-debug", data);
