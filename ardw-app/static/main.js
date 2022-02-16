@@ -414,6 +414,9 @@ function toolConnect(data) {
 
   popup_title.innerText = `Connecting ${tools[data.type].name}`;
 
+  // for now, everything is a success
+  data["status"] = "success";
+
   if (data.status === "success") {
     switch (data.type) {
       case "ptr":
@@ -643,144 +646,6 @@ function doCardsMatch(card1, card2) {
     card1.unit == card2.unit;
 }
 
-/** DEPRECATED */
-function addDebugCard_DEPR(from_user, measurement = null) {
-  var new_card = {
-    "pos": {
-      "type": null,
-      "val": null
-    },
-    "neg": {
-      "type": null,
-      "val": null
-    },
-    "bounds": {
-      "lo": null,
-      "hi": null
-    },
-    "value": null,
-    "unit": null,
-    "element": null
-  };
-
-  if (from_user) {
-    // User specified custom card and hit save
-
-    new_card.pos.type = sidebar_custom_selection.pos.type;
-    new_card.pos.val = sidebar_custom_selection.pos.val;
-
-    if (sidebar_custom_selection.neg.type === null) {
-      new_card.neg.type = "net";
-      new_card.neg.val = "GND";
-    } else {
-      new_card.neg.type = sidebar_custom_selection.neg.type;
-      new_card.neg.val = sidebar_custom_selection.neg.val;
-    }
-
-    // Rest of info can be taken straight from form
-    var sidebar_custom = document.getElementById("sidebar-custom-dmm");
-
-    let multiplier = units.getMultiplier(sidebar_custom.querySelector('*[name="unit-prefix"]').value);
-    let lo = parseFloat(sidebar_custom.querySelector('*[name="lo"]').value);
-    let hi = parseFloat(sidebar_custom.querySelector('*[name="hi"]').value);
-    if (!isNaN(lo)) {
-      new_card.bounds.lo = lo * multiplier;
-    }
-    if (!isNaN(hi)) {
-      new_card.bounds.hi = hi * multiplier;
-    }
-
-    let unit = sidebar_custom.querySelector('*[name="unit"]').value;
-    if (unit !== "none") {
-      new_card.unit = unit;
-    }
-
-    resetSidebarCustom();
-  } else {
-    // A measurement was taken during a session without a corresponding card
-    console.log("Measurement cards are WIP");
-    new_card.pos = measurement.pos;
-    new_card.neg = measurement.neg;
-    new_card.value = measurement.value;
-    new_card.unit = measurement.unit;
-  }
-
-  // No duplicate cards in session
-  let found_duplicate = false;
-  for (let card of current_debug_session.cards) {
-    if (card.pos.type == new_card.pos.type &&
-      card.pos.val == new_card.pos.val &&
-      card.neg.type == new_card.neg.type &&
-      card.neg.val == new_card.neg.val &&
-      card.unit == new_card.unit) {
-      found_duplicate = true;
-      break;
-    }
-  }
-  if (found_duplicate) {
-    return;
-  }
-
-  let div = document.createElement("div");
-  div.classList.add("sidebar-card");
-  let valtext = new_card.value !== null ? String(new_card.value) : "--";
-  if (new_card.unit !== null) {
-    valtext += new_card.unit;
-  }
-  div.innerHTML =
-    `<div class="card-row">
-        <span style="background: red;">&nbsp;</span>
-        <span class="sidebar-card-search">${getElementName(new_card.pos)}</span>
-    </div>
-    <div class="card-row">
-        <span style="background: black;">&nbsp;</span>
-        <span class="sidebar-card-search">${getElementName(new_card.neg)}</span>
-    </div>
-    <div class="card-row">
-        <span class="sidebar-result">${valtext}</span>
-    </div>`;
-
-  if (new_card.bounds.lo !== null || new_card.bounds.hi !== null) {
-    let lospan = document.createElement("span");
-    lospan.classList.add("bound");
-    if (new_card.bounds.lo !== null) {
-      lospan.innerHTML = new_card.bounds.lo;
-      if (new_card.value !== null) {
-        lospan.classList.add(new_card.value >= new_card.bounds.lo ? "good" : "bad");
-      }
-    } else {
-      lospan.innerHTML = "n/a";
-    }
-    let hispan = document.createElement("span");
-    hispan.classList.add("bound");
-    if (new_card.bounds.hi !== null) {
-      hispan.innerHTML = new_card.bounds.hi;
-      if (new_card.value !== null) {
-        hispan.classList.add(new_card.value <= new_card.bounds.hi ? "good" : "bad");
-      }
-    } else {
-      hispan.innerHTML = "n/a";
-    }
-
-    let bounddiv = document.createElement("div");
-    bounddiv.innerHTML = "(";
-    bounddiv.appendChild(lospan);
-    bounddiv.innerHTML += "-";
-    bounddiv.appendChild(hispan);
-    if (new_card.unit !== null) {
-      bounddiv.innerHTML += new_card.unit;
-    }
-    bounddiv.innerHTML += " )";
-
-    div.querySelector(".card-row:last-child").appendChild(bounddiv);
-  }
-
-  document.getElementById("sidebar-cards").appendChild(div);
-
-  new_card.element = div;
-  current_debug_session.cards.push(new_card);
-}
-
 /** Adds a new debug session card */
 function addDebugCard(card, id) {
   var div = document.createElement("div");
@@ -859,95 +724,6 @@ function updateDebugCard(card, id) {
       bounds[1].classList.add("bad");
     }
   }
-}
-
-/** DEPRECATED */
-function dmmMeasurement(data) {
-  if (current_debug_session.name === null) {
-    console.log("Received measurement without an active debug session, ignoring");
-    return;
-  }
-
-  let pos_selection = null;
-  let neg_selection = null;
-  let poshits = [];
-  let neghits = [];
-
-  let layer = data.side; // F or B
-
-  for (let pin of pinHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
-    // poshits.push({ "type": "pin", "val": pin });
-  }
-  for (let net of netHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
-    poshits.push({ "type": "net", "val": net });
-  }
-  if (poshits.length == 0) {
-    logerr("Positive probe measured unknown pad/net");
-    return;
-  } else if (poshits.length > 1) {
-    console.log("Positive probe hit several components. Selection disambiguation is still WIP");
-    return;
-  } else {
-    pos_selection = poshits[0];
-  }
-
-  for (let pin of pinHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
-    // neghits.push({ "type": "pin", "val": pin });
-  }
-  for (let net of netHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
-    neghits.push({ "type": "net", "val": net });
-  }
-  if (neghits.length == 0) {
-    logerr("Negative probe measured unknown pad/net");
-    return;
-  } else if (neghits.length > 1) {
-    console.log("Negative probe hit several components. Selection disambiguation is still WIP");
-    return;
-  } else {
-    neg_selection = neghits[0];
-  }
-
-  let measurement = {
-    "pos": pos_selection,
-    "neg": neg_selection,
-    "value": data.val,
-    "unit": data.unit
-  };
-
-  // TODO show probes actually selecting
-
-  for (let card of current_debug_session.cards) {
-    if (doCardsMatch(card, measurement)) {
-      // update existing measurement instead
-      if (card.value !== null) {
-        console.log(`card ${card} already has a measurement but was measured again`);
-      } else {
-        card.value = measurement.value;
-        card.unit = measurement.unit;
-
-        card.element.querySelector('.sidebar-result').innerHTML = `${card.value}${card.unit}`;
-        let bounds = card.element.querySelectorAll('.bound');
-        if (card.bounds.lo !== null) {
-          if (card.bounds.lo <= card.value) {
-            bounds[0].classList.add("good");
-          } else {
-            bounds[0].classList.add("bad");
-          }
-        }
-        if (card.bounds.hi !== null) {
-          if (card.bounds.hi >= card.value) {
-            bounds[1].classList.add("good");
-          } else {
-            bounds[1].classList.add("bad");
-          }
-        }
-      }
-      return;
-    }
-  }
-
-  // No matching card found, just add one
-  addDebugCard_DEPR(from_user = false, measurement);
 }
 
 /** Handles a debug session event (from server socket) */
@@ -1541,29 +1317,9 @@ function initSocket() {
     toolConnect(data);
   });
 
-  socket.on("tool-measure", (data) => {
-    if (!tools[data.type].ready) {
-      console.log(`${data.type} tool received measurement but is not fully set up`);
-      return;
-    }
-    switch (data.type) {
-      case "ptr":
-        console.log(`received ptr selection at (${data.coords.x},${data.coords.y})`);
-        break;
-      case "dmm":
-        console.log(`measured ${data.val} ${data.unit} with pos at (${data.pos_coords.x},${data.pos_coords.y})
-                and neg probe at (${data.neg_coords.x},${data.neg_coords.y})`);
-        dmmMeasurement(data);
-        break;
-      case "osc":
-        console.log("I don't know what the oscilloscope should do");
-        break;
-    }
-  });
-
   socket.on("debug-session", (data) => {
     debugSessionEvent(data);
-  })
+  });
 
   printcounter = 0
   socket.on("udp", (data) => {
