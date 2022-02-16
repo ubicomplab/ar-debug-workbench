@@ -24,7 +24,8 @@ import pyvisa
 supported_dmms = ["MODEL DMM6500", "DMM6500"]
 supported_oscs = ["MODEL MSO4104", "MSO4104"]
 
-instruments = []
+dmms = []
+oscs = []
 
 # parser = argparse.ArgumentParser('Read value from an Instrument')
 # parser.add_argument("--instrument", type=str, help="select an instrument. options: 'dmm', 'osc'")
@@ -40,13 +41,22 @@ def initializeInstruments():
 
     for counter in range(len(resources)):
         print("Connecting to resource "+str(counter)+": " + resources[counter])
-        instruments.append(rm.open_resource(resources[counter]))
-        print("Connected to: " + instruments[counter].query("*IDN?"))
-        if instruments[counter].query("*IDN?").split(",")[1] in supported_dmms:
-            print("Resource "+str(counter)+" is a DMM")
-        elif instruments[counter].query("*IDN?").split(",")[1] in supported_oscs:
-            print("Resource "+str(counter)+" is an oscilliscope")
 
+        if "USB" in resources[counter]: 
+            current_resource = rm.open_resource(resources[counter])
+            print("Connected to: " + current_resource.query("*IDN?"))
+            if current_resource.query("*IDN?").split(",")[1] in supported_dmms:
+                print("Resource "+str(counter)+" is a supported DMM")
+                dmms.append(current_resource)
+
+            elif current_resource.query("*IDN?").split(",")[1] in supported_oscs:
+                print("Resource "+str(counter)+" is a supported oscilliscope")
+                oscs.append(current_resource)
+
+            else:
+                print("Resource "+ current_resource+ " isn't a supported DMM or oscilliscope")
+        else:
+            print(resources[counter]+" isn't a USB device. Can't connect.")
     
     # inst.write("*rst; status:preset; *cls")
 
@@ -54,14 +64,14 @@ def queryValue(instrumentType, function):
     if instrumentType == "dmm":
         if function == "voltage":
             # TODO need to fix later so it doesn't just take the first instrument 
-            value = float(instruments[0].query(':MEASure:VOLTage:DC?'))
+            value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
             print("Measured value = " + str(value) + " VDC")
             return value
 
     elif instrumentType == "osc":
         if function == "voltage":
             # TODO need to fix later so it doesn't just take the first instrument 
-            value = float(instruments[0].query(':MEASure:VOLTage:DC?'))
+            value = float(oscs[0].query(':MEASure:VOLTage:DC?'))
             print("Measured value = " + str(value) + " VDC")
             return value
 
@@ -72,8 +82,9 @@ def queryValue(instrumentType, function):
 def main():
     initializeInstruments()
     queryValue("dmm", "voltage")
-    # for i in range(200):
-    #     value = float(instruments[0].query(':MEASure:VOLTage:DC?'))
+    for i in range(200):
+        value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
+        print(value)
         
 
 if __name__ == "__main__":
