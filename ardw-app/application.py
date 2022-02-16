@@ -58,7 +58,7 @@ def listen_udp():
     sock.bind(("127.0.0.1", 8052))
 
     framerate = 30 #fps
-    time_to_wait = 2.
+    time_to_wait = .5
 
     # maximum pixel difference within time_to_wait for the probe tip or end to be considered stationary
     threshold_stationary = 5
