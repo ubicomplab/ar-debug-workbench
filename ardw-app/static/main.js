@@ -101,6 +101,7 @@ var tools = {
 var active_tool_request = false;
 
 var sidebar_shown = false;
+
 /** Controls size of debug session sidebar */
 sidebar_split = Split(["#display", "#sidebar"], {
   sizes: [100, 0],

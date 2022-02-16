@@ -49,7 +49,7 @@ def pt_dist(pt1, pt2):
 
 
 def listen_udp():
-    global socketio, multimenu_active, multimenu_options, multimenu_baseline
+    global socketio, multimenu_active, multimenu_options, multimenu_baseline, last_selection
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -134,6 +134,7 @@ def listen_udp():
                         else:
                             process_selection(multimenu_options[3])
                             logging.info("making multimenu selection 3")
+                    last_selection = time.time()
 
         socketio.emit("udp", {
             "tippos_layout": {"x": tippos_layout_coord[0], "y": tippos_layout_coord[1]},
@@ -283,8 +284,6 @@ def get_datadicts():
 # -- end app routing --
 
 # -- socket --
-
-
 @socketio.on("connect")
 def handle_connect():
     global active_connections, selection, projector_mode, projector_calibration, active_session
@@ -359,7 +358,7 @@ def handle_tool_request(data):
         # TODO note that tool doesn't need to be ready, just needs to have already been requested
     else:
         logging.info(f"Adding tool; TODO")
-        # tools[data["type"]]["ready"] = True
+        tools[data["type"]]["ready"] = True
         # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
         socketio.emit("tool-request", data)
 
@@ -388,14 +387,7 @@ def handle_debug_session(data):
         socketio.emit("debug-session", newdata)
     elif data["event"] == "custom":
         # client is sending a new custom card
-        card = DebugCard(
-            data["card"]["pos"],
-            data["card"]["neg"],
-            data["card"]["val"],
-            data["card"]["unit"],
-            data["card"]["lo"],
-            data["card"]["hi"]
-        )
+        card = DebugCard(**data["card"])
         if active_session.has(card, exact=True) != -1:
             logging.error("Request for custom card that already exists")
         else:
@@ -424,7 +416,7 @@ def handle_debug_session(data):
         socketio.emit("debug-session", data)
     elif data["event"] == "export":
         # client wants to export
-        logging.info("Session export is WIP")
+        active_session.export()
 
 
 @socketio.on("tool-debug")
@@ -454,13 +446,6 @@ def handle_debug(data):
 def handle_toggle(data):
     socketio.emit("toggleboardpos", data)
 
-
-@socketio.on("python hitscan")
-def handle_python_hitscan(data):
-    python_hits = hitscan(data["point"][0], data["point"][1], pcbdata,
-                          pinref_to_idx, layer=data["layer"], renderPads=True, renderTracks=False)
-    logging.info(f"expected hits: {data['hits']}")
-    logging.info(f"  actual hits: {python_hits}")
 # -- end socket --
 
 
@@ -626,6 +611,19 @@ def make_selection(new_selection):
     if (new_selection["type"] != "deselect"):
         selection[new_selection["type"]] = new_selection["val"]
     socketio.emit("selection", new_selection)
+
+
+# handles a tool connection event, which comes from optitrack or other server code
+# device is "ptr", "dmm", or "osc", and element is key in the "ready-elements" dict
+# for the specified device in the tools dict
+def connect_tool(device, element):
+    global tools
+    tools[device]["ready-elements"][element] = True
+    tools[device]["ready"] = True
+    for element_ready in tools[device]["ready-elements"]:
+        if not element_ready:
+            tools[device]["ready"] = False
+            break
 
 
 if __name__ == "__main__":
