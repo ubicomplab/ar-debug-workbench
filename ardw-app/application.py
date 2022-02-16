@@ -543,8 +543,9 @@ def init_data(pcbdata, schdata):
             refid = ref_to_id[netpin["ref"]]
             for unitnum in compdict[refid]["units"]:
                 for unitpin in compdict[refid]["units"][unitnum]["pins"]:
-                    unitpin["net"] = netinfo["name"]
-                    schids.add(compdict[refid]["units"][unitnum]["schid"])
+                    if netpin["pin"] == unitpin["num"]:
+                        unitpin["net"] = netinfo["name"]
+                        schids.add(compdict[refid]["units"][unitnum]["schid"])
         if len(schids) == 0:
             logging.warning(f"{netinfo['name']} has no valid pins")
         else:
