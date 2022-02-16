@@ -61,6 +61,8 @@ function getElementName(element) {
       return `Net ${element.val}`;
     case "deselect":
       return "Cancel"
+    default:
+      return ""
   }
 }
 

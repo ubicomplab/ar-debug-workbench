@@ -1335,7 +1335,7 @@ function drawMultiMenu(canvasdict, hits) {
   for (let i in hits) {
     let hit = hits[i];
     let text = getElementName(hit);
-    ctx.fillText(getElementName(hit), centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1])
+    ctx.fillText(getElementName(hit), centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
   }
 }
 
