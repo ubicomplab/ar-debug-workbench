@@ -1021,7 +1021,7 @@ function initPage() {
   });
 
   projector_sliders["tx"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -200, 200, 0, increment)})
+    socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["tx"]["slider"] = document.getElementById("settings-projector-tx");
   projector_sliders["tx"]["label"] = document.getElementById("settings-projector-tx-label");
@@ -1038,7 +1038,7 @@ function initPage() {
   });
 
   projector_sliders["ty"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -200, 200, 0, increment)})
+    socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["ty"]["slider"] = document.getElementById("settings-projector-ty");
   projector_sliders["ty"]["label"] = document.getElementById("settings-projector-ty-label");

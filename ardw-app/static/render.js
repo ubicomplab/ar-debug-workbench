@@ -1338,7 +1338,7 @@ function drawMultiMenu(canvasdict, hits) {
 
   var flip = canvasdict.layer === "B" ? -1 : 1;
 
-  var centerpoint = [250, 100]
+  var centerpoint = [50, 100]
   var offset_len = 25
   var offset_deltas = [[-offset_len, 0], [0, -offset_len], [offset_len, 0], [0, offset_len]]
 
@@ -1349,7 +1349,7 @@ function drawMultiMenu(canvasdict, hits) {
   for (let i in hits) {
     let hit = hits[i];
     let text = getElementName(hit);
-    ctx.fillText(getElementName(hit), centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
+    ctx.fillText(text, centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
   }
 }
 

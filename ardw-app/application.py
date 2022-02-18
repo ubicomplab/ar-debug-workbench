@@ -732,10 +732,10 @@ if __name__ == "__main__":
     app_settings = {}
     projector_mode = "calibrate"
     projector_calibration = {
-        "tx": 0,
-        "ty": 0,
-        "r": 0,
-        "z": 1
+        "tx": config.getfloat("Dev", "DefaultTX"),
+        "ty": config.getfloat("Dev", "DefaultTY"),
+        "r": config.getfloat("Dev", "DefaultRotation"),
+        "z": config.getfloat("Dev", "DefaultZoom")
     }
 
     # Server tracks connected tools
