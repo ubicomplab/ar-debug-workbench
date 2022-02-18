@@ -30,9 +30,8 @@ def point_in_pad(x, y, pad, padding=0):
         v = (v[0] - pad["offset"][0], v[1] - pad["offset"][1])
     return Point(*v).within(get_pad_polygon(pad).buffer(padding))
 
+
 # from ibom, don't know what exactly it does
-
-
 def point_within_dist_to_arc(x, y, xc, yc, radius, start_deg, end_deg, d):
     dx = x - xc
     dy = y - yc
@@ -61,9 +60,8 @@ def point_within_dist_to_arc(x, y, xc, yc, radius, start_deg, end_deg, d):
     else:
         return angle >= angle1 and angle <= angle2
 
+
 # from ibom, don't know what exactly it does
-
-
 def point_within_dist_to_seg(x, y, x1, y1, x2, y2, d):
     a = x - x1
     b = y - y1
