@@ -193,6 +193,7 @@ def index():
         icon=url_for("static", filename="favicon.ico"),
         main=url_for("main_page"),
         proj=url_for("projector_page"),
+        tool=url_for("tool_debug_page"),
         js=url_for("static", filename="index.js")
     )
 
