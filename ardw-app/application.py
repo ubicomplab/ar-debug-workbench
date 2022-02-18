@@ -16,9 +16,7 @@ import time
 
 import numpy as np
 
-from example_tool import ExampleTool
 from tools import DebugCard, DebugSession
-
 from boardgeometry.hitscan import hitscan
 
 
@@ -26,21 +24,51 @@ from boardgeometry.hitscan import hitscan
 EWMA_ALPHA = 0.0
 
 # buffer between permitted selection events in s
-SELECTION_BUFFER_TIME = 0.75
+SELECTION_BUFFER_TIME = 1
 
+# buffer between permitted selection events in pixels (2D)
 SELECTION_BUFFER_PIX = 20
 
+# frames per second to run at (should match optitrack data)
+UDP_FRAMERATE = 30
 
+# time the tip or end must be stationary to trigger a dwell event, in seconds
+DWELL_TIME = 0.5
+
+# maximum pixel difference within time_to_wait for the probe tip or end to be considered stationary
+THRESHOLD_STATIONARY = 5
+THRESHOLD_STATIONARY_END = 10
+
+# maximum pixel difference for probe tip to be considered within disambiguation menu
+THRESHOLD_MULTI_TIPPOS = 20
+
+# minimum pixel difference for the probe end to be making a selection in the disambiguation menu
+THRESHOLD_MULTI_ENDPOS = 20
+
+# horizontal buffer around the edge cuts that the probe needs to leave before it can reselect, in pixels
+RESELECT_HORIZONTAL_BUFFER = 20
+
+# vertical buffer above the table that the probe needs to leave before it can reselect, in pixels
+RESELECT_VERTICAL_BUFFER = 20
+
+
+# converts optitrack pixels to layout mm in 2D
 def optitrack_to_layout_coords(point):
     global projector_calibration
     return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
             -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
 
+# convert layout mm to optitrack pixels in 2D
+def layout_to_optitrack_coords(point):
+    global projector_calibration
+    return [(point[0] + projector_calibration["tx"]) * projector_calibration["z"],
+            (-point[1] + projector_calibration["ty"]) * projector_calibration["z"]]
 
-# returns true iff all the points in history are within threshold of each other
-def history_within_threshold(history, threshold):
+
+# returns true iff all the points in history are within threshold of the first one
+def history_within_threshold(history, refpoint, threshold):
     history_len = np.shape(history)[1]
-    return np.all(np.linalg.norm(np.transpose(history) - np.tile(history[:,0], (history_len, 1)), axis=1) <= threshold)
+    return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
 
 
 def pt_dist(pt1, pt2):
@@ -49,41 +77,68 @@ def pt_dist(pt1, pt2):
     return np.sqrt(xdiff * xdiff + ydiff * ydiff)
 
 
+def detect_probe_behavior(tippos_history, endpos_history):
+    global last_selection, multimenu_active, multimenu_baseline
+
+    # we want to fire selection events from the average, not the latest position
+    tippos_mean = np.mean(tippos_history, axis=1)
+    endpos_mean = np.mean(endpos_history, axis=1)
+
+    if history_within_threshold(tippos_history, tippos_mean, THRESHOLD_STATIONARY):
+        # the tip is dwelling
+        if not multimenu_active:
+            # no multimenu currently active, so we just select
+            tippos_layout = optitrack_to_layout_coords(tippos_mean)
+            process_selection({"point": tippos_layout, "optitrack": True, "layer": "F", "pads": True, "tracks": False},
+                                raw_data={"tip": tippos_history[:, -1], "end": endpos_history[:, -1]},
+                                from_optitrack=True)
+        elif pt_dist(tippos_mean, multimenu_baseline["tip"]) > THRESHOLD_MULTI_TIPPOS:
+            # we have an active multimenu, but we're dwelling elsewhere, so deselect and cancel multimenu
+            logging.info("closing multimenu because tip moved")
+            process_selection({"type": "deselect", "val": None})
+        elif history_within_threshold(endpos_history, endpos_mean, THRESHOLD_STATIONARY_END):
+            # our tip is still roughly in the same place and our end has been stable
+            enddiff = multimenu_baseline["end"] - endpos_mean
+            logging.info(f"enddiff is stable at {enddiff}")
+
+            if np.linalg.norm(enddiff) > THRESHOLD_MULTI_ENDPOS:
+                if np.abs(enddiff)[0] >= np.abs(enddiff)[1]:
+                    # x change is greater
+                    if enddiff[0] < 0:
+                        process_selection(multimenu_options[2])
+                        logging.info("making multimenu selection 2")
+                    else:
+                        process_selection(multimenu_options[0])
+                        logging.info("making multimenu selection 0")
+                else:
+                    # y change is greater
+                    if enddiff[1] < 0:
+                        process_selection(multimenu_options[1])
+                        logging.info("making multimenu selection 1")
+                    else:
+                        process_selection(multimenu_options[3])
+                        logging.info("making multimenu selection 3")
+                last_selection = time.time()
+
+
 def listen_udp():
-    global socketio, multimenu_active, multimenu_options, multimenu_baseline, last_selection
+    global socketio
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", 8052))
 
-    framerate = 30 #fps
-    time_to_wait = .5
-
-    # maximum pixel difference within time_to_wait for the probe tip or end to be considered stationary
-    threshold_stationary = 5
-
-    threshold_stationary_end = 10
-
-    # maximum pixel difference for probe tip to be considered within disambiguation menu
-    threshold_multi_tippos = 20
-
-    # minimum pixel difference for the probe end to be making a selection in the disambiguation menu
-    threshold_multi_endpos = 20
-
-    history_len = int(framerate * time_to_wait)
+    history_len = int(UDP_FRAMERATE * DWELL_TIME)
 
     # N element array of historical tippos_pixel_coord
     # first element is oldest, last element is newest
     tippos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
-
     endpos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
 
+    # tracks the previous value from udp for the EWMA filter
     prev_var = None
 
-    # location of last selection
-    last_selection_tippos = np.array([0, 0])
-
-    nextframe = time.time() + 1. / framerate
+    nextframe = time.time() + 1. / UDP_FRAMERATE
     while True:
         data, addr = sock.recvfrom(1024)
         var = np.array(struct.unpack("f" * 6, data))
@@ -98,55 +153,25 @@ def listen_udp():
         endpos_pixel_coord = var[2:4]
         board_pixel_coord = var[4:6]
 
+        # update tip and end position histories
         tippos_pixel_history = np.roll(tippos_pixel_history, -1, axis=1)
         tippos_pixel_history[:, -1] = tippos_pixel_coord
 
         endpos_pixel_history = np.roll(endpos_pixel_history, -1, axis=1)
         endpos_pixel_history[:, -1] = endpos_pixel_coord
 
+        # detect if the user has selected something and react appropriately
+        detect_probe_behavior(tippos_pixel_history, endpos_pixel_history)
+
+        # TODO detect_multimeter_probes()
+
+        # send the tip and end positions to the web app to display
         tippos_layout_coord = optitrack_to_layout_coords(tippos_pixel_coord)
-
-        # if all the values within tippos_pixel_history are similar enough
-        if history_within_threshold(tippos_pixel_history, threshold_stationary):
-            # it's been in the same place
-            if not multimenu_active:
-                # no multimenu currently active, so we just select
-                # as long as we're far enough away from the previous selection attempt
-                if np.linalg.norm(last_selection_tippos - tippos_pixel_coord) >= SELECTION_BUFFER_PIX:
-                    last_selection_tippos = tippos_pixel_coord
-                    process_selection({"point": tippos_layout_coord, "optitrack": True, "layer": "F", "pads": True, "tracks": False},
-                                      raw_data={"tip": tippos_pixel_coord, "end": endpos_pixel_coord},
-                                      from_optitrack=True)
-            elif pt_dist(tippos_pixel_coord, multimenu_baseline["tip"]) > threshold_multi_tippos:
-                # we have an active multimenu but we've moved our tip too far, so deselect and cancel multimenu
-                logging.info("closing multimenu because tip moved")
-                process_selection({"type": "deselect", "val": None})
-            elif history_within_threshold(endpos_pixel_history, threshold_stationary_end):
-                # our tip is still roughly in the same place and our end has been stable
-                enddiff = multimenu_baseline["end"] - endpos_pixel_coord
-                logging.info(f"enddiff is stable at {enddiff}")
-
-                if np.linalg.norm(enddiff) > threshold_multi_endpos:
-                    if np.abs(enddiff)[0] >= np.abs(enddiff)[1]:
-                        # x change is greater
-                        if enddiff[0] < 0:
-                            process_selection(multimenu_options[2])
-                            logging.info("making multimenu selection 2")
-                        else:
-                            process_selection(multimenu_options[0])
-                            logging.info("making multimenu selection 0")
-                    else:
-                        # y change is greater
-                        if enddiff[1] < 0:
-                            process_selection(multimenu_options[1])
-                            logging.info("making multimenu selection 1")
-                        else:
-                            process_selection(multimenu_options[3])
-                            logging.info("making multimenu selection 3")
-                    last_selection = time.time()
+        endpos_layout_coord = optitrack_to_layout_coords(endpos_pixel_coord)
 
         socketio.emit("udp", {
             "tippos_layout": {"x": tippos_layout_coord[0], "y": tippos_layout_coord[1]},
+            "endpos_layout": {"x": endpos_layout_coord[0], "y": endpos_layout_coord[1]},
             "boardpos_pixel": {"x": board_pixel_coord[0], "y": board_pixel_coord[1]}
         })
 
@@ -157,7 +182,7 @@ def listen_udp():
         else:
             #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
             pass
-        nextframe = now + 1. / framerate
+        nextframe = now + 1. / UDP_FRAMERATE
 
 
 if getattr(sys, 'frozen', False):
@@ -564,7 +589,6 @@ def init_data(pcbdata, schdata):
 
 # timestamp of last selection, in seconds
 last_selection_time = 0
-
 
 # handles a selection event, which can come from the client or from optitrack
 def process_selection(data, raw_data=None, from_optitrack=False):
