@@ -51,6 +51,9 @@ RESELECT_HORIZONTAL_BUFFER = 20
 # vertical buffer above the table that the probe needs to leave before it can reselect, in pixels
 RESELECT_VERTICAL_BUFFER = 20
 
+# hitbox padding around pins for board selection
+PIN_PADDING = 5
+
 
 # converts optitrack pixels to layout mm in 2D
 def optitrack_to_layout_coords(point):
@@ -609,8 +612,9 @@ def process_selection(data, raw_data=None, from_optitrack=False):
 
     if "point" in data:
         # a point/click
-        hits = hitscan(data["point"][0], data["point"][1], pcbdata,
-                       pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
+        pin_padding = PIN_PADDING if from_optitrack else 0
+        hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"],
+                       render_pads=data["pads"], render_tracks=data["tracks"], pin_padding=pin_padding)
         if len(hits) > 0:
             logging.info(f"{'probe' if from_optitrack else 'app'} selection at point ({data['point'][0]},{data['point'][1]}) with {len(hits)} hits")
 

@@ -1,8 +1,9 @@
+import logging
 import numpy as np
 from shapely.geometry import Point, Polygon, box
 
 
-def get_pad_polygon(pad, logging=None, cache=True):
+def get_pad_polygon(pad, cache=True):
     # TODO ibom caches this, but probably unnecessary
     if cache and "poly" in pad:
         return pad["poly"]
@@ -19,8 +20,7 @@ def get_pad_polygon(pad, logging=None, cache=True):
         poly = get_chamfered_rect(
             pad["size"], pad["radius"], pad["chamfpos"], pad["chamfratio"])
     else:  # "custom"
-        if logging:
-            logging.error("Custom pads currently not supported")
+        logging.error("Custom pads currently not supported")
         #poly = get_poly(pad)
 
     if cache:

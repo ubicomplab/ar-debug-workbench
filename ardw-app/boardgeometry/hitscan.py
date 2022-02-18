@@ -22,13 +22,13 @@ def point_in_footprint(x, y, footprint):
         bbox["relpos"][1] <= v[1] and v[1] <= bbox["relpos"][1] + bbox["size"][1]
 
 
-def point_in_pad(x, y, pad):
+def point_in_pad(x, y, pad, padding=0):
     v = [x - pad["pos"][0], y - pad["pos"][1]]
     # TODO figure out why in js this is neg but footprint angle is pos
     v = rotate_vec(v, -pad["angle"])
     if "offset" in pad:
         v = (v[0] - pad["offset"][0], v[1] - pad["offset"][1])
-    return Point(*v).within(get_pad_polygon(pad))
+    return Point(*v).within(get_pad_polygon(pad).buffer(padding))
 
 # from ibom, don't know what exactly it does
 
@@ -100,43 +100,43 @@ def bbox_hitscan(x, y, pcbdata, layer=None):
     return result
 
 
-def pin_hitscan(x, y, pcbdata, pinref_to_idx, layer=None, renderPads=True):
-    if not renderPads:
+def pin_hitscan(x, y, pcbdata, pinref_to_idx, layer=None, render_pads=True, pin_padding=0):
+    if not render_pads:
         return []
     result = []
     for footprint in pcbdata["footprints"]:
         for pad in footprint["pads"]:
             if (not layer or layer in pad["layers"]) \
-                    and point_in_pad(x, y, pad):
+                    and point_in_pad(x, y, pad, pin_padding):
                 pin_name = f"{footprint['ref']}.{pad['padname']}"
                 if pin_name in pinref_to_idx:
                     result.append(pinref_to_idx[pin_name])
     return result
 
 
-def net_hitscan(x, y, pcbdata, layer=None, renderPads=True, renderTracks=False):
+def net_hitscan(x, y, pcbdata, layer=None, render_pads=True, render_tracks=False, pin_padding=0):
     nets_hit = set()
-    if "tracks" in pcbdata and layer and renderTracks:
+    if "tracks" in pcbdata and layer and render_tracks:
         for track in pcbdata["tracks"][layer]:
             if "radius" in track and point_within_dist_to_arc(x, y, *track["center"], track["radius"], track["startangle"], track["endangle"], track["width"] / 2):
                 nets_hit.add(track["net"])
             elif point_within_dist_to_seg(x, y, *track["start"], *track["end"], track["width"] / 2):
                 nets_hit.add(track["net"])
-    if renderPads:
+    if render_pads:
         for footprint in pcbdata["footprints"]:
             for pad in footprint["pads"]:
                 if (not layer or layer in pad["layers"]) \
-                        and point_in_pad(x, y, pad) and "net" in pad:
+                        and point_in_pad(x, y, pad, pin_padding) and "net" in pad:
                     nets_hit.add(pad["net"])
 
     return list(nets_hit)
 
 
-def hitscan(x, y, pcbdata, pinref_to_idx, layer=None, renderPads=True, renderTracks=False):
+def hitscan(x, y, pcbdata, pinref_to_idx, layer=None, render_pads=True, render_tracks=False, pin_padding=0):
     hits = [{"type": "comp", "val": hit}
             for hit in bbox_hitscan(x, y, pcbdata, layer)]
     hits += [{"type": "pin", "val": hit}
-             for hit in pin_hitscan(x, y, pcbdata, pinref_to_idx, layer, renderPads)]
+             for hit in pin_hitscan(x, y, pcbdata, pinref_to_idx, layer, render_pads, pin_padding)]
     hits += [{"type": "net", "val": hit}
-             for hit in net_hitscan(x, y, pcbdata, layer, renderPads, renderTracks)]
+             for hit in net_hitscan(x, y, pcbdata, layer, render_pads, render_tracks, pin_padding)]
     return hits
