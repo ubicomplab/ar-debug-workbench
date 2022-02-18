@@ -318,14 +318,14 @@ def handle_connect():
                      "val": val, "ready": tools[tool]["ready"]})
 
     if active_session is not None:
-        data = active_session.asdict()
+        data = active_session.to_dict()
         data["event"] = "new"
         emit("debug-session", data)
 
         for i, card in enumerate(active_session.cards):
             data = {
                 "event": "custom",
-                "card": card.asdict(),
+                "card": card.to_dict(),
                 "id": i
             }
             emit("debug-session", data)
@@ -385,7 +385,7 @@ def handle_debug_session(data):
     if active_session is None:
         # if we don't have a session, start a new one
         active_session = DebugSession()
-        newdata = active_session.asdict()
+        newdata = active_session.to_dict()
         newdata["event"] = "new"
         socketio.emit("debug-session", newdata)
 
@@ -393,21 +393,21 @@ def handle_debug_session(data):
         # client is editing name or notes
         active_session.name = data["name"]
         active_session.notes = data["notes"]
-        newdata = active_session.asdict()
+        newdata = active_session.to_dict()
         newdata["event"] = "edit"
         socketio.emit("debug-session", newdata)
     elif data["event"] == "custom":
         # client is sending a new custom card
         card = DebugCard(**data["card"])
+        i = active_session.add_card(card)
 
         # for now, just add the card without checking for duplicates
         newdata = {
             "event": "custom",
             "update": False,
-            "id": len(active_session.cards),
-            "card": card.asdict()
+            "id": i,
+            "card": card.to_dict()
         }
-        active_session.cards.append(card)
         socketio.emit("debug-session", newdata)
     elif data["event"] == "record":
         # client is turning recording on or off
@@ -439,7 +439,7 @@ def handle_tool_debug(data):
     elif name == "tool-connect":
         tool_connect(data["type"], data["val"])
     elif name == "measurement":
-        tool_measure(data["device"], data["measurement"])
+        tool_measure(data["measurement"])
     
 
 @socketio.on("debug")
@@ -658,24 +658,24 @@ def tool_connect(device, element, success=True):
     
 
 # handles a tool measurement event, which comes from optitrack
-# device is "dmm" or "osc"
-# measurement is {pos, neg, unit, val}, ie. optitrack hitscan is done already
-def tool_measure(device, measurement):
+# measurement is {device, pos, neg, unit, val}, ie. optitrack hitscan is done already
+def tool_measure(measurement):
     global tools, active_session, active_session_is_recording
 
     if not active_session_is_recording:
         logging.warning("measurement while there was no debug session")
         return
 
+    device = measurement["device"]
     if not tools[device]["ready"]:
         logging.warning("measurement before tool was setup, ignoring")
         return
 
     # TODO do something different for osc
-    card, id, update = active_session.measure(**measurement)
+    card, id, update = active_session.measure(measurement)
     data = {
         "event": "measurement",
-        "card": card.asdict(),
+        "card": card.to_dict(),
         "id": id,
         "update": update
     }

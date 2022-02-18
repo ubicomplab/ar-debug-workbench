@@ -1,102 +1,87 @@
 import logging
-from re import I
 import time
 
 
 class DebugCard:
-    def __init__(self, pos, neg=None, val=None, unit=None, lo=None, hi=None):
-        # pos and neg should be dict with "type" and "val"
-        self.pos = pos
-        self.neg = neg
-        self.val = val
-        self.unit = unit
-
+    def __init__(self, device, pos, neg, unit=None, val=None, lo=None, hi=None) -> None:
+        self.device: str = device
+        self.pos: dict = pos
+        self.neg: dict = neg
+        self.unit: str = unit
+        self.val: float = val
+        self.lo: float = lo
+        self.hi: float = hi
         if unit is None:
-            # no bounds without a unit
             self.lo = None
             self.hi = None
-        else:
-            self.lo = lo
-            self.hi = hi
-
-        self.in_bounds = None 
-
-    # pos and neg must be the same, but bounds, val, and unit of None match anything
-    def matches(self, other: 'DebugCard') -> bool:
-        if self.pos["type"] != other.pos["type"] or self.pos["val"] != other.pos["val"]:
-            return False
-        if self.neg["type"] != other.neg["type"] or self.neg["val"] != other.neg["val"]:
-            return False
-        if self.lo is not None and other.lo is not None and self.lo != other.lo:
-            return False
-        if self.hi is not None and other.hi is not None and self.hi != other.hi:
-            return False
-        if self.val is not None and other.val is not None and self.val != other.val:
-            return False
-        if self.unit is not None and other.unit is not None and self.unit != other.unit:
-            return False
-        return True
-    
-    # unspecified unit is only equal to unspecified unit
-    def equals(self, other: 'DebugCard') -> bool:
-        return (
-            self.pos["type"] == other.pos["type"] and
-            self.pos["val"] == other.pos["val"] and
-            self.neg["type"] == other.neg["type"] and
-            self.neg["val"] == other.neg["val"] and
-            self.unit == other.unit
-        )
-
-    def asdict(self) -> dict:
-        return {
-            "pos": self.pos,
-            "neg": self.neg,
-            "val": self.val,
-            "unit": self.unit,
-            "lo": self.lo,
-            "hi": self.hi
-        }
 
     def __repr__(self) -> str:
-        return str(self.asdict())
+        return str(self.__dict__)
+
+    # returns true iff self is a valid measurement update for target
+    def will_update(self, target) -> bool:
+        if target.val is not None:
+            return False
+        return (
+            self.device == target.device and
+            self.pos == target.pos and
+            self.neg == target.neg and
+            (target.unit is None or self.unit == target.unit)
+        )
+
+    # 0 is inbounds, -1 is too low, +1 is too high, None is no bounds/val
+    def inbounds(self) -> int:
+        if self.val is None or (self.lo is None and self.hi is None):
+            return None
+        elif self.lo is not None and self.val < self.lo:
+            return -1
+        elif self.hi is not None and self.val > self.hi:
+            return 1
+        else:
+            return 0
+
+    def to_dict(self) -> dict:
+        return self.__dict__
 
 
 class DebugSession:
-    def __init__(self, name="", notes=""):
+    def __init__(self, name="", notes="") -> None:
         self.name: str = name
         self.notes: str = notes
         self.timestamp: str = time.strftime("%H:%M:%S", time.localtime())
         self.cards: list[DebugCard] = []
 
-    def find_match(self, card: DebugCard) -> int:
-        for i, existing in enumerate(self.cards):
-            if card.matches(existing):
-                return i
-        return -1
+    def __repr__(self) -> str:
+        return str(self.__dict__)
 
-    # returns tuple of card result, id, update bool
-    def measure(self, pos, neg, val, unit):
-        measurement_card = DebugCard(pos, neg, val, unit)
-        match = self.find_match(measurement_card)
-        if match != -1:
-            self.cards[match].val = val
-            self.cards[match].unit = unit
-            return self.cards[match], match, True
-        else:
-            self.cards.append(measurement_card)
-            return measurement_card, len(self.cards) - 1, False
+    def add_card(self, card: DebugCard) -> int:
+        self.cards.append(card)
+        return len(self.cards) - 1
 
-    def export(self):
-        logging.info("Export is WIP")
+    def remove_card(self, i) -> DebugCard:
+        return self.cards.pop(i)
+
+    # returns the resulting card, the id of the card, and update flag
+    def measure(self, measurement: dict) -> tuple[DebugCard, int, bool]:
+        measure_card = DebugCard(**measurement)
+        # check if we have a card for this measurement
+        for i, card in enumerate(self.cards):
+            if measure_card.will_update(card):
+                card.unit = measure_card.unit
+                card.val = measure_card.val
+                return card, i, True
+        
+        # didn't have a matching card, so just append to end of deck
+        self.cards.append(measure_card)
+        return measure_card, len(self.cards) - 1, False
+
+    def export(self) -> None:
+        logging.info("Export WIP")
         logging.info(str(self))
 
-    def asdict(self) -> dict:
-        return {
-            "name": self.name,
-            "notes": self.notes,
-            "timestamp": self.timestamp,
-            "cards": self.cards
-        }
-
-    def __repr__(self) -> str:
-        return str(self.asdict())
+    def to_dict(self) -> dict:
+        output = self.__dict__.copy()
+        output["cards"] = []
+        for card in self.cards:
+            output["cards"].append(card.__dict__)
+        return output

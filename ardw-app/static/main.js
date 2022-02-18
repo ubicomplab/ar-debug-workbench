@@ -1199,6 +1199,7 @@ function initPage() {
   custom_save_button.addEventListener("click", () => {
     if (sidebar_custom_selection.pos.type !== null) {
       var new_card = {
+        "device": "dmm",
         "pos": {
           "type": sidebar_custom_selection.pos.type,
           "val": sidebar_custom_selection.pos.val
@@ -1207,8 +1208,8 @@ function initPage() {
           "type": null,
           "val": null
         },
-        "val": null,
         "unit": null,
+        "val": null,
         "lo": null,
         "hi": null
       };

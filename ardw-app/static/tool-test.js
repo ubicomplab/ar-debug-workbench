@@ -91,8 +91,8 @@ window.onload = () => {
   document.getElementById("dmm-measure").addEventListener("click", () => {
     var data = {
       "name": "measurement",
-      "device": "dmm",
       "measurement": {
+        "device": "dmm",
         "pos": {
           "type": "pin",
           "val": 148
