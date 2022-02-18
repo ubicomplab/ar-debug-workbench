@@ -4,6 +4,7 @@ from flask.helpers import url_for
 from flask_socketio import SocketIO
 from flask_socketio import emit
 
+import configparser
 import json
 import logging
 import os
@@ -20,39 +21,15 @@ from tools import DebugCard, DebugSession
 from boardgeometry.hitscan import hitscan
 
 
-# alpha value for the EWMA filter on optitrack data
-EWMA_ALPHA = 0.0
+config = configparser.ConfigParser()
+config.read("config.ini")
+
 
 # buffer between permitted selection events in s
 SELECTION_BUFFER_TIME = 1
 
 # buffer between permitted selection events in pixels (2D)
 SELECTION_BUFFER_PIX = 20
-
-# frames per second to run at (should match optitrack data)
-UDP_FRAMERATE = 30
-
-# time the tip or end must be stationary to trigger a dwell event, in seconds
-DWELL_TIME = 0.5
-
-# maximum pixel difference within time_to_wait for the probe tip or end to be considered stationary
-THRESHOLD_STATIONARY = 5
-THRESHOLD_STATIONARY_END = 10
-
-# maximum pixel difference for probe tip to be considered within disambiguation menu
-THRESHOLD_MULTI_TIPPOS = 20
-
-# minimum pixel difference for the probe end to be making a selection in the disambiguation menu
-THRESHOLD_MULTI_ENDPOS = 20
-
-# horizontal buffer around the edge cuts that the probe needs to leave before it can reselect, in pixels
-RESELECT_HORIZONTAL_BUFFER = 20
-
-# vertical buffer above the table that the probe needs to leave before it can reselect, in pixels
-RESELECT_VERTICAL_BUFFER = 20
-
-# hitbox padding around pins for board selection
-PIN_PADDING = 5
 
 
 # converts optitrack pixels to layout mm in 2D
@@ -74,12 +51,6 @@ def history_within_threshold(history, refpoint, threshold):
     return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
 
 
-def pt_dist(pt1, pt2):
-    xdiff = pt1[0] - pt2[0]
-    ydiff = pt1[1] - pt2[1]
-    return np.sqrt(xdiff * xdiff + ydiff * ydiff)
-
-
 def detect_probe_behavior(tippos_history, endpos_history):
     global last_selection, multimenu_active, multimenu_baseline
 
@@ -87,7 +58,7 @@ def detect_probe_behavior(tippos_history, endpos_history):
     tippos_mean = np.mean(tippos_history, axis=1)
     endpos_mean = np.mean(endpos_history, axis=1)
 
-    if history_within_threshold(tippos_history, tippos_mean, THRESHOLD_STATIONARY):
+    if history_within_threshold(tippos_history, tippos_mean, config.getfloat("Optitrack", "DwellRadiusTip")):
         # the tip is dwelling
         if not multimenu_active:
             # no multimenu currently active, so we just select
@@ -95,16 +66,18 @@ def detect_probe_behavior(tippos_history, endpos_history):
             process_selection({"point": tippos_layout, "optitrack": True, "layer": "F", "pads": True, "tracks": False},
                                 raw_data={"tip": tippos_history[:, -1], "end": endpos_history[:, -1]},
                                 from_optitrack=True)
-        elif pt_dist(tippos_mean, multimenu_baseline["tip"]) > THRESHOLD_MULTI_TIPPOS:
+        #elif pt_dist(tippos_mean, multimenu_baseline["tip"]) > config.getfloat("Selection", "MultiStableRadius"):
+        elif np.linalg.norm(tippos_mean - multimenu_baseline["tip"]) > config.getfloat("Optitrack", "MultiStableRadius"):
             # we have an active multimenu, but we're dwelling elsewhere, so deselect and cancel multimenu
             logging.info("closing multimenu because tip moved")
             process_selection({"type": "deselect", "val": None})
-        elif history_within_threshold(endpos_history, endpos_mean, THRESHOLD_STATIONARY_END):
-            # our tip is still roughly in the same place and our end has been stable
+        elif history_within_threshold(endpos_history, endpos_mean, config.getfloat("Optitrack", "DwellRadiusEnd")):
+            # our tip is still roughly in the same place and our end is dwelling
             enddiff = multimenu_baseline["end"] - endpos_mean
             logging.info(f"enddiff is stable at {enddiff}")
 
-            if np.linalg.norm(enddiff) > THRESHOLD_MULTI_ENDPOS:
+            if np.linalg.norm(enddiff) > config.getfloat("Optitrack", "MultiSafeRadius"):
+                # the end has moved far enough away to be selecting an option
                 if np.abs(enddiff)[0] >= np.abs(enddiff)[1]:
                     # x change is greater
                     if enddiff[0] < 0:
@@ -129,9 +102,9 @@ def listen_udp():
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("127.0.0.1", 8052))
+    sock.bind((config.get("Server", "UDPAddress"), config.getint("Server", "UDPPort")))
 
-    history_len = int(UDP_FRAMERATE * DWELL_TIME)
+    history_len = int(config.getint("Server", "UDPFramerate") * config.getfloat("Optitrack", "DwellTime"))
 
     # N element array of historical tippos_pixel_coord
     # first element is oldest, last element is newest
@@ -141,15 +114,15 @@ def listen_udp():
     # tracks the previous value from udp for the EWMA filter
     prev_var = None
 
-    nextframe = time.time() + 1. / UDP_FRAMERATE
+    nextframe = time.time() + 1. / config.getint("Server", "UDPFramerate")
     while True:
-        data, addr = sock.recvfrom(1024)
+        data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
         var = np.array(struct.unpack("f" * 6, data))
 
         # EWMA filter to reduce noise
-        # TODO tune EWMA_ALPHA or switch to more complex low-pass/Kalman filter
+        # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
         if prev_var is not None:
-            var = var + EWMA_ALPHA * (prev_var - var)
+            var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
         prev_var = var
 
         tippos_pixel_coord = var[0:2]
@@ -185,7 +158,7 @@ def listen_udp():
         else:
             #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
             pass
-        nextframe = now + 1. / UDP_FRAMERATE
+        nextframe = now + 1. / config.getint("Server", "UDPFramerate")
 
 
 if getattr(sys, 'frozen', False):
@@ -612,7 +585,7 @@ def process_selection(data, raw_data=None, from_optitrack=False):
 
     if "point" in data:
         # a point/click
-        pin_padding = PIN_PADDING if from_optitrack else 0
+        pin_padding = config.getfloat("Optitrack", "PinPadding") if from_optitrack else 0
         hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"],
                        render_pads=data["pads"], render_tracks=data["tracks"], pin_padding=pin_padding)
         if len(hits) > 0:
@@ -810,12 +783,14 @@ if __name__ == "__main__":
     multimenu_options = []
     multimenu_baseline = None
 
-    port = 5000
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
+    else:
+        port = config.getint("Server", "Port")
 
-    # we just assume ptr and dmm are already connected
-    autoconnect_tools(["ptr", "dmm"])
+    if config.getboolean("Dev", "AutoconnectTools"):
+        # we just assume ptr and dmm are already connected
+        autoconnect_tools(["ptr", "dmm"])
 
     socketio.run(app, port=port, debug=True)
 
