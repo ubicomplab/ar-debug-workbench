@@ -54,6 +54,12 @@ var udp_selection = null;
  *  {hits: [], layer: str} */
 var multimenu_active = null;
 
+/** The color of the probe dot/crosshair */
+var PROBE_COLOR = "purple";
+
+/** If true, draw a crosshair where the probe currently is. If false, draw a dot. */
+var probe_crosshair = true;
+
 
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
 function deg2rad(deg) {
@@ -1104,8 +1110,11 @@ function initMouseHandlers() {
   }
 
   if (udp_selection !== null) {
-    circleAtPoint(canvasdict, udp_selection, "purple", 6)
-    // circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
+    if (probe_crosshair) {
+      crosshairAtPoint(canvasdict, udp_selection, PROBE_COLOR);
+    } else {
+      circleAtPoint(canvasdict, udp_selection, PROBE_COLOR, 6);
+    }
   }
 
   if (IS_PROJECTOR) {
@@ -1233,6 +1242,11 @@ function circleAtPoint(layerdict, coords, color, radius) {
   ctx.arc(coords.x, coords.y, radius * s, 0, 2 * Math.PI);
   ctx.fill();
   ctx.stroke();
+}
+
+function crosshairAtPoint(layerdict, coords, color) {
+  box = [coords.x, coords.y, coords.x, coords.y];
+  crosshairOnBox(layerdict, box, color);
 }
 
 function toolIconAtPoint(layerdict, coords, color) {
