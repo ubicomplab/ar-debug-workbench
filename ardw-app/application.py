@@ -21,306 +21,19 @@ from tools import DebugCard, DebugSession
 from boardgeometry.hitscan import hitscan
 
 
+logging.basicConfig(
+    filename="ardw.log",
+    filemode="w",
+    # encoding="utf-8",
+    level="DEBUG",
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logging.info("Server started")
+
 # config file is split into the following sections:
 # Server, Optitrack, Dev
 config = configparser.ConfigParser()
 config.read("config.ini")
-
-
-can_reselect = {
-    "probe": True,
-    "pos": True,
-    "neg": True,
-    "osc": True
-}
-
-board_multimenu = {
-    "active": False,        # if True, a board multimenu is being displayed and all board selections are blocked
-    "source": None,         # "probe", "pos", "neg", "osc"
-    "end-origin": None,     # np[x,y] of endpos when menu was generated
-    "tip-anchor": None,     # np[x,y] of tippos when menu was generated
-    "options": [],          # list of selection options {type, val}
-}
-
-
-# converts optitrack pixels to layout mm in 2D
-def optitrack_to_layout_coords(point):
-    global projector_calibration
-    return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
-            -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
-
-# convert layout mm to optitrack pixels in 2D
-def layout_to_optitrack_coords(point):
-    global projector_calibration
-    return [(point[0] + projector_calibration["tx"]) * projector_calibration["z"],
-            (-point[1] + projector_calibration["ty"]) * projector_calibration["z"]]
-
-
-def update_reselection_zone():
-    global pcbdata, reselection_zone
-
-    edges = pcbdata["edges_bbox"]
-    bounds = [[edges["minx"], edges["miny"]], [edges["maxx"], edges["maxy"]]]
-    bounds = np.array([layout_to_optitrack_coords(point) for point in bounds])
-
-    hbuffer = config.getfloat("Optitrack", "ReselectHorizontalBuffer")
-    vbuffer = config.getfloat("Optitrack", "ReselectVerticalBuffer")
-    bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
-
-    reselection_zone = {
-        "x": bounds[:, 0],
-        "y": bounds[:, 1],
-        "z": [0, vbuffer]
-    }
-
-
-# returns True iff tippos is inside reselection_zone (ignores z if tippos is 2D)
-def in_selection_zone(tippos):
-    global reselection_zone
-    for dim, val in zip(reselection_zone.keys(), tippos):
-        if val < reselection_zone[dim][0] or val > reselection_zone[dim][1]:
-            return False
-    return True
-
-
-# returns true iff all the points in history are within threshold of refpoint
-def history_within_threshold(history, refpoint, threshold):
-    history_len = np.shape(history)[1]
-    return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
-
-
-# returns both histories shifted left with the update added to the end
-def update_probe_history(history, tip_update, end_update):
-    history["tip"] = np.roll(history["tip"], -1, axis=1)
-    history["tip"][:, -1] = tip_update
-    history["end"] = np.roll(history["end"], -1, axis=1)
-    history["end"][:, -1] = end_update
-
-
-def make_selection(new_selection):
-    global selection
-    logging.info(f"Making selection {new_selection}")
-    selection["comp"] = None
-    selection["pin"] = None
-    selection["net"] = None
-    if (new_selection["type"] != "deselect"):
-        selection[new_selection["type"]] = new_selection["val"]
-    socketio.emit("selection", new_selection)
-
-
-# handles a selection event from the client
-def client_selection(data):
-    global pcbdata, pinref_to_idx, socketio
-
-    if "point" in data:
-        # a click in layout
-        hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"],
-                       render_pads=data["pads"], render_tracks=data["tracks"], pin_padding=0)
-        
-        if len(hits) == 0:
-            make_selection({"type": "deselect", "val": None})
-        elif len(hits) == 1:
-            make_selection(hits[0])
-        else:
-            socketio.emit("selection", {"type": "multi", "point": data["point"], "layer": data["layer"],
-                                        "hits": hits, "from_optitrack": False})
-    else:
-        # a click in schematic or a disambiguation choice
-        make_selection(data)
-
-
-# handles a probe selection event
-# assumes this event was triggered under valid circumstances
-def probe_selection(name, tippos, endpos):
-    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
-
-    # board layer is hardcoded for now
-    layer = "F"
-
-    point = optitrack_to_layout_coords(tippos)
-
-    # TODO let user click on tracks?
-    # TODO user setting for what types can be probed
-    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
-                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
-
-    if len(hits) == 1:
-        can_reselect[name] = False
-        make_selection(hits[0])
-    elif len(hits) > 1:
-        can_reselect[name] = False
-
-        board_multimenu["active"] = True
-        board_multimenu["source"] = name
-        board_multimenu["tip-anchor"] = tippos
-        board_multimenu["end-origin"] = endpos
-        # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
-        if len(hits) < 4:
-            hits += [None] * (4 - len(hits))
-        board_multimenu["options"] = hits[:4]
-
-        # don't need a point since main.js ignores selection if from_optitrack=True
-        socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
-
-
-# handles a dmm selection event
-# assumes this event was triggered under valid circumstances
-def dmm_selection(probe, tippos, endpos):
-    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
-
-    # board layer is hardcoded for now
-    layer = "F"
-
-    point = optitrack_to_layout_coords(tippos)
-
-    # the multimeter doesn't want to select components
-    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=True,
-                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
-
-    if len(hits) == 1:
-        logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
-
-        can_reselect[probe] = False
-        # TODO store and display multimeter selection state
-    elif len(hits) > 1:
-        can_reselect[probe] = False
-
-        # TODO auto disambiguation if we have a guided measurement
-
-        # if we still need disambiguation, generate menu
-        board_multimenu["active"] = True
-        board_multimenu["source"] = probe
-        board_multimenu["tip-anchor"] = tippos
-        board_multimenu["end-origin"] = endpos
-        # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
-        if len(hits) < 4:
-            hits += [None] * (4 - len(hits))
-        board_multimenu["options"] = hits[:4]
-        
-        # TODO display multimeter disambiguation menu
-        #socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
-
-        pass
-
-
-# handles a board multimeter selection event
-# assumes this event was triggered under valid circumstances
-def multimenu_selection(name, endpos):
-    global board_multimenu
-
-    v = endpos - board_multimenu["end-origin"]
-    if np.abs(v[0]) > np.abs(v[1]):
-        # x change is greater
-        if v[0] < 0:
-            choice = board_multimenu["options"][2]
-        else:
-            choice = board_multimenu["options"][0]
-    else:
-        # y change is greater
-        if v[1] < 0:
-            choice = board_multimenu["options"][1]
-        else:
-            choice = board_multimenu["options"][3]
-
-    if choice is not None:
-        # a valid option was selected
-        board_multimenu["active"] = False
-        make_selection(choice)
-
-
-# checks for probe dwelling (selection and disambiguation) and fires the appropriate event
-# name is "probe", "pos", "neg", "osc" and history is {"tip": [], "end": []}
-# selection_fn is called when the tip is dwelling and wants to fire a selection event
-def check_probe_events(name: str, history: dict, selection_fn):
-    global board_multimenu, can_reselect, socketio
-
-    if not in_selection_zone(history["tip"][:, -1]):
-        can_reselect[name] = True
-        if board_multimenu["active"] and board_multimenu["source"] == name:
-            board_multimenu["active"] = False
-            socketio.emit("selection", {"type": "cancel-multi"})
-        return
-
-    tip_mean = np.mean(history["tip"], axis=1)
-    end_mean = np.mean(history["tip"], axis=1)
-
-    if not board_multimenu["active"]:
-        # no multimenu is open, we can select
-        if can_reselect[name] and history_within_threshold(history["tip"], tip_mean, config.get("Optitrack", "DwellRadiusTip")):
-            selection_fn(name, tip_mean, end_mean)
-    elif board_multimenu["source"] == name:
-        # a multimenu for this probe is open
-        if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
-                history_within_threshold(history["end"], end_mean, config.get("Optitrack", "DwellRadiusEnd")) and \
-                np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius"):
-            # tip is still in place and end is dwelling outside the "safe zone"
-            multimenu_selection(name, end_mean)
-
-
-def listen_udp():
-    global socketio
-
-    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((config.get("Server", "UDPAddress"), config.getint("Server", "UDPPort")))
-
-    framerate = config.getint("Server", "UDPFramerate")
-    history_len = int(framerate * config.getfloat("Optitrack", "DwellTime"))
-
-    # probe histories have "tip" and "end", each of which is a 2D array of points from oldest to newest
-    # blame Ishan for the fact that these arrays are transposed s.t. the ith point is at [:, i] not [i]
-    # TODO transpose them back
-    probe_history = {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
-    dmm_probe_history = {
-        "pos": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))},
-        "neg": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
-    }
-
-    # tracks the previous value from udp for the EWMA filter
-    prev_var = None
-
-    nextframe = time.time() + 1. / framerate
-    while True:
-        data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
-        var = np.array(struct.unpack("f" * 6, data))
-
-        # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
-        if prev_var is not None:
-            var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
-        prev_var = var
-
-        # TODO add z values
-        probe_tip = var[0:2]
-        probe_end = var[2:4]
-        board_pos = var[4:6]
-
-        update_probe_history(probe_history, probe_tip, probe_end)
-        check_probe_events("probe", probe_history, selection_fn=probe_selection)
-
-        # for now, we don't have the necessary values
-        update_probe_history(dmm_probe_history["pos"], None, None)
-        update_probe_history(dmm_probe_history["neg"], None, None)
-        for probe, history in dmm_probe_history.items():
-            check_probe_events(probe, history, selection_fn=dmm_selection)
-
-        # send the tip and end positions to the web app to display
-        probe_tip_layout = optitrack_to_layout_coords(probe_tip)
-        probe_end_layout = optitrack_to_layout_coords(probe_end)
-
-        socketio.emit("udp", {
-            "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
-            "endpos_layout": {"x": probe_end_layout[0], "y": probe_end_layout[1]},
-            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]}
-        })
-
-        now = time.time()
-        diff = nextframe - now
-        if diff > 0:
-            time.sleep(diff)
-        else:
-            #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
-            pass
-        nextframe = now + 1. / framerate
 
 
 if getattr(sys, 'frozen', False):
@@ -728,6 +441,288 @@ def init_data(pcbdata, schdata):
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
 
+# converts optitrack pixels to layout mm in 2D
+def optitrack_to_layout_coords(point):
+    global projector_calibration
+    return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
+            -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
+
+# convert layout mm to optitrack pixels in 2D
+def layout_to_optitrack_coords(point):
+    global projector_calibration
+    return [(point[0] + projector_calibration["tx"]) * projector_calibration["z"],
+            (-point[1] + projector_calibration["ty"]) * projector_calibration["z"]]
+
+
+# updates the selection safe zone in place (call any time we transform the projector)
+def update_reselection_zone():
+    global pcbdata, reselection_zone
+
+    edges = pcbdata["edges_bbox"]
+    bounds = [[edges["minx"], edges["miny"]], [edges["maxx"], edges["maxy"]]]
+    bounds = np.array([layout_to_optitrack_coords(point) for point in bounds])
+
+    hbuffer = config.getfloat("Optitrack", "ReselectHorizontalBuffer")
+    vbuffer = config.getfloat("Optitrack", "ReselectVerticalBuffer")
+    bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
+
+    reselection_zone = {
+        "x": bounds[:, 0],
+        "y": bounds[:, 1],
+        "z": [0, vbuffer]
+    }
+
+
+# returns True iff tippos is inside reselection_zone (ignores z if tippos is 2D)
+def in_selection_zone(tippos):
+    global reselection_zone
+    for dim, val in zip(reselection_zone.keys(), tippos):
+        if val < reselection_zone[dim][0] or val > reselection_zone[dim][1]:
+            return False
+    return True
+
+
+# returns true iff all the points in history are within threshold of refpoint
+def history_within_threshold(history, refpoint, threshold):
+    history_len = np.shape(history)[1]
+    return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+
+
+# returns both histories shifted left with the update added to the end
+def update_probe_history(history, tip_update, end_update):
+    history["tip"] = np.roll(history["tip"], -1, axis=1)
+    history["tip"][:, -1] = tip_update
+    history["end"] = np.roll(history["end"], -1, axis=1)
+    history["end"][:, -1] = end_update
+
+
+# actually makes a selection and echoes it to all clients
+def make_selection(new_selection):
+    global selection
+    logging.info(f"Making selection {new_selection}")
+    selection["comp"] = None
+    selection["pin"] = None
+    selection["net"] = None
+    if (new_selection["type"] != "deselect"):
+        selection[new_selection["type"]] = new_selection["val"]
+    socketio.emit("selection", new_selection)
+
+
+# handles a selection event from the client
+def client_selection(data):
+    global pcbdata, pinref_to_idx, socketio
+
+    if "point" in data:
+        # a click in layout
+        hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"],
+                       render_pads=data["pads"], render_tracks=data["tracks"], pin_padding=0)
+        
+        if len(hits) == 0:
+            make_selection({"type": "deselect", "val": None})
+        elif len(hits) == 1:
+            make_selection(hits[0])
+        else:
+            socketio.emit("selection", {"type": "multi", "point": data["point"], "layer": data["layer"],
+                                        "hits": hits, "from_optitrack": False})
+    else:
+        # a click in schematic or a disambiguation choice
+        make_selection(data)
+
+
+# handles a probe selection event
+# assumes this event was triggered under valid circumstances
+def probe_selection(name, tippos, endpos):
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+
+    # board layer is hardcoded for now
+    layer = "F"
+
+    point = optitrack_to_layout_coords(tippos)
+
+    # TODO let user click on tracks?
+    # TODO user setting for what types can be probed
+    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
+                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
+
+    if len(hits) == 1:
+        can_reselect[name] = False
+        make_selection(hits[0])
+    elif len(hits) > 1:
+        can_reselect[name] = False
+
+        board_multimenu["active"] = True
+        board_multimenu["source"] = name
+        board_multimenu["tip-anchor"] = tippos
+        board_multimenu["end-origin"] = endpos
+        # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
+        if len(hits) < 4:
+            hits += [None] * (4 - len(hits))
+        board_multimenu["options"] = hits[:4]
+
+        # don't need a point since main.js ignores selection if from_optitrack=True
+        socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
+
+
+# handles a dmm selection event
+# assumes this event was triggered under valid circumstances
+def dmm_selection(probe, tippos, endpos):
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+
+    # board layer is hardcoded for now
+    layer = "F"
+
+    point = optitrack_to_layout_coords(tippos)
+
+    # the multimeter doesn't want to select components
+    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=True,
+                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
+
+    if len(hits) == 1:
+        logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
+
+        can_reselect[probe] = False
+        # TODO store and display multimeter selection state
+    elif len(hits) > 1:
+        can_reselect[probe] = False
+
+        # TODO auto disambiguation if we have a guided measurement
+
+        # if we still need disambiguation, generate menu
+        board_multimenu["active"] = True
+        board_multimenu["source"] = probe
+        board_multimenu["tip-anchor"] = tippos
+        board_multimenu["end-origin"] = endpos
+        # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
+        if len(hits) < 4:
+            hits += [None] * (4 - len(hits))
+        board_multimenu["options"] = hits[:4]
+        
+        # TODO display multimeter disambiguation menu
+        #socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
+
+        pass
+
+
+# handles a board multimeter selection event
+# assumes this event was triggered under valid circumstances
+def multimenu_selection(name, endpos):
+    global board_multimenu
+
+    v = endpos - board_multimenu["end-origin"]
+    if np.abs(v[0]) > np.abs(v[1]):
+        # x change is greater
+        if v[0] < 0:
+            choice = board_multimenu["options"][2]
+        else:
+            choice = board_multimenu["options"][0]
+    else:
+        # y change is greater
+        if v[1] < 0:
+            choice = board_multimenu["options"][1]
+        else:
+            choice = board_multimenu["options"][3]
+
+    if choice is not None:
+        # a valid option was selected
+        board_multimenu["active"] = False
+        make_selection(choice)
+
+
+# checks for probe dwelling (selection and disambiguation) and fires the appropriate event
+# name is "probe", "pos", "neg", "osc" and history is {"tip": [], "end": []}
+# selection_fn is called when the tip is dwelling and wants to fire a selection event
+def check_probe_events(name: str, history: dict, selection_fn):
+    global board_multimenu, can_reselect, socketio
+
+    if not in_selection_zone(history["tip"][:, -1]):
+        can_reselect[name] = True
+        if board_multimenu["active"] and board_multimenu["source"] == name:
+            board_multimenu["active"] = False
+            socketio.emit("selection", {"type": "cancel-multi"})
+        return
+
+    tip_mean = np.mean(history["tip"], axis=1)
+    end_mean = np.mean(history["tip"], axis=1)
+
+    if not board_multimenu["active"]:
+        # no multimenu is open, we can select
+        if can_reselect[name] and history_within_threshold(history["tip"], tip_mean, config.get("Optitrack", "DwellRadiusTip")):
+            selection_fn(name, tip_mean, end_mean)
+    elif board_multimenu["source"] == name:
+        # a multimenu for this probe is open
+        if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
+                history_within_threshold(history["end"], end_mean, config.get("Optitrack", "DwellRadiusEnd")) and \
+                np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius"):
+            # tip is still in place and end is dwelling outside the "safe zone"
+            multimenu_selection(name, end_mean)
+
+
+def listen_udp():
+    global socketio
+
+    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((config.get("Server", "UDPAddress"), config.getint("Server", "UDPPort")))
+
+    framerate = config.getint("Server", "UDPFramerate")
+    history_len = int(framerate * config.getfloat("Optitrack", "DwellTime"))
+
+    # probe histories have "tip" and "end", each of which is a 2D array of points from oldest to newest
+    # blame Ishan for the fact that these arrays are transposed s.t. the ith point is at [:, i] not [i]
+    # TODO transpose them back
+    probe_history = {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+    dmm_probe_history = {
+        "pos": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))},
+        "neg": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+    }
+
+    # tracks the previous value from udp for the EWMA filter
+    prev_var = None
+
+    nextframe = time.time() + 1. / framerate
+    while True:
+        data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
+        var = np.array(struct.unpack("f" * 6, data))
+
+        # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
+        if prev_var is not None:
+            var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
+        prev_var = var
+
+        # TODO add z values
+        probe_tip = var[0:2]
+        probe_end = var[2:4]
+        board_pos = var[4:6]
+
+        update_probe_history(probe_history, probe_tip, probe_end)
+        check_probe_events("probe", probe_history, selection_fn=probe_selection)
+
+        # for now, we don't have the necessary values
+        update_probe_history(dmm_probe_history["pos"], None, None)
+        update_probe_history(dmm_probe_history["neg"], None, None)
+        for probe, history in dmm_probe_history.items():
+            check_probe_events(probe, history, selection_fn=dmm_selection)
+
+        # send the tip and end positions to the web app to display
+        probe_tip_layout = optitrack_to_layout_coords(probe_tip)
+        probe_end_layout = optitrack_to_layout_coords(probe_end)
+
+        socketio.emit("udp", {
+            "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
+            "endpos_layout": {"x": probe_end_layout[0], "y": probe_end_layout[1]},
+            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]}
+        })
+
+        now = time.time()
+        diff = nextframe - now
+        if diff > 0:
+            time.sleep(diff)
+        else:
+            #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
+            pass
+        nextframe = now + 1. / framerate
+
+
 # handles a tool connection event, which comes from optitrack or other server code
 # device is "ptr", "dmm", or "osc", and element is key in the "ready-elements" dict
 # for the specified device in the tools dict
@@ -788,16 +783,6 @@ def autoconnect_tools(enabled):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        filename="ardw.log",
-        filemode="w",
-        # encoding="utf-8",
-        level="DEBUG",
-        format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-
-    logging.info("Server started")
-
     schdata = None
     pcbdata = None
 
@@ -874,10 +859,22 @@ if __name__ == "__main__":
     # if False, measurements are ignored and custom cards are not highlighted
     active_session_is_recording = False
 
-    # if true, we're currently displaying (and listening for) a multimenu on the projector view
-    multimenu_active = False
-    multimenu_options = []
-    multimenu_baseline = None
+    # controls whether or not various probes can make a new selection
+    can_reselect = {
+        "probe": True,
+        "pos": True,
+        "neg": True,
+        "osc": True
+    }
+
+    # contains state needed to compute multimenu disambiguation
+    board_multimenu = {
+        "active": False,        # if True, a board multimenu is being displayed and all board selections are blocked
+        "source": None,         # "probe", "pos", "neg", "osc"
+        "end-origin": None,     # np[x,y] of endpos when menu was generated
+        "tip-anchor": None,     # np[x,y] of tippos when menu was generated
+        "options": [],          # list of selection options {type, val}
+    }
 
     # {x, y, z}, where each coordinate is [min, max]
     reselection_zone = None
