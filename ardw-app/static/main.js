@@ -1290,7 +1290,12 @@ function initSocket() {
         deselectAll(true);
         break;
       case "multi":
-        multiMenu(data.point, data.layer, data.hits)
+        if (!data.from_optitrack) {
+          multiMenu(data.point, data.layer, data.hits)
+        }
+        break;
+      case "cancel-multi":
+        document.getElementById("sch-multi-click").classList.add("hidden");
         break;
     }
   });
@@ -1324,14 +1329,8 @@ function initSocket() {
 
   printcounter = 0
   socket.on("udp", (data) => {
-    return;
-    // console.log(data)
-    if (printcounter % 30 == 0) {
-      console.log(`tip   at ${data["tippos_pixel"].x.toFixed(1)}, ${data["tippos_pixel"].y.toFixed(1)}`)
-      console.log(`board at ${data["boardpos_pixel"].x.toFixed(1)}, ${data["boardpos_pixel"].y.toFixed(1)}`)
-      printcounter = 0;
-    }
-    printcounter++;
+    udp_selection = data["tippos_layout"]
+    drawHighlights();
   })
 }
 

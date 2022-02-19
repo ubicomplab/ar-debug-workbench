@@ -130,11 +130,15 @@ def net_hitscan(x, y, pcbdata, layer=None, render_pads=True, render_tracks=False
     return list(nets_hit)
 
 
-def hitscan(x, y, pcbdata, pinref_to_idx, layer=None, render_pads=True, render_tracks=False, pin_padding=0):
-    hits = [{"type": "comp", "val": hit}
-            for hit in bbox_hitscan(x, y, pcbdata, layer)]
-    hits += [{"type": "pin", "val": hit}
-             for hit in pin_hitscan(x, y, pcbdata, pinref_to_idx, layer, render_pads, pin_padding)]
-    hits += [{"type": "net", "val": hit}
-             for hit in net_hitscan(x, y, pcbdata, layer, render_pads, render_tracks, pin_padding)]
+def hitscan(x, y, pcbdata, pinref_to_idx, layer=None, render_pads=True, render_tracks=False, pin_padding=0, types=["comp", "pin", "net"]):
+    hits = []
+    if "comp" in types:
+        hits += [{"type": "comp", "val": hit}
+                 for hit in bbox_hitscan(x, y, pcbdata, layer)]
+    if "pin" in types:
+        hits += [{"type": "pin", "val": hit}
+                 for hit in pin_hitscan(x, y, pcbdata, pinref_to_idx, layer, render_pads, pin_padding)]
+    if "net" in types:
+        hits += [{"type": "net", "val": hit}
+                 for hit in net_hitscan(x, y, pcbdata, layer, render_pads, render_tracks, pin_padding)]
     return hits

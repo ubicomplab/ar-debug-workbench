@@ -108,6 +108,9 @@ function initSocket() {
           multimenu_active = {"hits": selection.hits, "layer": selection.layer}
         }
         break;
+      case "cancel-multi":
+        multimenu_active = null;
+        break;
     }
   });
   socket.on("projector-mode", (mode) => {

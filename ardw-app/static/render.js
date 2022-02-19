@@ -1344,7 +1344,7 @@ function drawMultiMenu(canvasdict, hits) {
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.font = "5px sans-serif";
+  ctx.font = "4px sans-serif";
 
   for (let i in hits) {
     let hit = hits[i];
