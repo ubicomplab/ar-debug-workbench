@@ -49,6 +49,7 @@ var ibom_settings = {
 
 /** {type, val, coords, color} */
 var udp_selection = null;
+var udp_grey = null;
 
 /** if not null, display multimenu
  *  {hits: [], layer: str} */
@@ -58,7 +59,7 @@ var multimenu_active = null;
 var PROBE_COLOR = "purple";
 
 /** If true, draw a crosshair where the probe currently is. If false, draw a dot. */
-var probe_crosshair = true;
+var probe_crosshair = false;
 
 
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
@@ -1115,6 +1116,10 @@ function initMouseHandlers() {
     } else {
       circleAtPoint(canvasdict, udp_selection, PROBE_COLOR, 6);
     }
+  }
+
+  if (udp_grey !== null) {
+    circleAtPoint(canvasdict, udp_grey, "green", 6);
   }
 
   if (IS_PROJECTOR) {

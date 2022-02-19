@@ -1329,6 +1329,7 @@ function initSocket() {
 
   printcounter = 0
   socket.on("udp", (data) => {
+//    console.log(data)
     udp_selection = data["tippos_layout"]
     drawHighlights();
   })

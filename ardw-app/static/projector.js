@@ -140,6 +140,7 @@ function initSocket() {
   socket.on("udp", (data) => {
     optitrackBoardposUpdate(data["boardpos_pixel"])
     udp_selection = data["tippos_layout"]
+    udp_grey = data["greytip"]
     drawHighlights()
   })
   socket.on("toggleboardpos", (val) => {

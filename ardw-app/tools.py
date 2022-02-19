@@ -62,7 +62,7 @@ class DebugSession:
         return self.cards.pop(i)
 
     # returns the resulting card, the id of the card, and update flag
-    def measure(self, measurement: dict) -> tuple[DebugCard, int, bool]:
+    def measure(self, measurement: dict):
         measure_card = DebugCard(**measurement)
         # check if we have a card for this measurement
         for i, card in enumerate(self.cards):

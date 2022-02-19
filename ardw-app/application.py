@@ -646,12 +646,12 @@ def check_probe_events(name: str, history: dict, selection_fn):
 
     if not board_multimenu["active"]:
         # no multimenu is open, we can select
-        if can_reselect[name] and history_within_threshold(history["tip"], tip_mean, config.get("Optitrack", "DwellRadiusTip")):
+        if can_reselect[name] and history_within_threshold(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip")):
             selection_fn(name, tip_mean, end_mean)
     elif board_multimenu["source"] == name:
         # a multimenu for this probe is open
         if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
-                history_within_threshold(history["end"], end_mean, config.get("Optitrack", "DwellRadiusEnd")) and \
+                history_within_threshold(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd")) and \
                 np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius"):
             # tip is still in place and end is dwelling outside the "safe zone"
             multimenu_selection(name, end_mean)
@@ -682,17 +682,26 @@ def listen_udp():
     nextframe = time.time() + 1. / framerate
     while True:
         data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
-        var = np.array(struct.unpack("f" * 6, data))
+        var = np.array(struct.unpack("f" * 13, data))
 
         # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
         if prev_var is not None:
             var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
         prev_var = var
 
-        # TODO add z values
-        probe_tip = var[0:2]
-        probe_end = var[2:4]
-        board_pos = var[4:6]
+        # board and red/grey tips are x,y,z where x,y are in pixels and z is in real mm
+        # red/grey end is x,y in pixels
+        probe_tip = var[0:3]
+        probe_end = var[3:5]
+        board_pos = var[5:8]
+        grey_tip = var[8:11]
+        grey_end = var[11:13]
+
+        # to avoid crashes for now, ignoring z values
+        probe_tip = probe_tip[:2]
+        grey_tip = grey_tip[:2]
+        board_pos = board_pos[:2]
+
 
         update_probe_history(probe_history, probe_tip, probe_end)
         check_probe_events("probe", probe_history, selection_fn=probe_selection)
@@ -707,9 +716,12 @@ def listen_udp():
         probe_tip_layout = optitrack_to_layout_coords(probe_tip)
         probe_end_layout = optitrack_to_layout_coords(probe_end)
 
+        grey_tip_layout = optitrack_to_layout_coords(grey_tip)
+
         socketio.emit("udp", {
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_layout": {"x": probe_end_layout[0], "y": probe_end_layout[1]},
+            "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
             "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]}
         })
 
