@@ -49,10 +49,17 @@ var ibom_settings = {
 
 /** {type, val, coords, color} */
 var udp_selection = null;
+var udp_grey = null;
 
 /** if not null, display multimenu
  *  {hits: [], layer: str} */
 var multimenu_active = null;
+
+/** The color of the probe dot/crosshair */
+var PROBE_COLOR = "purple";
+
+/** If true, draw a crosshair where the probe currently is. If false, draw a dot. */
+var probe_crosshair = false;
 
 
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
@@ -1104,8 +1111,15 @@ function initMouseHandlers() {
   }
 
   if (udp_selection !== null) {
-    circleAtPoint(canvasdict, udp_selection, "purple", 6)
-    // circleAtPoint(canvasdict, {x: 0, y: 0}, "white", 10)
+    if (probe_crosshair) {
+      crosshairAtPoint(canvasdict, udp_selection, PROBE_COLOR);
+    } else {
+      circleAtPoint(canvasdict, udp_selection, PROBE_COLOR, 6);
+    }
+  }
+
+  if (udp_grey !== null) {
+    circleAtPoint(canvasdict, udp_grey, "green", 6);
   }
 
   if (IS_PROJECTOR) {
@@ -1235,6 +1249,11 @@ function circleAtPoint(layerdict, coords, color, radius) {
   ctx.stroke();
 }
 
+function crosshairAtPoint(layerdict, coords, color) {
+  box = [coords.x, coords.y, coords.x, coords.y];
+  crosshairOnBox(layerdict, box, color);
+}
+
 function toolIconAtPoint(layerdict, coords, color) {
   var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
 
@@ -1324,18 +1343,18 @@ function drawMultiMenu(canvasdict, hits) {
 
   var flip = canvasdict.layer === "B" ? -1 : 1;
 
-  var centerpoint = [250, 100]
+  var centerpoint = [50, 100]
   var offset_len = 25
   var offset_deltas = [[-offset_len, 0], [0, -offset_len], [offset_len, 0], [0, offset_len]]
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.font = "5px sans-serif";
+  ctx.font = "4px sans-serif";
 
   for (let i in hits) {
     let hit = hits[i];
     let text = getElementName(hit);
-    ctx.fillText(getElementName(hit), centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
+    ctx.fillText(text, centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
   }
 }
 

@@ -4,6 +4,7 @@ from flask.helpers import url_for
 from flask_socketio import SocketIO
 from flask_socketio import emit
 
+import configparser
 import json
 import logging
 import os
@@ -16,148 +17,23 @@ import time
 
 import numpy as np
 
-from example_tool import ExampleTool
 from tools import DebugCard, DebugSession
-
 from boardgeometry.hitscan import hitscan
 
 
-# alpha value for the EWMA filter on optitrack data
-EWMA_ALPHA = 0.0
+logging.basicConfig(
+    filename="ardw.log",
+    filemode="w",
+    # encoding="utf-8",
+    level="DEBUG",
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logging.info("Server started")
 
-# buffer between permitted selection events in s
-SELECTION_BUFFER_TIME = 0.75
-
-SELECTION_BUFFER_PIX = 20
-
-
-def optitrack_to_layout_coords(point):
-    global projector_calibration
-    return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
-            -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
-
-
-# returns true iff all the points in history are within threshold of each other
-# TODO derive history_len from history.shape
-def history_within_threshold(history, threshold):
-    history_len = np.shape(history)[1]
-    return np.all(np.linalg.norm(np.transpose(history) - np.tile(history[:,0], (history_len, 1)), axis=1) <= threshold)
-
-
-def pt_dist(pt1, pt2):
-    xdiff = pt1[0] - pt2[0]
-    ydiff = pt1[1] - pt2[1]
-    return np.sqrt(xdiff * xdiff + ydiff * ydiff)
-
-
-def listen_udp():
-    global socketio, multimenu_active, multimenu_options, multimenu_baseline
-
-    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("127.0.0.1", 8052))
-
-    framerate = 30 #fps
-    time_to_wait = .5
-
-    # maximum pixel difference within time_to_wait for the probe tip or end to be considered stationary
-    threshold_stationary = 5
-
-    threshold_stationary_end = 10
-
-    # maximum pixel difference for probe tip to be considered within disambiguation menu
-    threshold_multi_tippos = 20
-
-    # minimum pixel difference for the probe end to be making a selection in the disambiguation menu
-    threshold_multi_endpos = 20
-
-    history_len = int(framerate * time_to_wait)
-
-    # N element array of historical tippos_pixel_coord
-    # first element is oldest, last element is newest
-    tippos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
-
-    endpos_pixel_history = np.arange(history_len * 2).reshape(2, history_len)
-
-    prev_var = None
-
-    # location of last selection
-    last_selection_tippos = np.array([0, 0])
-
-    nextframe = time.time() + 1. / framerate
-    while True:
-        data, addr = sock.recvfrom(1024)
-        var = np.array(struct.unpack("f" * 6, data))
-
-        # EWMA filter to reduce noise
-        # TODO tune EWMA_ALPHA or switch to more complex low-pass/Kalman filter
-        if prev_var is not None:
-            var = var + EWMA_ALPHA * (prev_var - var)
-        prev_var = var
-
-        tippos_pixel_coord = var[0:2]
-        endpos_pixel_coord = var[2:4]
-        board_pixel_coord = var[4:6]
-
-        tippos_pixel_history = np.roll(tippos_pixel_history, -1, axis=1)
-        tippos_pixel_history[:, -1] = tippos_pixel_coord
-
-        endpos_pixel_history = np.roll(endpos_pixel_history, -1, axis=1)
-        endpos_pixel_history[:, -1] = endpos_pixel_coord
-
-        tippos_layout_coord = optitrack_to_layout_coords(tippos_pixel_coord)
-
-        # if all the values within tippos_pixel_history are similar enough
-        if history_within_threshold(tippos_pixel_history, threshold_stationary):
-            # it's been in the same place
-            if not multimenu_active:
-                # no multimenu currently active, so we just select
-                # as long as we're far enough away from the previous selection attempt
-                if np.linalg.norm(last_selection_tippos - tippos_pixel_coord) >= SELECTION_BUFFER_PIX:
-                    last_selection_tippos = tippos_pixel_coord
-                    process_selection({"point": tippos_layout_coord, "optitrack": True, "layer": "F", "pads": True, "tracks": False},
-                                      raw_data={"tip": tippos_pixel_coord, "end": endpos_pixel_coord},
-                                      from_optitrack=True)
-            elif pt_dist(tippos_pixel_coord, multimenu_baseline["tip"]) > threshold_multi_tippos:
-                # we have an active multimenu but we've moved our tip too far, so deselect and cancel multimenu
-                logging.info("closing multimenu because tip moved")
-                process_selection({"type": "deselect", "val": None})
-            elif history_within_threshold(endpos_pixel_history, threshold_stationary_end):
-                # our tip is still roughly in the same place and our end has been stable
-                enddiff = multimenu_baseline["end"] - endpos_pixel_coord
-                logging.info(f"enddiff is stable at {enddiff}")
-
-                if np.linalg.norm(enddiff) > threshold_multi_endpos:
-                    if np.abs(enddiff)[0] >= np.abs(enddiff)[1]:
-                        # x change is greater
-                        if enddiff[0] < 0:
-                            process_selection(multimenu_options[2])
-                            logging.info("making multimenu selection 2")
-                        else:
-                            process_selection(multimenu_options[0])
-                            logging.info("making multimenu selection 0")
-                    else:
-                        # y change is greater
-                        if enddiff[1] < 0:
-                            process_selection(multimenu_options[1])
-                            logging.info("making multimenu selection 1")
-                        else:
-                            process_selection(multimenu_options[3])
-                            logging.info("making multimenu selection 3")
-
-        socketio.emit("udp", {
-            "tippos_layout": {"x": tippos_layout_coord[0], "y": tippos_layout_coord[1]},
-            "boardpos_pixel": {"x": board_pixel_coord[0], "y": board_pixel_coord[1]}
-        })
-
-        now = time.time()
-        diff = nextframe - now
-        if diff > 0:
-            time.sleep(diff)
-        else:
-            #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
-            pass
-        nextframe = now + 1. / framerate
+# config file is split into the following sections:
+# Server, Optitrack, Dev
+config = configparser.ConfigParser()
+config.read("config.ini")
 
 
 if getattr(sys, 'frozen', False):
@@ -192,6 +68,7 @@ def index():
         icon=url_for("static", filename="favicon.ico"),
         main=url_for("main_page"),
         proj=url_for("projector_page"),
+        tool=url_for("tool_debug_page"),
         js=url_for("static", filename="index.js")
     )
 
@@ -295,8 +172,6 @@ def get_datadicts():
 # -- end app routing --
 
 # -- socket --
-
-
 @socketio.on("connect")
 def handle_connect():
     global active_connections, selection, projector_mode, projector_calibration, active_session
@@ -317,17 +192,17 @@ def handle_connect():
         for val, ready in tools[tool]["ready-elements"].items():
             if ready:
                 emit("tool-connect", {"type": tool,
-                     "val": val, "status": "success"})
+                     "val": val, "ready": tools[tool]["ready"]})
 
     if active_session is not None:
-        data = active_session.asdict()
+        data = active_session.to_dict()
         data["event"] = "new"
         emit("debug-session", data)
 
-        for i in range(len(active_session.cards)):
+        for i, card in enumerate(active_session.cards):
             data = {
                 "event": "custom",
-                "card": active_session.cards[i].asdict(),
+                "card": card.to_dict(),
                 "id": i
             }
             emit("debug-session", data)
@@ -342,7 +217,8 @@ def handle_disconnect():
 @socketio.on("selection")
 def handle_selection(data):
     logging.info(f"Socket received selection {data}")
-    process_selection(data)
+    #process_selection(data)
+    client_selection(data)
 
 
 @socketio.on("projector-mode")
@@ -358,6 +234,7 @@ def handle_projector_adjust(adjust):
     global projector_calibration
     logging.info(f"Received projector adjust {adjust}")
     projector_calibration[adjust["type"]] = adjust["val"]
+    update_reselection_zone()
     socketio.emit("projector-adjust", adjust)
 
 
@@ -371,7 +248,7 @@ def handle_tool_request(data):
         # TODO note that tool doesn't need to be ready, just needs to have already been requested
     else:
         logging.info(f"Adding tool; TODO")
-        # tools[data["type"]]["ready"] = True
+        tools[data["type"]]["ready"] = True
         # TODO process different kinds of requests (val=dev,pos,neg,1,2,3,4)
         socketio.emit("tool-request", data)
 
@@ -387,7 +264,7 @@ def handle_debug_session(data):
     if active_session is None:
         # if we don't have a session, start a new one
         active_session = DebugSession()
-        newdata = active_session.asdict()
+        newdata = active_session.to_dict()
         newdata["event"] = "new"
         socketio.emit("debug-session", newdata)
 
@@ -395,31 +272,22 @@ def handle_debug_session(data):
         # client is editing name or notes
         active_session.name = data["name"]
         active_session.notes = data["notes"]
-        newdata = active_session.asdict()
+        newdata = active_session.to_dict()
         newdata["event"] = "edit"
         socketio.emit("debug-session", newdata)
     elif data["event"] == "custom":
         # client is sending a new custom card
-        card = DebugCard(
-            data["card"]["pos"],
-            data["card"]["neg"],
-            data["card"]["val"],
-            data["card"]["unit"],
-            data["card"]["lo"],
-            data["card"]["hi"]
-        )
-        if active_session.has(card, exact=True) != -1:
-            logging.error("Request for custom card that already exists")
-        else:
-            # for now, allow adding custom card w/ unit after adding same card w/o unit
-            newdata = {
-                "event": "custom",
-                "update": False,
-                "id": len(active_session.cards),
-                "card": card.asdict()
-            }
-            active_session.cards.append(card)
-            socketio.emit("debug-session", newdata)
+        card = DebugCard(**data["card"])
+        i = active_session.add_card(card)
+
+        # for now, just add the card without checking for duplicates
+        newdata = {
+            "event": "custom",
+            "update": False,
+            "id": i,
+            "card": card.to_dict()
+        }
+        socketio.emit("debug-session", newdata)
     elif data["event"] == "record":
         # client is turning recording on or off
         if data["record"] != active_session_is_recording:
@@ -436,27 +304,22 @@ def handle_debug_session(data):
         socketio.emit("debug-session", data)
     elif data["event"] == "export":
         # client wants to export
-        logging.info("Session export is WIP")
+        active_session.export()
 
 
 @socketio.on("tool-debug")
 def handle_tool_debug(data):
+    # the tool-debug message imitates server-initiated behavior
     global tools
     logging.info(f"Received tool debug msg {data}")
     name = data.pop("name")
     if name == "log":
         logging.info(str(tools))
-    else:
-        if data["status"] == "success":
-            tools[data["type"]]["ready-elements"][data["val"]] = True
-            allready = True
-            for ready in tools[data["type"]]["ready-elements"].values():
-                if not ready:
-                    allready = False
-                    break
-            tools[data["type"]]["ready"] = allready
-
-        socketio.emit(name, data)
+    elif name == "tool-connect":
+        tool_connect(data["type"], data["val"])
+    elif name == "measurement":
+        tool_measure(data["measurement"])
+    
 
 @socketio.on("debug")
 def handle_debug(data):
@@ -466,13 +329,6 @@ def handle_debug(data):
 def handle_toggle(data):
     socketio.emit("toggleboardpos", data)
 
-
-@socketio.on("python hitscan")
-def handle_python_hitscan(data):
-    python_hits = hitscan(data["point"][0], data["point"][1], pcbdata,
-                          pinref_to_idx, layer=data["layer"], renderPads=True, renderTracks=False)
-    logging.info(f"expected hits: {data['hits']}")
-    logging.info(f"  actual hits: {python_hits}")
 # -- end socket --
 
 
@@ -585,64 +441,62 @@ def init_data(pcbdata, schdata):
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
 
-# timestamp of last selection, in seconds
-last_selection_time = 0
+# converts optitrack pixels to layout mm in 2D
+def optitrack_to_layout_coords(point):
+    global projector_calibration
+    return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
+            -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
+
+# convert layout mm to optitrack pixels in 2D
+def layout_to_optitrack_coords(point):
+    global projector_calibration
+    return [(point[0] + projector_calibration["tx"]) * projector_calibration["z"],
+            (-point[1] + projector_calibration["ty"]) * projector_calibration["z"]]
 
 
-# handles a selection event, which can come from the client or from optitrack
-def process_selection(data, raw_data=None, from_optitrack=False):
-    global socketio, multimenu_active, multimenu_options, multimenu_baseline, last_selection_time
+# updates the selection safe zone in place (call any time we transform the projector)
+def update_reselection_zone():
+    global pcbdata, reselection_zone
 
-    if data is None:
-        # received a None selection, probably from multi menu
-        return
+    edges = pcbdata["edges_bbox"]
+    bounds = [[edges["minx"], edges["miny"]], [edges["maxx"], edges["maxy"]]]
+    bounds = np.array([layout_to_optitrack_coords(point) for point in bounds])
 
-    now = time.time()
-    if from_optitrack and now - last_selection_time < SELECTION_BUFFER_TIME:
-        # we processed a selection within the last <buffer> s, ignore this one
-        return
+    hbuffer = config.getfloat("Optitrack", "ReselectHorizontalBuffer")
+    vbuffer = config.getfloat("Optitrack", "ReselectVerticalBuffer")
+    bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
 
-    #logging.info("non-repeat selection")
-    # it's been long enough since the last selection, so proceed
-    last_selection_time = now
+    reselection_zone = {
+        "x": bounds[:, 0],
+        "y": bounds[:, 1],
+        "z": [0, vbuffer]
+    }
 
-    if "point" in data:
-        # a point/click
-        hits = hitscan(data["point"][0], data["point"][1], pcbdata,
-                       pinref_to_idx, layer=data["layer"], renderPads=data["pads"], renderTracks=data["tracks"])
-        if len(hits) > 0:
-            logging.info(f"{'probe' if from_optitrack else 'app'} selection at point ({data['point'][0]},{data['point'][1]}) with {len(hits)} hits")
 
-        if len(hits) == 1:
-            # single selection
-            make_selection(hits[0])
-        elif len(hits) > 1:
-            # multi selection for client to disambiguate (max of 4)
-            logging.info("creating multimenu")
+# returns True iff tippos is inside reselection_zone (ignores z if tippos is 2D)
+def in_selection_zone(tippos):
+    global reselection_zone
+    for dim, val in zip(reselection_zone.keys(), tippos):
+        if val < reselection_zone[dim][0] or val > reselection_zone[dim][1]:
+            return False
+    return True
 
-            if from_optitrack:
-                # deselect first to avoid confusion
-                make_selection({"type": "deselect", "val": None})
 
-                multimenu_active = True
-                multimenu_options = hits[:4]
-                if len(hits) < 4:
-                    multimenu_options += [None] * (4 - len(hits))
-                multimenu_baseline = raw_data
-            else:
-                multimenu_options = hits
-            socketio.emit(
-                "selection", {"type": "multi", "point": data["point"], "layer": data["layer"], "hits": multimenu_options, "from_optitrack": from_optitrack})
-        elif not from_optitrack:
-            # only allow deselection from app, not from probe
-            make_selection({"type": "deselect", "val": None})
-    else:
-        # choice made from schematic or disambiguation menu, simply echo back to all clients
-        multimenu_active = False
-        multimenu_options = []
-        multimenu_baseline = None
-        make_selection(data)
+# returns true iff all the points in history are within threshold of refpoint
+def history_within_threshold(history, refpoint, threshold):
+    history_len = np.shape(history)[1]
+    return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
 
+
+# returns both histories shifted left with the update added to the end
+def update_probe_history(history, tip_update, end_update):
+    history["tip"] = np.roll(history["tip"], -1, axis=1)
+    history["tip"][:, -1] = tip_update
+    history["end"] = np.roll(history["end"], -1, axis=1)
+    history["end"][:, -1] = end_update
+
+
+# actually makes a selection and echoes it to all clients
 def make_selection(new_selection):
     global selection
     logging.info(f"Making selection {new_selection}")
@@ -654,17 +508,293 @@ def make_selection(new_selection):
     socketio.emit("selection", new_selection)
 
 
+# handles a selection event from the client
+def client_selection(data):
+    global pcbdata, pinref_to_idx, socketio
+
+    if "point" in data:
+        # a click in layout
+        hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"],
+                       render_pads=data["pads"], render_tracks=data["tracks"], pin_padding=0)
+        
+        if len(hits) == 0:
+            make_selection({"type": "deselect", "val": None})
+        elif len(hits) == 1:
+            make_selection(hits[0])
+        else:
+            socketio.emit("selection", {"type": "multi", "point": data["point"], "layer": data["layer"],
+                                        "hits": hits, "from_optitrack": False})
+    else:
+        # a click in schematic or a disambiguation choice
+        make_selection(data)
+
+
+# handles a probe selection event
+# assumes this event was triggered under valid circumstances
+def probe_selection(name, tippos, endpos):
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+
+    # board layer is hardcoded for now
+    layer = "F"
+
+    point = optitrack_to_layout_coords(tippos)
+
+    # TODO let user click on tracks?
+    # TODO user setting for what types can be probed
+    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
+                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
+
+    if len(hits) == 1:
+        can_reselect[name] = False
+        make_selection(hits[0])
+    elif len(hits) > 1:
+        can_reselect[name] = False
+
+        board_multimenu["active"] = True
+        board_multimenu["source"] = name
+        board_multimenu["tip-anchor"] = tippos
+        board_multimenu["end-origin"] = endpos
+        # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
+        if len(hits) < 4:
+            hits += [None] * (4 - len(hits))
+        board_multimenu["options"] = hits[:4]
+
+        # don't need a point since main.js ignores selection if from_optitrack=True
+        socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
+
+
+# handles a dmm selection event
+# assumes this event was triggered under valid circumstances
+def dmm_selection(probe, tippos, endpos):
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+
+    # board layer is hardcoded for now
+    layer = "F"
+
+    point = optitrack_to_layout_coords(tippos)
+
+    # the multimeter doesn't want to select components
+    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=True,
+                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
+
+    if len(hits) == 1:
+        logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
+
+        can_reselect[probe] = False
+        # TODO store and display multimeter selection state
+    elif len(hits) > 1:
+        can_reselect[probe] = False
+
+        # TODO auto disambiguation if we have a guided measurement
+
+        # if we still need disambiguation, generate menu
+        board_multimenu["active"] = True
+        board_multimenu["source"] = probe
+        board_multimenu["tip-anchor"] = tippos
+        board_multimenu["end-origin"] = endpos
+        # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
+        if len(hits) < 4:
+            hits += [None] * (4 - len(hits))
+        board_multimenu["options"] = hits[:4]
+        
+        # TODO display multimeter disambiguation menu
+        #socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
+
+        pass
+
+
+# handles a board multimeter selection event
+# assumes this event was triggered under valid circumstances
+def multimenu_selection(name, endpos):
+    global board_multimenu
+
+    v = endpos - board_multimenu["end-origin"]
+    if np.abs(v[0]) > np.abs(v[1]):
+        # x change is greater
+        if v[0] < 0:
+            choice = board_multimenu["options"][2]
+        else:
+            choice = board_multimenu["options"][0]
+    else:
+        # y change is greater
+        if v[1] < 0:
+            choice = board_multimenu["options"][1]
+        else:
+            choice = board_multimenu["options"][3]
+
+    if choice is not None:
+        # a valid option was selected
+        board_multimenu["active"] = False
+        make_selection(choice)
+
+
+# checks for probe dwelling (selection and disambiguation) and fires the appropriate event
+# name is "probe", "pos", "neg", "osc" and history is {"tip": [], "end": []}
+# selection_fn is called when the tip is dwelling and wants to fire a selection event
+def check_probe_events(name: str, history: dict, selection_fn):
+    global board_multimenu, can_reselect, socketio
+
+    if not in_selection_zone(history["tip"][:, -1]):
+        can_reselect[name] = True
+        if board_multimenu["active"] and board_multimenu["source"] == name:
+            board_multimenu["active"] = False
+            socketio.emit("selection", {"type": "cancel-multi"})
+        return
+
+    tip_mean = np.mean(history["tip"], axis=1)
+    end_mean = np.mean(history["tip"], axis=1)
+
+    if not board_multimenu["active"]:
+        # no multimenu is open, we can select
+        if can_reselect[name] and history_within_threshold(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip")):
+            selection_fn(name, tip_mean, end_mean)
+    elif board_multimenu["source"] == name:
+        # a multimenu for this probe is open
+        if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
+                history_within_threshold(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd")) and \
+                np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius"):
+            # tip is still in place and end is dwelling outside the "safe zone"
+            multimenu_selection(name, end_mean)
+
+
+def listen_udp():
+    global socketio
+
+    sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((config.get("Server", "UDPAddress"), config.getint("Server", "UDPPort")))
+
+    framerate = config.getint("Server", "UDPFramerate")
+    history_len = int(framerate * config.getfloat("Optitrack", "DwellTime"))
+
+    # probe histories have "tip" and "end", each of which is a 2D array of points from oldest to newest
+    # blame Ishan for the fact that these arrays are transposed s.t. the ith point is at [:, i] not [i]
+    # TODO transpose them back
+    probe_history = {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+    dmm_probe_history = {
+        "pos": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))},
+        "neg": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+    }
+
+    # tracks the previous value from udp for the EWMA filter
+    prev_var = None
+
+    nextframe = time.time() + 1. / framerate
+    while True:
+        data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
+        var = np.array(struct.unpack("f" * 13, data))
+
+        # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
+        if prev_var is not None:
+            var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
+        prev_var = var
+
+        # board and red/grey tips are x,y,z where x,y are in pixels and z is in real mm
+        # red/grey end is x,y in pixels
+        probe_tip = var[0:3]
+        probe_end = var[3:5]
+        board_pos = var[5:8]
+        grey_tip = var[8:11]
+        grey_end = var[11:13]
+
+        # to avoid crashes for now, ignoring z values
+        probe_tip = probe_tip[:2]
+        grey_tip = grey_tip[:2]
+        board_pos = board_pos[:2]
+
+
+        update_probe_history(probe_history, probe_tip, probe_end)
+        check_probe_events("probe", probe_history, selection_fn=probe_selection)
+
+        # for now, we don't have the necessary values
+        update_probe_history(dmm_probe_history["pos"], None, None)
+        update_probe_history(dmm_probe_history["neg"], None, None)
+        for probe, history in dmm_probe_history.items():
+            check_probe_events(probe, history, selection_fn=dmm_selection)
+
+        # send the tip and end positions to the web app to display
+        probe_tip_layout = optitrack_to_layout_coords(probe_tip)
+        probe_end_layout = optitrack_to_layout_coords(probe_end)
+
+        grey_tip_layout = optitrack_to_layout_coords(grey_tip)
+
+        socketio.emit("udp", {
+            "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
+            "endpos_layout": {"x": probe_end_layout[0], "y": probe_end_layout[1]},
+            "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
+            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]}
+        })
+
+        now = time.time()
+        diff = nextframe - now
+        if diff > 0:
+            time.sleep(diff)
+        else:
+            #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
+            pass
+        nextframe = now + 1. / framerate
+
+
+# handles a tool connection event, which comes from optitrack or other server code
+# device is "ptr", "dmm", or "osc", and element is key in the "ready-elements" dict
+# for the specified device in the tools dict
+def tool_connect(device, element, success=True):
+    global tools
+
+    data = {
+        "status": "success" if success else "failed",
+        "type": device,
+        "val": element,
+        "ready": False
+    }
+    if success:
+        tools[device]["ready-elements"][element] = True
+        is_ready = True
+        for element_ready in tools[device]["ready-elements"]:
+            if not element_ready:
+                is_ready = False
+                break
+        if is_ready:
+            tools[device]["ready"] = True
+            data["ready"] = True
+
+    socketio.emit("tool-connect", data)
+    
+
+# handles a tool measurement event, which comes from optitrack
+# measurement is {device, pos, neg, unit, val}, ie. optitrack hitscan is done already
+def tool_measure(measurement):
+    global tools, active_session, active_session_is_recording
+
+    if not active_session_is_recording:
+        logging.warning("measurement while there was no debug session")
+        return
+
+    device = measurement["device"]
+    if not tools[device]["ready"]:
+        logging.warning("measurement before tool was setup, ignoring")
+        return
+
+    # TODO do something different for osc
+    card, id, update = active_session.measure(measurement)
+    data = {
+        "event": "measurement",
+        "card": card.to_dict(),
+        "id": id,
+        "update": update
+    }
+    socketio.emit("debug-session", data)
+
+
+def autoconnect_tools(enabled):
+    global tools
+    for device in enabled:
+        tools[device]["ready"] = True
+        for element in tools[device]["ready-elements"]:
+            tools[device]["ready-elements"][element] = True
+
+
 if __name__ == "__main__":
-    logging.basicConfig(
-        filename="ardw.log",
-        filemode="w",
-        # encoding="utf-8",
-        level="DEBUG",
-        format="%(asctime)s - %(levelname)s - %(message)s"
-    )
-
-    logging.info("Server started")
-
     schdata = None
     pcbdata = None
 
@@ -694,12 +824,11 @@ if __name__ == "__main__":
     app_settings = {}
     projector_mode = "calibrate"
     projector_calibration = {
-        "tx": 0,
-        "ty": 0,
-        "r": 0,
-        "z": 1
+        "tx": config.getfloat("Dev", "DefaultTX"),
+        "ty": config.getfloat("Dev", "DefaultTY"),
+        "r": config.getfloat("Dev", "DefaultRotation"),
+        "z": config.getfloat("Dev", "DefaultZoom")
     }
-    ibom_settings = {}
 
     # Server tracks connected tools
     tools = {
@@ -742,14 +871,35 @@ if __name__ == "__main__":
     # if False, measurements are ignored and custom cards are not highlighted
     active_session_is_recording = False
 
-    # if true, we're currently displaying (and listening for) a multimenu on the projector view
-    multimenu_active = False
-    multimenu_options = []
-    multimenu_baseline = None
+    # controls whether or not various probes can make a new selection
+    can_reselect = {
+        "probe": True,
+        "pos": True,
+        "neg": True,
+        "osc": True
+    }
 
-    port = 5000
+    # contains state needed to compute multimenu disambiguation
+    board_multimenu = {
+        "active": False,        # if True, a board multimenu is being displayed and all board selections are blocked
+        "source": None,         # "probe", "pos", "neg", "osc"
+        "end-origin": None,     # np[x,y] of endpos when menu was generated
+        "tip-anchor": None,     # np[x,y] of tippos when menu was generated
+        "options": [],          # list of selection options {type, val}
+    }
+
+    # {x, y, z}, where each coordinate is [min, max]
+    reselection_zone = None
+    update_reselection_zone()
+
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
+    else:
+        port = config.getint("Server", "Port")
+
+    if config.getboolean("Dev", "AutoconnectTools"):
+        # we just assume ptr and dmm are already connected
+        autoconnect_tools(["ptr", "dmm"])
 
     socketio.run(app, port=port, debug=True)
 

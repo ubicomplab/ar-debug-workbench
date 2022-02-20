@@ -108,6 +108,9 @@ function initSocket() {
           multimenu_active = {"hits": selection.hits, "layer": selection.layer}
         }
         break;
+      case "cancel-multi":
+        multimenu_active = null;
+        break;
     }
   });
   socket.on("projector-mode", (mode) => {
@@ -137,6 +140,7 @@ function initSocket() {
   socket.on("udp", (data) => {
     optitrackBoardposUpdate(data["boardpos_pixel"])
     udp_selection = data["tippos_layout"]
+    udp_grey = data["greytip"]
     drawHighlights()
   })
   socket.on("toggleboardpos", (val) => {
