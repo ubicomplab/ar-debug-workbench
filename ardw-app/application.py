@@ -295,19 +295,25 @@ def handle_debug_session(data):
         i = active_session.add_card(card)
 
         # for now, just add the card without checking for duplicates
-        newdata = {
+        socketio.emit("debug-session", {
             "event": "custom",
             "update": False,
             "id": i,
             "card": card.to_dict()
-        }
-        socketio.emit("debug-session", newdata)
+        })
+
+        nextid, nextcard = active_session.get_next()
+        if nextid != -1:
+            socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
     elif data["event"] == "record":
         # client is turning recording on or off
         if data["record"] != active_session_is_recording:
             active_session_is_recording = data["record"]
             socketio.emit("debug-session", data)
-            # TODO highlight or deselect next custom card as necessary
+
+            nextid, nextcard = active_session.get_next()
+            if nextid != -1:
+                socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
     elif data["event"] == "save":
         # client wants to save and exit session
         session_history.append(active_session)
@@ -557,8 +563,15 @@ def make_tool_selection(device, new_selection=None):
         tool_selections[device] = new_selection
         socketio.emit("tool-selection", {"device": device, "selection": new_selection})
 
-        # if we're in a debug session, record a measurement if probes are set
-        if active_session_is_recording:
+        if active_session_is_recording and new_selection is not None:
+            # if we hit something that is not the next card, stop highlighting the next card
+            _, nextcard = active_session.get_next()
+            if nextcard is not None:
+                if (device == "pos" and nextcard.pos != new_selection) or \
+                    (device == "neg" and nextcard.neg != new_selection):
+                    socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
+
+            # record a measurement if both probes are set
             if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
                 dmm_unit, dmm_val = measure_dmm()
                 tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
@@ -835,15 +848,18 @@ def tool_measure(device, pos, neg, unit, val):
         logging.warning("measurement before tool was setup, ignoring")
         return
 
-    # TODO do something different for osc
     card, id, update = active_session.measure(device, pos, neg, unit, val)
-    data = {
+
+    socketio.emit("debug-session", {
         "event": "measurement",
         "card": card.to_dict(),
         "id": id,
         "update": update
-    }
-    socketio.emit("debug-session", data)
+    })
+
+    nextid, nextcard = active_session.get_next()
+    if nextid != -1:
+        socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
 
 
 def autoconnect_tools(enabled):

@@ -15,6 +15,9 @@ var transform = {
   "z": 1
 };
 
+var active_session_is_recording = false;
+
+
 /** Sets various ibom settings to false to avoid displaying unwanted things */
 function initSettings() {
   ibom_settings["renderDrawings"] = false;
@@ -154,6 +157,38 @@ function initSocket() {
   socket.on("toggleboardpos", (val) => {
     trackboard = val;
     optitrackBoardposUpdate(udpboardpos)
+  })
+
+  socket.on("debug-session", (data) => {
+    // projector page just needs simplified debug session state for now
+    switch (data.event) {
+      case "record":
+        active_session_is_recording = data.record;
+        if (!active_session_is_recording) {
+          probes.pos.selection = null;
+          probes.neg.selection = null;
+          probes.osc.selection = null;
+          drawHighlights();
+        }
+        break;
+      case "next":
+        // TODO support osc
+        if (active_session_is_recording) {
+          if (data.id == -1) {
+            // deselect
+            probes.pos.selection = null;
+            probes.neg.selection = null;
+            probes.osc.selection = null;
+            drawHighlights();
+          } else {
+            // show user where to measure next
+            probes.pos.selection = data.card.pos;
+            probes.neg.selection = data.card.neg;
+            drawHighlights();
+          }
+        }
+        break;
+    }
   })
 
   socket.on("config", (data) => {

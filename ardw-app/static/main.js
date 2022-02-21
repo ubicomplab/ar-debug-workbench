@@ -55,12 +55,11 @@ var sidebar_custom_selection = {
   }
 };
 
-var active_debug_session = false;
-
 /** true iff sidebar is open; independent of debug session state */
 var sidebar_is_open = false;
 
-var recording_is_on = false;
+/** true iff we are currently recording measurements */
+var active_session_is_recording = false;
 
 /**
  * Tracks all the currently enabled tools
@@ -583,7 +582,7 @@ function toggleSidebar(x = false) {
 
 /** Handler for the debug session record button */
 function recordButton() {
-  socket.emit("debug-session", { "event": "record", "record": !recording_is_on });
+  socket.emit("debug-session", { "event": "record", "record": !active_session_is_recording });
 }
 
 /** Updates the client recording state */
@@ -593,11 +592,11 @@ function setRecordState(record) {
   if (record) {
     button.classList.add("on");
     icon.classList.remove("hidden");
-    recording_is_on = true
+    active_session_is_recording = true
   } else {
     button.classList.remove("on");
     icon.classList.add("hidden");
-    recording_is_on = false
+    active_session_is_recording = false
   }
 }
 
@@ -735,7 +734,6 @@ function debugSessionEvent(data) {
     case "new":
     case "edit":
       // A client requested a new debug session or is editing an existing one
-      active_debug_session = true
       sidebar.querySelector('*[name="sidebar-name"]').value = data.name;
       sidebar.querySelector('*[name="sidebar-notes"]').value = data.notes;
       sidebar.querySelector('*[name="sidebar-timestamp"]').innerHTML = data.timestamp;
@@ -752,6 +750,12 @@ function debugSessionEvent(data) {
       break;
     case "record":
       setRecordState(data.record);
+      if (!active_session_is_recording) {
+        probes.pos.selection = null;
+        probes.neg.selection = null;
+        probes.osc.selection = null;
+        drawHighlights();
+      }
       break;
     case "save":
       // Session was saved and exited, so wipe all fields and close the sidebar
@@ -768,11 +772,25 @@ function debugSessionEvent(data) {
       setRecordState(false);
       toggleSidebar(true);
 
-      active_debug_session = false;
-
       break;
     case "export":
       console.log("export is WIP");
+      break;
+    case "next":
+      // TODO support osc
+      if (active_session_is_recording) {
+        if (data.id == -1) {
+          probes.pos.selection = null;
+          probes.neg.selection = null;
+          probes.osc.selection = null;
+          drawHighlights();
+        } else {
+          // Highlight the next card
+          probes.pos.selection = data.card.pos;
+          probes.neg.selection = data.card.neg;
+          drawHighlights();
+        }
+      }
       break;
   }
 }
@@ -1220,6 +1238,13 @@ function initPage() {
       } else {
         new_card.neg.type = sidebar_custom_selection.neg.type;
         new_card.neg.val = sidebar_custom_selection.neg.val;
+      }
+
+      if (new_card.pos.type == "pin") {
+        new_card.pos.val = parseInt(new_card.pos.val);
+      }
+      if (new_card.neg.type == "pin") {
+        new_card.neg.val = parseInt(new_card.neg.val);
       }
 
       // Rest of info can be taken straight from form
