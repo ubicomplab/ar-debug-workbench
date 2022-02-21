@@ -25,8 +25,51 @@ var current_selection = {
   "val": null
 }
 
-/** list of {type, val, coords, color}; mutually exclusive with current_selection */
-var tool_selections = [];
+/**
+ * Keeps track of locations and "selections" for each probe
+ * Colors come from config.ini
+ * location is {x, y} in layout mm, selection is {type, val}
+ * Note: tool selections are mutually exclusive with current_selection
+ * Note: selections can also come from the debug session highlighting the next card
+ */
+ var probes = {
+  "probe": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  },
+  "pos": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  },
+  "neg": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  },
+  "osc": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  }
+}
 
 /** Maximum zoom level where entire schematic fits in the available space
  * Note this differs for each schematic sheet */
@@ -625,7 +668,7 @@ function handleMouseClick(layerdict, e = null) {
   } else {
     // Click in layout, send to server instead of processing here
     var coords = offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict)
-    console.log(`layout click at (${coords[0]},${coords[1]}`)
+    // console.log(`layout click at (${coords[0]},${coords[1]}`)
     socket.emit("selection", {
       source: "point",
       point: offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict),

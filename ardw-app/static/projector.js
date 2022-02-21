@@ -139,13 +139,30 @@ function initSocket() {
   })
   socket.on("udp", (data) => {
     optitrackBoardposUpdate(data["boardpos_pixel"])
-    udp_selection = data["tippos_layout"]
-    udp_grey = data["greytip"]
-    drawHighlights()
+    probes["pos"].location = data["tippos_layout"];
+    probes["neg"].location = data["greytip"];
+    drawHighlights();
+  })
+  socket.on("tool-selection", (data) => {
+    if (data.selection == "multi") {
+      // TODO multi menu
+    } else {
+      probes[data.device].selection = data.selection;
+      drawHighlights();
+    }
   })
   socket.on("toggleboardpos", (val) => {
     trackboard = val;
     optitrackBoardposUpdate(udpboardpos)
+  })
+
+  socket.on("config", (data) => {
+    for (let device in data) {
+      let colors = data[device];
+      probes[device].color.loc = colors[0];
+      probes[device].color.sel = colors[1];
+      probes[device].color.zone = colors[1];
+    }
   })
 }
 

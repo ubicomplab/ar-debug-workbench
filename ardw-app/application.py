@@ -52,6 +52,7 @@ app.config["SECRET_KEY"] = "secret!"
 socketio = SocketIO(app, async_mode="eventlet")
 thread = None
 
+
 # -- app routing --
 @app.route("/")
 def index():
@@ -182,7 +183,10 @@ def handle_connect():
     for k, v in selection.items():
         if v is not None:
             emit("selection", {"type": k, "val": v})
-            break
+
+    for device, sel in tool_selections.items():
+        if sel is not None:
+            emit("tool-selection", {"device": device, "selection": sel})
 
     emit("projector-mode", projector_mode)
     for k, v in projector_calibration.items():
@@ -208,11 +212,21 @@ def handle_connect():
             emit("debug-session", data)
 
 
+    # not sure if there's a better way to avoid spamming all clients every time one connects
+    emit("config", {
+        "probe": [config.get("Rendering", "ProbeDotColor"), config.get("Rendering", "ProbeSelectionColor")],
+        "pos": [config.get("Rendering", "DmmPosDotColor"), config.get("Rendering", "DmmPosSelectionColor")],
+        "neg": [config.get("Rendering", "DmmNegDotColor"), config.get("Rendering", "DmmNegSelectionColor")],
+        "osc": [config.get("Rendering", "OscDotColor"), config.get("Rendering", "OscSelectionColor")]
+    })
+
+
 @socketio.on("disconnect")
 def handle_disconnect():
     global active_connections
     active_connections -= 1
     logging.info(f"Client disconnected ({active_connections} active)")
+
 
 @socketio.on("selection")
 def handle_selection(data):
@@ -318,7 +332,7 @@ def handle_tool_debug(data):
     elif name == "tool-connect":
         tool_connect(data["type"], data["val"])
     elif name == "measurement":
-        tool_measure(data["measurement"])
+        tool_measure(**data["measurement"])
     
 
 @socketio.on("debug")
@@ -447,6 +461,7 @@ def optitrack_to_layout_coords(point):
     return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
             -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
 
+
 # convert layout mm to optitrack pixels in 2D
 def layout_to_optitrack_coords(point):
     global projector_calibration
@@ -503,9 +518,56 @@ def make_selection(new_selection):
     selection["comp"] = None
     selection["pin"] = None
     selection["net"] = None
-    if (new_selection["type"] != "deselect"):
+    if new_selection is None or new_selection["type"] == "deselect":
+        socketio.emit("selection", {"type": "deselect", "val": None})
+    else:
+        # selection and tool selection are mutually exclusive
+        make_tool_selection(None)
         selection[new_selection["type"]] = new_selection["val"]
-    socketio.emit("selection", new_selection)
+        socketio.emit("selection", new_selection)
+
+
+# wrapper for getting DMM measurement from scipy
+# returns tuple of unit, value
+def measure_dmm():
+    logging.error("measure_dmm() not yet implemented")
+    return None, None
+
+
+# wrapper for getting oscilloscope measurement from scipy
+# returns tuple of unit, value
+def measure_osc():
+    logging.error("measure_osc() not yet implemented")
+    return None, None
+
+
+# actually makes a tool selection and echoes it to all clients to be displayed
+def make_tool_selection(device, new_selection=None):
+    global tool_selections
+    logging.info(f"Making tool selection {device}: {new_selection}")
+
+    if device is None:
+        # deselect all tools
+        for tool in tool_selections:
+            tool_selections[tool] = None
+            socketio.emit("tool-selection", {"device": tool, "selection": None})
+    else:
+        # selection and tool selection are mutually exclusive
+        make_selection(None)
+        tool_selections[device] = new_selection
+        socketio.emit("tool-selection", {"device": device, "selection": new_selection})
+
+        # if we're in a debug session, record a measurement if probes are set
+        if active_session_is_recording:
+            if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
+                dmm_unit, dmm_val = measure_dmm()
+                tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
+                socketio.emit("tool-selection", {"device": "pos", "selection": None})
+                socketio.emit("tool-selection", {"device": "neg", "selection": None})
+            if tool_selections["osc"] is not None:
+                osc_unit, osc_val = measure_osc()
+                tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
+                socketio.emit("tool-selection", {"device": "osc", "selection": None})
 
 
 # handles a selection event from the client
@@ -581,7 +643,8 @@ def dmm_selection(probe, tippos, endpos):
         logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
 
         can_reselect[probe] = False
-        # TODO store and display multimeter selection state
+
+        make_tool_selection(probe, hits[0])
     elif len(hits) > 1:
         can_reselect[probe] = False
 
@@ -598,9 +661,7 @@ def dmm_selection(probe, tippos, endpos):
         board_multimenu["options"] = hits[:4]
         
         # TODO display multimeter disambiguation menu
-        #socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
-
-        pass
+        socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
 
 
 # handles a board multimeter selection event
@@ -763,20 +824,19 @@ def tool_connect(device, element, success=True):
 
 # handles a tool measurement event, which comes from optitrack
 # measurement is {device, pos, neg, unit, val}, ie. optitrack hitscan is done already
-def tool_measure(measurement):
+def tool_measure(device, pos, neg, unit, val):
     global tools, active_session, active_session_is_recording
 
     if not active_session_is_recording:
         logging.warning("measurement while there was no debug session")
         return
 
-    device = measurement["device"]
     if not tools[device]["ready"]:
         logging.warning("measurement before tool was setup, ignoring")
         return
 
     # TODO do something different for osc
-    card, id, update = active_session.measure(measurement)
+    card, id, update = active_session.measure(device, pos, neg, unit, val)
     data = {
         "event": "measurement",
         "card": card.to_dict(),
@@ -816,6 +876,7 @@ if __name__ == "__main__":
     active_connections = 0
 
     # Server tracks current selections and settings
+    # TODO no need to store these as separate keys rather than a single value
     selection = {
         "comp": None,
         "pin": None,
@@ -867,9 +928,17 @@ if __name__ == "__main__":
 
     # active_session: DebugSession = None
     active_session = None
+
     # if True, measurements are added to the current session and the next custom card is highlighted
     # if False, measurements are ignored and custom cards are not highlighted
     active_session_is_recording = False
+
+    tool_selections = {
+        "probe": None,
+        "pos": None,
+        "neg": None,
+        "osc": None
+    }
 
     # controls whether or not various probes can make a new selection
     can_reselect = {
@@ -892,14 +961,14 @@ if __name__ == "__main__":
     reselection_zone = None
     update_reselection_zone()
 
+    if config.getboolean("Dev", "AutoconnectTools"):
+        # we just assume ptr and dmm are already connected
+        autoconnect_tools(["ptr", "dmm"])
+
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
     else:
         port = config.getint("Server", "Port")
-
-    if config.getboolean("Dev", "AutoconnectTools"):
-        # we just assume ptr and dmm are already connected
-        autoconnect_tools(["ptr", "dmm"])
 
     socketio.run(app, port=port, debug=True)
 
