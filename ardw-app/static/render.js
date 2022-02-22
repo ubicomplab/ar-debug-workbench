@@ -1146,11 +1146,14 @@ function initMouseHandlers() {
   drawToolLocations(canvasdict);
 
   if (IS_PROJECTOR) {
-    drawFPS(allcanvas.front);
+    // drawFPS(canvasdict);
+    drawCurrentSelection(canvasdict);
+    if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
+      // drawMultiMenu(canvasdict, multimenu_active.hits)
+      drawMultiMenu2(canvasdict, multimenu_active.hits);
+    }
   }
-  if (multimenu_active !== null && canvasdict.layer == multimenu_active.layer) {
-    drawMultiMenu(canvasdict, multimenu_active.hits)
-  }
+
 }
 
 /**
@@ -1334,15 +1337,22 @@ function refreshLoop() {
 refreshLoop();
 
 function drawFPS(layerdict) {
+  if (!IS_PROJECTOR) {
+    return;
+  }
   var canvas = layerdict.highlight;
   var ctx = canvas.getContext("2d");
-  ctx.font = "10px sans-serif";
+  var fontsize = 40;
+  var padding = 20;
+  ctx.font = `${fontsize / transform.z}px sans-serif`;
   ctx.fillStyle = "black";
   ctx.beginPath();
-  ctx.rect(20, 10, 40, 16);
+  var cornerpt = undoProjectorTransform(padding, padding);
+  ctx.rect(cornerpt.x, cornerpt.y, fontsize * 4 / transform.z, fontsize * 1.5 / transform.z);
   ctx.fill();
   ctx.fillStyle = "white";
-  ctx.fillText(`FPS: ${fps}`, 20, 20);
+  var textpt = undoProjectorTransform(padding, padding + fontsize)
+  ctx.fillText(`FPS: ${fps}`, textpt.x, textpt.y);
 }
 
 var fps_interval = window.setInterval(() => {
@@ -1352,6 +1362,26 @@ var fps_interval = window.setInterval(() => {
     // console.log(fps);
   }
 }, 500)
+
+function drawCurrentSelection(canvasdict) {
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvasdict.highlight.getContext("2d");
+
+  var fontsize = 40;
+  var origin = {"x": 20, "y": 120}
+
+  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.font = `${fontsize / transform.z}px sans-serif`;
+
+  var textpt = undoProjectorTransform(origin.x, origin.y)
+  ctx.fillText(`Current Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
+  if (active_session_is_recording) {
+    textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25);
+    ctx.fillText(`Pos Probe: ${getElementName(probes.pos.selection)}`, textpt.x, textpt.y);
+    textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25 * 2);
+    ctx.fillText(`Neg Probe: ${getElementName(probes.neg.selection)}`, textpt.x, textpt.y);
+  }
+}
 
 function drawMultiMenu(canvasdict, hits) {
   if (hits.length > 4) {
@@ -1377,5 +1407,82 @@ function drawMultiMenu(canvasdict, hits) {
     let text = getElementName(hit);
     ctx.fillText(text, centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
   }
+}
+
+var testmm = {
+  "hits": [
+    {"type": "pin", "val": 15},
+    {"type": "pin", "val": 20},
+    {"type": "pin", "val": 165},
+    {"type": "net", "val": "GND"}
+  ],
+  "layer": "F"
+}
+
+function drawMultiMenu2(canvasdict, hits) {
+  var style = getComputedStyle(topmostdiv);
+  var canvas = canvasdict.highlight;
+  var ctx = canvas.getContext("2d");
+
+  // TODO Currently no support for back layer
+
+  var origin = {
+    "x": style.getPropertyValue("--multi-origin-x"),
+    "y": style.getPropertyValue("--multi-origin-y")
+  };
+  var x_off = style.getPropertyValue("--multi-x-off");
+  var y_height = style.getPropertyValue("--multi-y-height");
+
+  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
+  // ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.font = style.getPropertyValue("--multi-font");
+
+  origin = {"x": 40, "y": 160}
+  x_off = 30
+  y_height = 60
+  // ctx.font = "40px sans-serif"
+  var fontsize = 40;
+  ctx.font = `${fontsize / transform.z}px sans-serif`;
+
+  circleAtPoint(canvasdict, undoProjectorTransform(origin.x, origin.y), "red", 10);
+
+  let liney = origin.y + y_height * 0.25;
+  let linept = undoProjectorTransform(origin.x, liney)
+  let endpt = undoProjectorTransform(origin.x + 300, liney)
+
+  ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.lineWidth = 6 / transform.z;
+  ctx.beginPath();
+  ctx.moveTo(linept.x, linept.y);
+  ctx.lineTo(endpt.x, endpt.y);
+  ctx.stroke(); 
+
+  for (let i in hits) {
+    let hit = hits[i];
+    i = parseInt(i);
+
+    liney = origin.y + y_height * ((i + 1.25));
+    linept = undoProjectorTransform(origin.x, liney)
+    endpt = undoProjectorTransform(origin.x + 300, liney)
+
+    // ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
+    // ctx.lineWidth = 6 / transform.z;
+    ctx.beginPath();
+    ctx.moveTo(linept.x, linept.y);
+    ctx.lineTo(endpt.x, endpt.y);
+    ctx.stroke(); 
+
+    let text = getElementName(hit);
+    let textpt = undoProjectorTransform(origin.x + x_off, origin.y + y_height * (i + 1))
+    ctx.fillText(text, textpt.x, textpt.y);
+  }
+}
+
+function undoProjectorTransform(x, y) {
+  if (!IS_PROJECTOR) {
+    logerr("Called undoProjectorTransform() from main page");
+    return;
+  }
+  return {"x": x / transform.z - transform.tx, "y": y / transform.z - transform.ty}
 }
 

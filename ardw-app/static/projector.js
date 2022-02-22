@@ -108,7 +108,8 @@ function initSocket() {
         break;
       case "multi":
         if (selection.from_optitrack) {
-          multimenu_active = {"hits": selection.hits, "layer": selection.layer}
+          multimenu_active = {"hits": selection.hits, "layer": selection.layer, "device": "probe"}
+          drawHighlights();
         }
         break;
       case "cancel-multi":
@@ -149,6 +150,8 @@ function initSocket() {
   socket.on("tool-selection", (data) => {
     if (data.selection == "multi") {
       // TODO multi menu
+      multimenu_active = {"hits": data.hits, "layer": data.layer, "device": data.device}
+      drawHighlights();
     } else {
       probes[data.device].selection = data.selection;
       drawHighlights();

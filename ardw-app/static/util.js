@@ -52,6 +52,9 @@ function logwarn(msg) {
  * @param {*} element Must be {type, val}
  */
 function getElementName(element) {
+  if (element === null) {
+    return "";
+  }
   switch (element.type) {
     case "comp":
       return `Component ${compdict[element.val].ref}`;
