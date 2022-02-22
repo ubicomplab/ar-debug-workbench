@@ -505,8 +505,16 @@ def in_selection_zone(tippos):
 
 # returns true iff all the points in history are within threshold of refpoint
 def history_within_threshold(history, refpoint, threshold):
+    #history_len = np.shape(history)[1]
+    #return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+    return history_dwellvalue(history, refpoint, threshold) == 1
+
+
+# returns the percentage (0 to 1) of points of the history that are within threshold
+def history_dwellvalue(history, refpoint, threshold):
     history_len = np.shape(history)[1]
-    return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+    count = np.count_nonzero(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+    return count / history_len
 
 
 # returns both histories shifted left with the update added to the end
@@ -705,6 +713,7 @@ def multimenu_selection(name, endpos):
 # checks for probe dwelling (selection and disambiguation) and fires the appropriate event
 # name is "probe", "pos", "neg", "osc" and history is {"tip": [], "end": []}
 # selection_fn is called when the tip is dwelling and wants to fire a selection event
+# returns the dwell values of the tip and end
 def check_probe_events(name: str, history: dict, selection_fn):
     global board_multimenu, can_reselect, socketio
 
@@ -718,17 +727,22 @@ def check_probe_events(name: str, history: dict, selection_fn):
     tip_mean = np.mean(history["tip"], axis=1)
     end_mean = np.mean(history["tip"], axis=1)
 
+    tip_dwell = history_dwellvalue(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip"))
+    end_dwell = history_dwellvalue(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd"))
+
     if not board_multimenu["active"]:
         # no multimenu is open, we can select
-        if can_reselect[name] and history_within_threshold(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip")):
+        if can_reselect[name] and tip_dwell == 1:
             selection_fn(name, tip_mean, end_mean)
     elif board_multimenu["source"] == name:
         # a multimenu for this probe is open
         if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
-                history_within_threshold(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd")) and \
-                np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius"):
+                np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius") and \
+                end_dwell == 1:
             # tip is still in place and end is dwelling outside the "safe zone"
             multimenu_selection(name, end_mean)
+
+    return tip_dwell, end_dwell
 
 
 def listen_udp():
@@ -778,7 +792,7 @@ def listen_udp():
 
 
         update_probe_history(probe_history, probe_tip, probe_end)
-        check_probe_events("probe", probe_history, selection_fn=probe_selection)
+        tip_dwell, end_dwell = check_probe_events("probe", probe_history, selection_fn=probe_selection)
 
         # for now, we don't have the necessary values
         update_probe_history(dmm_probe_history["pos"], None, None)
@@ -796,7 +810,9 @@ def listen_udp():
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_layout": {"x": probe_end_layout[0], "y": probe_end_layout[1]},
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
-            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]}
+            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]},
+            "tipdwell": tip_dwell,
+            "enddwell": end_dwell
         })
 
         now = time.time()
