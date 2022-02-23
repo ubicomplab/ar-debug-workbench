@@ -27,6 +27,9 @@ supported_oscs = ["MODEL MSO4104", "MSO4104"]
 dmms = []
 oscs = []
 
+#Oscilliscope channel
+channel = 2
+
 # parser = argparse.ArgumentParser('Read value from an Instrument')
 # parser.add_argument("--instrument", type=str, help="select an instrument. options: 'dmm', 'osc'")
 # parser.add_argument("--function", type=str, help="function for instrument read. examples: voltage, current, resistance")
@@ -69,10 +72,18 @@ def queryValue(instrumentType, function):
             return value
 
     elif instrumentType == "osc":
-        if function == "voltage":
+        if function == "frequency":
             # TODO need to fix later so it doesn't just take the first instrument 
-            value = float(oscs[0].query(':MEASure:VOLTage:DC?'))
-            print("Measured value = " + str(value) + " VDC")
+            oscs[0].write('MEAS:FREQ CHAN' + str(channel))
+            value = float(oscs[0].query(':MEAS:FREQ?'))
+            print("Measured value = " + str(value) + " Hz")
+            return value
+
+        if function == "duty":
+            # TODO need to fix later so it doesn't just take the first instrument 
+            oscs[0].write('MEAS:DUTY CHAN' + str(channel))
+            value = float(oscs[0].query(':MEAS:DUTY?'))
+            print("Measured value = " + str(value) + " %")
             return value
 
     else:
@@ -81,10 +92,8 @@ def queryValue(instrumentType, function):
 
 def main():
     initializeInstruments()
-    queryValue("dmm", "voltage")
-    for i in range(200):
-        value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
-        print(value)
+    queryValue("osc", "frequency")
+
         
 
 if __name__ == "__main__":
