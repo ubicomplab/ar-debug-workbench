@@ -637,10 +637,13 @@ def probe_selection(name, tippos, endpos):
         board_multimenu["source"] = name
         board_multimenu["tip-anchor"] = tippos
         board_multimenu["end-origin"] = endpos
+
+        """
         # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
         if len(hits) < 4:
             hits += [None] * (4 - len(hits))
         board_multimenu["options"] = hits[:4]
+        """
 
         # don't need a point since main.js ignores selection if from_optitrack=True
         socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
@@ -676,10 +679,13 @@ def dmm_selection(probe, tippos, endpos):
         board_multimenu["source"] = probe
         board_multimenu["tip-anchor"] = tippos
         board_multimenu["end-origin"] = endpos
+
+        """
         # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
         if len(hits) < 4:
             hits += [None] * (4 - len(hits))
         board_multimenu["options"] = hits[:4]
+        """
         
         # TODO display multimeter disambiguation menu
         socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
@@ -710,6 +716,37 @@ def multimenu_selection(name, endpos):
         make_selection(choice)
 
 
+def multimenu_selection_linear(name, endpos):
+    global board_multimenu
+
+    # for linear, we only care about the y value
+    # if val is positive, we've moved up (-y)
+    val = board_multimenu["end-origin"][1] - endpos[1]
+    val = endpos[1] - board_multimenu["end-origin"][1]
+
+    num_cells = len(board_multimenu["options"]) + 1
+    row_height = config.getfloat("Optitrack", "MultiRowHeight")
+
+    # origin is in the middle of the safe cell, so first correct for this
+    # cell_i is 0 for safe cell, - if above safe cell, and + if below safe cell
+    cell_i = (val + row_height / 2) // row_height
+
+    if cell_i == 0:
+        # we're in safe cell, do nothing
+        return
+
+    if cell_i > 0:
+        # we're above the safe cell, so decrement our index bc the safe cell is not in options
+        cell_i -= 1
+
+    # safe cell is at midpoint (ceil) of cells
+    # option_i is index within options
+    option_i = cell_i + num_cells // 2
+
+    if option_i >= 0 and option_i < len(board_multimenu["options"]):
+        make_selection(board_multimenu["options"][option_i])
+
+
 # checks for probe dwelling (selection and disambiguation) and fires the appropriate event
 # name is "probe", "pos", "neg", "osc" and history is {"tip": [], "end": []}
 # selection_fn is called when the tip is dwelling and wants to fire a selection event
@@ -717,32 +754,43 @@ def multimenu_selection(name, endpos):
 def check_probe_events(name: str, history: dict, selection_fn):
     global board_multimenu, can_reselect, socketio
 
-    if not in_selection_zone(history["tip"][:, -1]):
-        can_reselect[name] = True
-        if board_multimenu["active"] and board_multimenu["source"] == name:
-            board_multimenu["active"] = False
-            socketio.emit("selection", {"type": "cancel-multi"})
-        return
-
     tip_mean = np.mean(history["tip"], axis=1)
     end_mean = np.mean(history["tip"], axis=1)
 
     tip_dwell = history_dwellvalue(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip"))
     end_dwell = history_dwellvalue(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd"))
 
+    if not in_selection_zone(history["tip"][:, -1]):
+        can_reselect[name] = True
+        if board_multimenu["active"] and board_multimenu["source"] == name:
+            board_multimenu["active"] = False
+            socketio.emit("selection", {"type": "cancel-multi"})
+        return tip_dwell, end_dwell
+
     if not board_multimenu["active"]:
         # no multimenu is open, we can select
         if can_reselect[name] and tip_dwell == 1:
             selection_fn(name, tip_mean, end_mean)
-    elif board_multimenu["source"] == name:
+    elif board_multimenu["source"] == name and False:
         # a multimenu for this probe is open
         if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
                 np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius") and \
                 end_dwell == 1:
             # tip is still in place and end is dwelling outside the "safe zone"
             multimenu_selection(name, end_mean)
+    elif board_multimenu["source"] == name:
+        # a multimenu for this probe is open
+        if end_dwell == 1 and np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius"):
+            # tip is still in place and end is dwelling
+            multimenu_selection_linear(name, end_mean)
 
     return tip_dwell, end_dwell
+
+
+# generates a new history of zeroes of the appropriate size (determined by config.ini)
+def new_history():
+    history_len = int(config.getint("Optitrack", "UDPFramerate") * config.getfloat("Optitrack", "DwellTime"))
+    return np.zeroes((2, history_len))
 
 
 def listen_udp():
@@ -753,15 +801,14 @@ def listen_udp():
     sock.bind((config.get("Server", "UDPAddress"), config.getint("Server", "UDPPort")))
 
     framerate = config.getint("Server", "UDPFramerate")
-    history_len = int(framerate * config.getfloat("Optitrack", "DwellTime"))
 
     # probe histories have "tip" and "end", each of which is a 2D array of points from oldest to newest
     # blame Ishan for the fact that these arrays are transposed s.t. the ith point is at [:, i] not [i]
     # TODO transpose them back
-    probe_history = {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+    probe_history = {"tip": new_history(), "end": new_history()}
     dmm_probe_history = {
-        "pos": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))},
-        "neg": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+        "pos": {"tip": new_history(), "end": new_history()},
+        "neg": {"tip": new_history(), "end": new_history()}
     }
 
     # tracks the previous value from udp for the EWMA filter
@@ -802,13 +849,19 @@ def listen_udp():
 
         # send the tip and end positions to the web app to display
         probe_tip_layout = optitrack_to_layout_coords(probe_tip)
-        probe_end_layout = optitrack_to_layout_coords(probe_end)
+
+        if board_multimenu["active"]:
+            # get the normalized probe end y-delta s.t. row height = 1
+            probe_end_delta = np.mean(probe_history["end"], axis=1)[1] - board_multimenu["end-origin"][1]
+            probe_end_delta /= config.getfloat("Optitrack", "MultiRowHeight")
+        else:
+            probe_end_delta = 0
 
         grey_tip_layout = optitrack_to_layout_coords(grey_tip)
 
         socketio.emit("udp", {
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
-            "endpos_layout": {"x": probe_end_layout[0], "y": probe_end_layout[1]},
+            "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
             "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]},
             "tipdwell": tip_dwell,

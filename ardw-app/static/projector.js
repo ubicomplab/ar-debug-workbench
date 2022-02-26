@@ -145,6 +145,7 @@ function initSocket() {
     optitrackBoardposUpdate(data["boardpos_pixel"])
     probes["pos"].location = data["tippos_layout"];
     probes["neg"].location = data["greytip"];
+    probe_end_delta = data["endpos_delta"];
     drawHighlights();
   })
   socket.on("tool-selection", (data) => {
