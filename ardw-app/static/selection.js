@@ -32,7 +32,7 @@ var current_selection = {
  * Note: tool selections are mutually exclusive with current_selection
  * Note: selections can also come from the debug session highlighting the next card
  */
- var probes = {
+var probes = {
   "probe": {
     "location": null,
     "selection": null,
@@ -70,6 +70,9 @@ var current_selection = {
     }
   }
 }
+
+/** Keeps track of the normalized probe end y-delta, s.t. row height is 1 */
+var probe_end_delta = null;
 
 /** Maximum zoom level where entire schematic fits in the available space
  * Note this differs for each schematic sheet */

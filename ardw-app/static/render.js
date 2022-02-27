@@ -1150,7 +1150,7 @@ function initMouseHandlers() {
     drawCurrentSelection(canvasdict);
     if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
       // drawMultiMenu(canvasdict, multimenu_active.hits)
-      drawMultiMenu2(canvasdict, multimenu_active.hits);
+      drawMultiMenu3(canvasdict, multimenu_active.hits);
     }
   }
 
@@ -1419,63 +1419,62 @@ var testmm = {
   "layer": "F"
 }
 
-function drawMultiMenu2(canvasdict, hits) {
+function drawMultiMenu3(canvasdict, hits) {
   var style = getComputedStyle(topmostdiv);
   var canvas = canvasdict.highlight;
   var ctx = canvas.getContext("2d");
 
-  // TODO Currently no support for back layer
+  var fontsize = 40;
+  var row_padding = 10;
+
+  var anchor = {"x": 1000, "y": 20}
+  var row_width = 300;
+
+  // ceil not floor so that if we have an odd number, the top has more
+  var midpoint = Math.ceil(hits.length / 2);
 
   var origin = {
-    "x": style.getPropertyValue("--multi-origin-x"),
-    "y": style.getPropertyValue("--multi-origin-y")
-  };
-  var x_off = style.getPropertyValue("--multi-x-off");
-  var y_height = style.getPropertyValue("--multi-y-height");
+    "x": anchor.x + row_width / 2,
+    "y": anchor.y + (fontsize + row_padding) * (midpoint + 0.5)
+  }
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
-  // ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.font = style.getPropertyValue("--multi-font");
-
-  origin = {"x": 40, "y": 160}
-  x_off = 30
-  y_height = 60
-  // ctx.font = "40px sans-serif"
-  var fontsize = 40;
+  ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.lineWidth = 1 / transform.z;
   ctx.font = `${fontsize / transform.z}px sans-serif`;
 
-  circleAtPoint(canvasdict, undoProjectorTransform(origin.x, origin.y), "red", 10);
-
-  let liney = origin.y + y_height * 0.25;
-  let linept = undoProjectorTransform(origin.x, liney)
-  let endpt = undoProjectorTransform(origin.x + 300, liney)
-
-  ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.lineWidth = 6 / transform.z;
-  ctx.beginPath();
-  ctx.moveTo(linept.x, linept.y);
-  ctx.lineTo(endpt.x, endpt.y);
-  ctx.stroke(); 
-
-  for (let i in hits) {
-    let hit = hits[i];
-    i = parseInt(i);
-
-    liney = origin.y + y_height * ((i + 1.25));
-    linept = undoProjectorTransform(origin.x, liney)
-    endpt = undoProjectorTransform(origin.x + 300, liney)
-
-    // ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-    // ctx.lineWidth = 6 / transform.z;
-    ctx.beginPath();
-    ctx.moveTo(linept.x, linept.y);
-    ctx.lineTo(endpt.x, endpt.y);
-    ctx.stroke(); 
-
-    let text = getElementName(hit);
-    let textpt = undoProjectorTransform(origin.x + x_off, origin.y + y_height * (i + 1))
-    ctx.fillText(text, textpt.x, textpt.y);
+  let point = {"x": anchor.x, "y": anchor.y};
+  drawHLine(ctx, point, row_width, undoProjectorTransform);
+  for (let i = 0; i < hits.length; i++) {
+    if (i == midpoint) {
+      // If we're at the midpoint of the list, move us down one extra row
+      point.y += fontsize + row_padding;
+      drawHLine(ctx, point, row_width, undoProjectorTransform);
+    }
+    point.y += fontsize;
+    let tpoint = undoProjectorTransform(point.x + row_padding, point.y);
+    ctx.fillText(getElementName(hits[i]), tpoint.x, tpoint.y, row_width - row_padding)
+    point.y += row_padding;
+    drawHLine(ctx, point, row_width, undoProjectorTransform);
   }
+
+  var endpos = {
+    "x": origin.x,
+    "y": origin.y + (fontsize + row_padding) * probe_end_delta
+  }
+  circleAtPoint(canvasdict, undoProjectorTransform(endpos.x, endpos.y), "blue", 10);
+}
+
+function drawHLine(ctx, point, len, transform_fn=null) {
+  var end = {"x": point.x + len, "y": point.y}
+  if (transform_fn !== null) {
+    point = transform_fn(point.x, point.y);
+    end = transform_fn(end.x, end.y);
+  }
+  ctx.beginPath();
+  ctx.moveTo(point.x, point.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
 }
 
 function undoProjectorTransform(x, y) {
