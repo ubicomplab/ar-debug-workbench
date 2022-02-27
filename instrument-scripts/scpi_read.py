@@ -55,6 +55,7 @@ def initializeInstruments():
             elif current_resource.query("*IDN?").split(",")[1] in supported_oscs:
                 print("Resource "+str(counter)+" is a supported oscilliscope")
                 oscs.append(current_resource)
+                current_resource.write('VERBOSE ON')
 
             else:
                 print("Resource "+ current_resource+ " isn't a supported DMM or oscilliscope")
@@ -74,14 +75,20 @@ def queryValue(instrumentType, function):
     elif instrumentType == "osc":
         if function == "frequency":
             # TODO need to fix later so it doesn't just take the first instrument 
-            oscs[0].write('MEAS:FREQ CHAN' + str(channel))
-            value = float(oscs[0].query(':MEAS:FREQ?'))
+            # oscs[0].write('MEASU:FREQ CHAN' + str(channel))
+            # oscs[0].write(':MEASUrement:IMMed:SOUrce1 CH' + str(channel))
+            # oscs[0].write(':MEASUrement:IMMed:TYPe FREQuency')
+            # value = str(oscs[0].query(':MEASUrement:IMMed:VALue?'))
+            oscs[0].write(':MEASUrement:MEAS1:STATE ON')
+            oscs[0].write(':MEASUrement:MEAS1:SOUrce1 CH' + str(channel))
+            oscs[0].write(':MEASUrement:MEAS1:TYPe FREQuency')
+            value = str(oscs[0].query(':MEASUrement:MEAS1:VALue?'))
             print("Measured value = " + str(value) + " Hz")
             return value
 
         if function == "duty":
             # TODO need to fix later so it doesn't just take the first instrument 
-            oscs[0].write('MEAS:DUTY CHAN' + str(channel))
+            oscs[0].write(':MEAS:DUTY CHAN' + str(channel))
             value = float(oscs[0].query(':MEAS:DUTY?'))
             print("Measured value = " + str(value) + " %")
             return value
