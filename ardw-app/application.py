@@ -486,6 +486,7 @@ def update_reselection_zone():
     hbuffer = config.getfloat("Optitrack", "ReselectHorizontalBuffer")
     vbuffer = config.getfloat("Optitrack", "ReselectVerticalBuffer")
     bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
+    bounds = np.sort(bounds, axis=0)
 
     reselection_zone = {
         "x": bounds[:, 0],
@@ -514,6 +515,7 @@ def history_within_threshold(history, refpoint, threshold):
 def history_dwellvalue(history, refpoint, threshold):
     history_len = np.shape(history)[1]
     count = np.count_nonzero(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+    #print(history, refpoint, threshold, count)
     return count / history_len
 
 
@@ -644,6 +646,7 @@ def probe_selection(name, tippos, endpos):
             hits += [None] * (4 - len(hits))
         board_multimenu["options"] = hits[:4]
         """
+        board_multimenu["options"] = hits
 
         # don't need a point since main.js ignores selection if from_optitrack=True
         socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
@@ -686,6 +689,7 @@ def dmm_selection(probe, tippos, endpos):
             hits += [None] * (4 - len(hits))
         board_multimenu["options"] = hits[:4]
         """
+        board_multimenu["options"] = hits
         
         # TODO display multimeter disambiguation menu
         socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
@@ -729,7 +733,9 @@ def multimenu_selection_linear(name, endpos):
 
     # origin is in the middle of the safe cell, so first correct for this
     # cell_i is 0 for safe cell, - if above safe cell, and + if below safe cell
-    cell_i = (val + row_height / 2) // row_height
+    cell_i = int((val + row_height / 2) / row_height)
+
+    logging.info(f"val {val}, cell_i {cell_i}")
 
     if cell_i == 0:
         # we're in safe cell, do nothing
@@ -743,7 +749,9 @@ def multimenu_selection_linear(name, endpos):
     # option_i is index within options
     option_i = cell_i + num_cells // 2
 
-    if option_i >= 0 and option_i < len(board_multimenu["options"]):
+    logging.info(f"option_i {option_i} of {len(board_multimenu['options'])} options")
+
+    if 0 <= option_i < len(board_multimenu["options"]):
         make_selection(board_multimenu["options"][option_i])
 
 
@@ -755,12 +763,13 @@ def check_probe_events(name: str, history: dict, selection_fn):
     global board_multimenu, can_reselect, socketio
 
     tip_mean = np.mean(history["tip"], axis=1)
-    end_mean = np.mean(history["tip"], axis=1)
+    end_mean = np.mean(history["end"], axis=1)
 
     tip_dwell = history_dwellvalue(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip"))
     end_dwell = history_dwellvalue(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd"))
 
     if not in_selection_zone(history["tip"][:, -1]):
+        logging.info("out of selection box")
         can_reselect[name] = True
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
@@ -779,8 +788,10 @@ def check_probe_events(name: str, history: dict, selection_fn):
             # tip is still in place and end is dwelling outside the "safe zone"
             multimenu_selection(name, end_mean)
     elif board_multimenu["source"] == name:
-        # a multimenu for this probe is open
-        if end_dwell == 1 and np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius"):
+        # a multimenu for this probe is open)
+        anchordist = np.linalg.norm(tip_mean - board_multimenu["tip-anchor"])
+        logging.info(f"trying mm sel with dwell val of {end_dwell} and anchor dist {anchordist}")
+        if end_dwell == 1 and anchordist <= config.getfloat("Optitrack", "MultiAnchorRadius"):
             # tip is still in place and end is dwelling
             multimenu_selection_linear(name, end_mean)
 
@@ -789,8 +800,8 @@ def check_probe_events(name: str, history: dict, selection_fn):
 
 # generates a new history of zeroes of the appropriate size (determined by config.ini)
 def new_history():
-    history_len = int(config.getint("Optitrack", "UDPFramerate") * config.getfloat("Optitrack", "DwellTime"))
-    return np.zeroes((2, history_len))
+    history_len = int(config.getint("Server", "UDPFramerate") * config.getfloat("Optitrack", "DwellTime"))
+    return np.zeros((2, history_len))
 
 
 def listen_udp():
@@ -814,9 +825,11 @@ def listen_udp():
     # tracks the previous value from udp for the EWMA filter
     prev_var = None
 
-    nextframe = time.time() + 1. / framerate
+    nextframe = time.perf_counter() + 1. / framerate
     while True:
+        ts = time.perf_counter()
         data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
+        ts_wait = time.perf_counter() - ts
         var = np.array(struct.unpack("f" * 13, data))
 
         # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
@@ -837,15 +850,16 @@ def listen_udp():
         grey_tip = grey_tip[:2]
         board_pos = board_pos[:2]
 
-
+        ts_check = time.perf_counter()
         update_probe_history(probe_history, probe_tip, probe_end)
         tip_dwell, end_dwell = check_probe_events("probe", probe_history, selection_fn=probe_selection)
+        ts_check = time.perf_counter() - ts_check
 
         # for now, we don't have the necessary values
-        update_probe_history(dmm_probe_history["pos"], None, None)
-        update_probe_history(dmm_probe_history["neg"], None, None)
-        for probe, history in dmm_probe_history.items():
-            check_probe_events(probe, history, selection_fn=dmm_selection)
+        #update_probe_history(dmm_probe_history["pos"], None, None)
+        #update_probe_history(dmm_probe_history["neg"], None, None)
+        #for probe, history in dmm_probe_history.items():
+        #    check_probe_events(probe, history, selection_fn=dmm_selection)
 
         # send the tip and end positions to the web app to display
         probe_tip_layout = optitrack_to_layout_coords(probe_tip)
@@ -859,6 +873,7 @@ def listen_udp():
 
         grey_tip_layout = optitrack_to_layout_coords(grey_tip)
 
+        ts_sock = time.perf_counter()
         socketio.emit("udp", {
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_delta": probe_end_delta,
@@ -867,13 +882,20 @@ def listen_udp():
             "tipdwell": tip_dwell,
             "enddwell": end_dwell
         })
+        ts_sock = time.perf_counter() - ts_sock
 
-        now = time.time()
+        now = time.perf_counter()
+        ts = now - ts
         diff = nextframe - now
+        #logging.info(f"diff is {diff * 1000:.0f}ms")
         if diff > 0:
+            #logging.info("frame early!")
             time.sleep(diff)
+        elif diff < -2 / framerate:
+            logging.warning(f"low framerate: {-diff * 1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            pass
         else:
-            #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
+            #logging.info("frame (sorta) on time")
             pass
         nextframe = now + 1. / framerate
 

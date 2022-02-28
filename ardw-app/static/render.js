@@ -1146,7 +1146,7 @@ function initMouseHandlers() {
   drawToolLocations(canvasdict);
 
   if (IS_PROJECTOR) {
-    // drawFPS(canvasdict);
+    drawFPS(canvasdict);
     drawCurrentSelection(canvasdict);
     if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
       // drawMultiMenu(canvasdict, multimenu_active.hits)
