@@ -601,7 +601,7 @@ def client_selection(data):
     if "point" in data:
         # a click in layout
         hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"],
-                       render_pads=data["pads"], render_tracks=data["tracks"], pin_padding=0)
+                       render_pads=data["pads"], render_tracks=data["tracks"], padding=0)
         
         if len(hits) == 0:
             make_selection({"type": "deselect", "val": None})
@@ -633,7 +633,7 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
     # TODO let user click on tracks?
     # TODO user setting for what types can be probed
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
-                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
+                   padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
 
     if len(hits) == 1:
         can_reselect[name] = False
@@ -674,7 +674,7 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
 
     # the multimeter doesn't want to select components
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=True,
-                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
+                   padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
 
     if len(hits) == 1:
         logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
