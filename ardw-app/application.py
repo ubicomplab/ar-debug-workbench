@@ -484,14 +484,15 @@ def update_reselection_zone():
     bounds = np.array([layout_to_optitrack_coords(point) for point in bounds])
 
     hbuffer = config.getfloat("Optitrack", "ReselectHorizontalBuffer")
-    vbuffer = config.getfloat("Optitrack", "ReselectVerticalBuffer")
+    vmin = config.getfloat("Optitrack", "ReselectVerticalMinimum")
+    vmax = config.getfloat("Optitrack", "ReselectVerticalMaximum")
     bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
     bounds = np.sort(bounds, axis=0)
 
     reselection_zone = {
         "x": bounds[:, 0],
         "y": bounds[:, 1],
-        "z": [0, vbuffer]
+        "z": [vmin, vmax]
     }
 
 
@@ -616,8 +617,13 @@ def client_selection(data):
 
 # handles a probe selection event
 # assumes this event was triggered under valid circumstances
-def probe_selection(name, tippos, endpos):
+def probe_selection(name, tippos, endpos, force_deselect=False):
     global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+
+    if force_deselect:
+        # we dwelled down outside of the board
+        make_selection(None)
+        return
 
     # board layer is hardcoded for now
     layer = "F"
@@ -654,8 +660,12 @@ def probe_selection(name, tippos, endpos):
 
 # handles a dmm selection event
 # assumes this event was triggered under valid circumstances
-def dmm_selection(probe, tippos, endpos):
+def dmm_selection(probe, tippos, endpos, force_deselect=False):
     global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+
+    if force_deselect:
+        logging.error("tool probe deselect NotYetImplemented")
+        return
 
     # board layer is hardcoded for now
     layer = "F"
@@ -758,6 +768,7 @@ def multimenu_selection_linear(name, endpos):
 # checks for probe dwelling (selection and disambiguation) and fires the appropriate event
 # name is "probe", "pos", "neg", "osc" and history is {"tip": [], "end": []}
 # selection_fn is called when the tip is dwelling and wants to fire a selection event
+#   must take name, tip_pos, end_pos, and optional force_deselect
 # returns the dwell values of the tip and end
 def check_probe_events(name: str, history: dict, selection_fn):
     global board_multimenu, can_reselect, socketio
@@ -767,21 +778,23 @@ def check_probe_events(name: str, history: dict, selection_fn):
     tip_mean = np.mean(history["tip"], axis=1)
     end_mean = np.mean(history["end"], axis=1)
 
+    tip_pos = history["tip"][:, -1]
+    end_pos = history["end"][:, -1]
+
     tip_dwell = history_dwellvalue(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip"))
     end_dwell = history_dwellvalue(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd"))
     ts_dwell = time.perf_counter() - ts
 
     ts_isz = time.perf_counter()
-    isz = in_selection_zone(history["tip"][:, -1])
-    ts_isz = time.perf_counter() - ts_isz
-
-    if not isz:
-        #logging.info("out of selection box")
+    if not in_selection_zone(tip_pos):
         can_reselect[name] = True
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
             socketio.emit("selection", {"type": "cancel-multi"})
+        if tip_pos[2] <= config.getfloat("Optitrack", "OutsideVerticalBuffer"):
+            selection_fn(name, tip_pos, end_pos, True)
         return tip_dwell, end_dwell
+    ts_isz = time.perf_counter() - ts_isz
 
     ts_op = time.perf_counter()
     ts_op_name = "none"
@@ -803,22 +816,22 @@ def check_probe_events(name: str, history: dict, selection_fn):
         #logging.info(f"trying mm sel with dwell val of {end_dwell:.1f} and anchor dist {anchordist:.1f}")
         if end_dwell == 1 and anchordist <= config.getfloat("Optitrack", "MultiAnchorRadius"):
             # tip is still in place and end is dwelling
-            end_point = history["end"][:, -1]
-            multimenu_selection_linear(name, end_point)
+            multimenu_selection_linear(name, end_pos)
         ts_op_name = "mm"
     ts_op = time.perf_counter() - ts_op
 
     ts = time.perf_counter() - ts
     if ts > .01:
         logging.info(f"check {name} took {ts*1000:.0f}ms ({ts_dwell*1000:.0f}ms dwell, {ts_isz*1000:.0f}ms isz, {ts_op*1000:.0f}ms op {ts_op_name})")
+        pass
 
     return tip_dwell, end_dwell
 
 
 # generates a new history of zeroes of the appropriate size (determined by config.ini)
-def new_history(dwell_time):
+def new_history(dwell_time, dim=2):
     history_len = int(config.getint("Server", "UDPFramerate") * dwell_time)
-    return np.zeros((2, history_len))
+    return np.zeros((dim, history_len))
 
 
 def listen_udp():
@@ -835,7 +848,7 @@ def listen_udp():
     # TODO transpose them back
     dwell_time_tip = config.getfloat("Optitrack", "DwellTime")
     dwell_time_end = config.getfloat("Optitrack", "DwellTimeEnd")
-    probe_history = {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)}
+    probe_history = {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     dmm_probe_history = {
         "pos": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)},
         "neg": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)}
@@ -856,7 +869,7 @@ def listen_udp():
             var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
         prev_var = var
 
-        # board and red/grey tips are x,y,z where x,y are in pixels and z is in real mm
+        # board and red/grey tips are x,y,z where x,y are in pixels and z is in real m
         # red/grey end is x,y in pixels
         probe_tip = var[0:3]
         probe_end = var[3:5]
@@ -864,8 +877,12 @@ def listen_udp():
         grey_tip = var[8:11]
         grey_end = var[11:13]
 
+        # convert z from real m to real mm to (roughly) match other coordinates
+        probe_tip[2] *= 1000
+        grey_tip[2] *= 1000
+        board_pos[2] *= 1000
+
         # to avoid crashes for now, ignoring z values
-        probe_tip = probe_tip[:2]
         grey_tip = grey_tip[:2]
         board_pos = board_pos[:2]
 
@@ -875,9 +892,8 @@ def listen_udp():
         ts_check = time.perf_counter() - ts_check
 
         # for now, we don't have the necessary values
-        #update_probe_history(dmm_probe_history["pos"], None, None)
-        #update_probe_history(dmm_probe_history["neg"], None, None)
         #for probe, history in dmm_probe_history.items():
+        #    update_probe_history(history, None, None)
         #    check_probe_events(probe, history, selection_fn=dmm_selection)
 
         # send the tip and end positions to the web app to display
@@ -913,7 +929,7 @@ def listen_udp():
             #logging.info("frame early!")
             time.sleep(diff)
         elif diff < -1 / framerate:
-            logging.warning(f"low framerate: {-diff * 1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            logging.warning(f"low framerate: {-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")
