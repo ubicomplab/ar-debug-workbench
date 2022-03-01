@@ -726,16 +726,16 @@ def multimenu_selection_linear(name, endpos):
     # for linear, we only care about the y value
     # if val is positive, we've moved up (-y)
     val = board_multimenu["end-origin"][1] - endpos[1]
-    val = endpos[1] - board_multimenu["end-origin"][1]
+    #val = endpos[1] - board_multimenu["end-origin"][1]
 
     num_cells = len(board_multimenu["options"]) + 1
     row_height = config.getfloat("Optitrack", "MultiRowHeight")
 
     # origin is in the middle of the safe cell, so first correct for this
     # cell_i is 0 for safe cell, - if above safe cell, and + if below safe cell
-    cell_i = int((val + row_height / 2) / row_height)
+    cell_i = int(np.floor(val / row_height + 0.5))
 
-    logging.info(f"val {val}, cell_i {cell_i}")
+    #logging.info(f"val {val:.1f}, cell_i {cell_i}")
 
     if cell_i == 0:
         # we're in safe cell, do nothing
@@ -749,7 +749,7 @@ def multimenu_selection_linear(name, endpos):
     # option_i is index within options
     option_i = cell_i + num_cells // 2
 
-    logging.info(f"option_i {option_i} of {len(board_multimenu['options'])} options")
+    #logging.info(f"option_i {option_i} of {len(board_multimenu['options'])} options")
 
     if 0 <= option_i < len(board_multimenu["options"]):
         make_selection(board_multimenu["options"][option_i])
@@ -762,24 +762,34 @@ def multimenu_selection_linear(name, endpos):
 def check_probe_events(name: str, history: dict, selection_fn):
     global board_multimenu, can_reselect, socketio
 
+    ts = time.perf_counter()
+
     tip_mean = np.mean(history["tip"], axis=1)
     end_mean = np.mean(history["end"], axis=1)
 
     tip_dwell = history_dwellvalue(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip"))
     end_dwell = history_dwellvalue(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd"))
+    ts_dwell = time.perf_counter() - ts
 
-    if not in_selection_zone(history["tip"][:, -1]):
-        logging.info("out of selection box")
+    ts_isz = time.perf_counter()
+    isz = in_selection_zone(history["tip"][:, -1])
+    ts_isz = time.perf_counter() - ts_isz
+
+    if not isz:
+        #logging.info("out of selection box")
         can_reselect[name] = True
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
             socketio.emit("selection", {"type": "cancel-multi"})
         return tip_dwell, end_dwell
 
+    ts_op = time.perf_counter()
+    ts_op_name = "none"
     if not board_multimenu["active"]:
         # no multimenu is open, we can select
         if can_reselect[name] and tip_dwell == 1:
             selection_fn(name, tip_mean, end_mean)
+        ts_op_name = "sel"
     elif board_multimenu["source"] == name and False:
         # a multimenu for this probe is open
         if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
@@ -790,17 +800,24 @@ def check_probe_events(name: str, history: dict, selection_fn):
     elif board_multimenu["source"] == name:
         # a multimenu for this probe is open)
         anchordist = np.linalg.norm(tip_mean - board_multimenu["tip-anchor"])
-        logging.info(f"trying mm sel with dwell val of {end_dwell} and anchor dist {anchordist}")
+        #logging.info(f"trying mm sel with dwell val of {end_dwell:.1f} and anchor dist {anchordist:.1f}")
         if end_dwell == 1 and anchordist <= config.getfloat("Optitrack", "MultiAnchorRadius"):
             # tip is still in place and end is dwelling
-            multimenu_selection_linear(name, end_mean)
+            end_point = history["end"][:, -1]
+            multimenu_selection_linear(name, end_point)
+        ts_op_name = "mm"
+    ts_op = time.perf_counter() - ts_op
+
+    ts = time.perf_counter() - ts
+    if ts > .01:
+        logging.info(f"check {name} took {ts*1000:.0f}ms ({ts_dwell*1000:.0f}ms dwell, {ts_isz*1000:.0f}ms isz, {ts_op*1000:.0f}ms op {ts_op_name})")
 
     return tip_dwell, end_dwell
 
 
 # generates a new history of zeroes of the appropriate size (determined by config.ini)
-def new_history():
-    history_len = int(config.getint("Server", "UDPFramerate") * config.getfloat("Optitrack", "DwellTime"))
+def new_history(dwell_time):
+    history_len = int(config.getint("Server", "UDPFramerate") * dwell_time)
     return np.zeros((2, history_len))
 
 
@@ -816,10 +833,12 @@ def listen_udp():
     # probe histories have "tip" and "end", each of which is a 2D array of points from oldest to newest
     # blame Ishan for the fact that these arrays are transposed s.t. the ith point is at [:, i] not [i]
     # TODO transpose them back
-    probe_history = {"tip": new_history(), "end": new_history()}
+    dwell_time_tip = config.getfloat("Optitrack", "DwellTime")
+    dwell_time_end = config.getfloat("Optitrack", "DwellTimeEnd")
+    probe_history = {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)}
     dmm_probe_history = {
-        "pos": {"tip": new_history(), "end": new_history()},
-        "neg": {"tip": new_history(), "end": new_history()}
+        "pos": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)},
+        "neg": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)}
     }
 
     # tracks the previous value from udp for the EWMA filter
@@ -866,7 +885,9 @@ def listen_udp():
 
         if board_multimenu["active"]:
             # get the normalized probe end y-delta s.t. row height = 1
-            probe_end_delta = np.mean(probe_history["end"], axis=1)[1] - board_multimenu["end-origin"][1]
+            #probe_end_delta = np.mean(probe_history["end"], axis=1)[1] - board_multimenu["end-origin"][1]
+            #probe_end_delta = board_multimenu["end-origin"][1] - np.mean(probe_history["end"], axis=1)[1]
+            probe_end_delta = board_multimenu["end-origin"][1] - probe_end[1]
             probe_end_delta /= config.getfloat("Optitrack", "MultiRowHeight")
         else:
             probe_end_delta = 0
@@ -891,7 +912,7 @@ def listen_udp():
         if diff > 0:
             #logging.info("frame early!")
             time.sleep(diff)
-        elif diff < -2 / framerate:
+        elif diff < -1 / framerate:
             logging.warning(f"low framerate: {-diff * 1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
