@@ -249,7 +249,7 @@ def handle_projectormode(mode):
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
     global projector_calibration
-    logging.info(f"Received projector adjust {adjust}")
+    #logging.info(f"Received projector adjust {adjust}")
     projector_calibration[adjust["type"]] = adjust["val"]
     update_reselection_zone()
     socketio.emit("projector-adjust", adjust)
@@ -674,6 +674,8 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         logging.error("tool probe deselect NotYetImplemented")
         return
 
+    logging.info(f"attempting dmm selection for {probe}")
+
     # board layer is hardcoded for now
     layer = "F"
 
@@ -690,6 +692,7 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
 
         make_tool_selection(probe, hits[0])
     elif len(hits) > 1:
+        logging.info(f"probe {probe} hit {len(hits)} things")
         can_reselect[probe] = False
 
         # TODO auto disambiguation if we have a guided measurement
@@ -794,6 +797,8 @@ def check_probe_events(name: str, history: dict, selection_fn):
 
     ts_isz = time.perf_counter()
     if not in_selection_zone(tip_pos):
+        # logging.info(f"{name} is out of zone at {tip_pos[0]:.0f}, {tip_pos[1]:.0f}, {tip_pos[2]:.0f}")
+        # logging.info(f"zone is {reselection_zone}")
         can_reselect[name] = True
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
@@ -802,6 +807,8 @@ def check_probe_events(name: str, history: dict, selection_fn):
             selection_fn(name, tip_pos, end_pos, True)
         return tip_dwell, end_dwell
     ts_isz = time.perf_counter() - ts_isz
+
+    # logging.info(f"{name} is in zone with tip dwell {tip_dwell:.1f}")
 
     ts_op = time.perf_counter()
     ts_op_name = "none"
@@ -891,18 +898,17 @@ def listen_udp():
         board_pos[2] *= 1000
 
         # to avoid crashes for now, ignoring z values
-        grey_tip = grey_tip[:2]
         board_pos = board_pos[:2]
 
         ts_check = time.perf_counter()
         update_probe_history(probe_history, probe_tip, probe_end)
-        tip_dwell, end_dwell = check_probe_events("probe", probe_history, selection_fn=probe_selection)
+        # tip_dwell, end_dwell = check_probe_events("probe", probe_history, selection_fn=probe_selection)
         ts_check = time.perf_counter() - ts_check
 
-        # for now, we don't have the necessary values
-        for probe, history in dmm_probe_history.items():
-            update_probe_history(history, None, None)
-            check_probe_events(probe, history, selection_fn=dmm_selection)
+        update_probe_history(dmm_probe_history["pos"], probe_tip, probe_end)
+        check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
+        update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
+        check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
 
         # send the tip and end positions to the web app to display
         probe_tip_layout = optitrack_to_layout_coords(probe_tip)
@@ -924,8 +930,8 @@ def listen_udp():
             "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
             "boardpos": {"x": board_pos[0], "y": board_pos[1], "r": board_rot},
-            "tipdwell": tip_dwell,
-            "enddwell": end_dwell
+            # "tipdwell": tip_dwell,
+            # "enddwell": end_dwell
         })
         ts_sock = time.perf_counter() - ts_sock
 
@@ -937,7 +943,7 @@ def listen_udp():
             #logging.info("frame early!")
             time.sleep(diff)
         elif diff < -1 / framerate:
-            logging.warning(f"low framerate: {-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            #logging.warning(f"low framerate: {-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")
