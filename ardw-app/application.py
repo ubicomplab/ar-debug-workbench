@@ -18,6 +18,7 @@ import time
 import numpy as np
 
 from tools import DebugCard, DebugSession
+from instrumentscripts.scpi_read import *
 from boardgeometry.hitscan import hitscan
 
 
@@ -546,17 +547,21 @@ def make_selection(new_selection):
         socketio.emit("selection", new_selection)
 
 
-# wrapper for getting DMM measurement from scipy
+# wrapper for getting DMM measurement from SCPI
 # returns tuple of unit, value
 def measure_dmm():
-    logging.error("measure_dmm() not yet implemented")
-    return None, None
+    logging.info("Making a voltage DMM measurement")
+    value = queryValue("dmm","voltage")
+    #logging.error("measure_dmm() not yet implemented")
+    return 'volts', value
 
 
-# wrapper for getting oscilloscope measurement from scipy
+# wrapper for getting oscilloscope measurement from SCPI
 # returns tuple of unit, value
 def measure_osc():
-    logging.error("measure_osc() not yet implemented")
+    logging.info("Making a osc frequency measurement")
+    value = queryValue("osc","frequency")
+    #logging.error("measure_osc() not yet implemented")
     return None, None
 
 
@@ -999,6 +1004,7 @@ def autoconnect_tools(enabled):
         for element in tools[device]["ready-elements"]:
             tools[device]["ready-elements"][element] = True
 
+    initializeInstruments()
 
 if __name__ == "__main__":
     schdata = None
