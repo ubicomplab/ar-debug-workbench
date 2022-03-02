@@ -852,8 +852,8 @@ def listen_udp():
     dwell_time_end = config.getfloat("Optitrack", "DwellTimeEnd")
     probe_history = {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     dmm_probe_history = {
-        "pos": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)},
-        "neg": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)}
+        "pos": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)},
+        "neg": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     }
 
     # tracks the previous value from udp for the EWMA filter
@@ -864,7 +864,7 @@ def listen_udp():
         ts = time.perf_counter()
         data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
         ts_wait = time.perf_counter() - ts
-        var = np.array(struct.unpack("f" * 13, data))
+        var = np.array(struct.unpack("f" * 14, data))
 
         # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
         if prev_var is not None:
@@ -878,6 +878,7 @@ def listen_udp():
         board_pos = var[5:8]
         grey_tip = var[8:11]
         grey_end = var[11:13]
+        board_rot = var[13]
 
         # convert z from real m to real mm to (roughly) match other coordinates
         probe_tip[2] *= 1000
@@ -894,9 +895,9 @@ def listen_udp():
         ts_check = time.perf_counter() - ts_check
 
         # for now, we don't have the necessary values
-        #for probe, history in dmm_probe_history.items():
-        #    update_probe_history(history, None, None)
-        #    check_probe_events(probe, history, selection_fn=dmm_selection)
+        for probe, history in dmm_probe_history.items():
+            update_probe_history(history, None, None)
+            check_probe_events(probe, history, selection_fn=dmm_selection)
 
         # send the tip and end positions to the web app to display
         probe_tip_layout = optitrack_to_layout_coords(probe_tip)
@@ -917,7 +918,7 @@ def listen_udp():
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
-            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]},
+            "boardpos": {"x": board_pos[0], "y": board_pos[1], "r": board_rot},
             "tipdwell": tip_dwell,
             "enddwell": end_dwell
         })

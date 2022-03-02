@@ -1153,6 +1153,10 @@ function initMouseHandlers() {
     }
   }
 
+  if (IS_PROJECTOR) {
+//    circleAtPoint(canvasdict, {"x": 0, "y": 0}, "orange", 10)
+  }
+
 }
 
 /**
