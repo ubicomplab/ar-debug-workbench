@@ -211,13 +211,15 @@ def handle_connect():
             }
             emit("debug-session", data)
 
-
     # not sure if there's a better way to avoid spamming all clients every time one connects
     emit("config", {
-        "probe": [config.get("Rendering", "ProbeDotColor"), config.get("Rendering", "ProbeSelectionColor")],
-        "pos": [config.get("Rendering", "DmmPosDotColor"), config.get("Rendering", "DmmPosSelectionColor")],
-        "neg": [config.get("Rendering", "DmmNegDotColor"), config.get("Rendering", "DmmNegSelectionColor")],
-        "osc": [config.get("Rendering", "OscDotColor"), config.get("Rendering", "OscSelectionColor")]
+        "devices": {
+            "probe": [config.get("Rendering", "ProbeDotColor"), config.get("Rendering", "ProbeSelectionColor")],
+            "pos": [config.get("Rendering", "DmmPosDotColor"), config.get("Rendering", "DmmPosSelectionColor")],
+            "neg": [config.get("Rendering", "DmmNegDotColor"), config.get("Rendering", "DmmNegSelectionColor")],
+            "osc": [config.get("Rendering", "OscDotColor"), config.get("Rendering", "OscSelectionColor")],
+        },
+        "track_board": config.getboolean("Dev", "TrackBoard")
     })
 
 

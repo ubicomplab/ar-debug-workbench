@@ -1369,8 +1369,8 @@ function initSocket() {
   })
 
   socket.on("config", (data) => {
-    for (let device in data) {
-      let colors = data[device];
+    for (let device in data.devices) {
+      let colors = data.devices[device];
       probes[device].color.loc = colors[0];
       probes[device].color.sel = colors[1];
       probes[device].color.zone = colors[1];
