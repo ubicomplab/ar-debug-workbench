@@ -3,6 +3,13 @@
 // It also contains some custom functions for the projector page,
 // mainly for handling socket selection events
 
+/** Magic numbers for the offset between optitrack boardpos and our render */
+const BOARDPOS_OFFSET_X = 589.87;
+const BOARDPOS_OFFSET_Y = -420.96;
+
+/** if True, the tx/ty of the transform */
+var trackboard = false;
+var udpboardpos = {};
 
 // Set to true so that functions in render.js ignore the resize transform (s/x/y)
 IS_PROJECTOR = true;
@@ -196,24 +203,23 @@ function initSocket() {
   })
 
   socket.on("config", (data) => {
-    for (let device in data) {
-      let colors = data[device];
+    for (let device in data.devices) {
+      let colors = data.devices[device];
       probes[device].color.loc = colors[0];
       probes[device].color.sel = colors[1];
       probes[device].color.zone = colors[1];
     }
+    trackboard = data.track_board;
   })
 }
-
-trackboard = false;
-udpboardpos = {}
 
 // TODO uses magic numbers, instead use layout coords from server
 /** Updates the board position to match the given boardpos */
 function optitrackBoardposUpdate(boardpos) {
   var t = allcanvas.front.transform;
-  var x = (boardpos.x - 600) / t.zoom;
-  var y = -(boardpos.y + 445) / t.zoom;
+  var x = (boardpos.x - BOARDPOS_OFFSET_X) / t.zoom;
+  var y = -(boardpos.y - BOARDPOS_OFFSET_Y) / t.zoom;
+
   if (trackboard) {
     socket.emit("projector-adjust", {"type": "tx", "val": x});
     socket.emit("projector-adjust", {"type": "ty", "val": y});

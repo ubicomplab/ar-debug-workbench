@@ -603,7 +603,7 @@ function drawNets(canvas, layer, highlight) {
   if (ibom_settings.renderZones) {
     drawZones(canvas, layer, style.getPropertyValue("--zone-color"), highlight, highlight_dict);
   }
-  if (ibom_settings.renderPads && highlight) {
+  if (highlight) {
     for (var footprint of pcbdata.footprints) {
       // draw pads
       var padDrawn = false;
@@ -613,7 +613,7 @@ function drawNets(canvas, layer, highlight) {
           padDrawn = true;
         }
       }
-      if (padDrawn) {
+      if (padDrawn && ibom_settings.renderPads) {
         // redraw all pad holes because some pads may overlap
         for (var pad of footprint.pads) {
           drawPadHole(ctx, pad, style.getPropertyValue('--pad-hole-color'));
@@ -1149,8 +1149,7 @@ function initMouseHandlers() {
     drawFPS(canvasdict);
     drawCurrentSelection(canvasdict);
     if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
-      // drawMultiMenu(canvasdict, multimenu_active.hits)
-      drawMultiMenu3(canvasdict, multimenu_active.hits);
+       drawMultiMenu(canvasdict, multimenu_active.hits);
     }
   }
 
@@ -1384,51 +1383,15 @@ function drawCurrentSelection(canvasdict) {
 }
 
 function drawMultiMenu(canvasdict, hits) {
-  if (hits.length > 4) {
-    console.log("Error: too many hits")
-    return;
-  }
-  var canvas = canvasdict.highlight;
-  var style = getComputedStyle(topmostdiv);
-  var ctx = canvas.getContext("2d");
-
-  var flip = canvasdict.layer === "B" ? -1 : 1;
-
-  var centerpoint = [50, 100]
-  var offset_len = 25
-  var offset_deltas = [[-offset_len, 0], [0, -offset_len], [offset_len, 0], [0, offset_len]]
-
-  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.font = "4px sans-serif";
-
-  for (let i in hits) {
-    let hit = hits[i];
-    let text = getElementName(hit);
-    ctx.fillText(text, centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
-  }
-}
-
-var testmm = {
-  "hits": [
-    {"type": "pin", "val": 15},
-    {"type": "pin", "val": 20},
-    {"type": "pin", "val": 165},
-    {"type": "net", "val": "GND"}
-  ],
-  "layer": "F"
-}
-
-function drawMultiMenu3(canvasdict, hits) {
-  var style = getComputedStyle(topmostdiv);
-  var canvas = canvasdict.highlight;
-  var ctx = canvas.getContext("2d");
-
+  // Config variables for the multi menu
   var fontsize = 40;
   var row_padding = 10;
-
   var anchor = {"x": 1000, "y": 20}
   var row_width = 300;
+
+  var style = getComputedStyle(topmostdiv);
+  var canvas = canvasdict.highlight;
+  var ctx = canvas.getContext("2d");
 
   // ceil not floor so that if we have an odd number, the top has more
   var midpoint = Math.ceil(hits.length / 2);
