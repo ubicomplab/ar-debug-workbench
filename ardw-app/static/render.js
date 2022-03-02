@@ -55,6 +55,14 @@ var multimenu_active = null;
 var probe_crosshair = false;
 
 
+/** offset of the center of rotation for the projector canvas
+ * currently just the center of the edge cut bbox */ 
+const rotation_offset = {
+  "x": 148.5011,
+  "y": 105.0036
+}
+
+
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
 function deg2rad(deg) {
   return deg * Math.PI / 180;
@@ -661,17 +669,29 @@ function drawBackground(canvasdict, clear = true) {
 function prepareCanvas(canvas, flip, transform, rotate) {
   var ctx = canvas.getContext("2d");
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  var fontsize = 1.55;
-  ctx.scale(transform.zoom, transform.zoom);
-  ctx.translate(transform.panx, transform.pany);
-  if (flip) {
-    ctx.scale(-1, 1);
+  if (IS_PROJECTOR) {
+    ctx.scale(transform.zoom, transform.zoom);
+    ctx.translate(transform.panx, transform.pany);
+    ctx.translate(rotation_offset.x, rotation_offset.y);
+    if (rotate) {
+      ctx.rotate(deg2rad(ibom_settings.boardRotation));
+    }
+    ctx.translate(-rotation_offset.x, -rotation_offset.y);
+    if (flip) {
+      ctx.scale(-1, 1);
+    }
+  } else {
+    ctx.scale(transform.zoom, transform.zoom);
+    ctx.translate(transform.panx, transform.pany);
+    if (flip) {
+      ctx.scale(-1, 1);
+    }
+    ctx.translate(transform.x, transform.y);
+    if (rotate) {
+      ctx.rotate(deg2rad(ibom_settings.boardRotation));
+    }
+    ctx.scale(transform.s, transform.s);
   }
-  ctx.translate(transform.x, transform.y);
-  if (rotate) {
-    ctx.rotate(deg2rad(ibom_settings.boardRotation));
-  }
-  ctx.scale(transform.s, transform.s);
 }
 
 function prepareLayer(canvasdict) {
@@ -741,7 +761,7 @@ function recalcLayerScale(layerdict, width, height, rotate) {
     }
     layerdict.transform.y = -((bbox.maxy + bbox.miny) * scalefactor - height) * 0.5;
   }
-  for (var c of ["bg", "fab", "silk", "highlight"]) {
+  for (var c of ["bg", "fab", "silk", "highlight", "anno"]) {
     canvas = layerdict[c];
     if (canvas) {
       canvas.width = width;
@@ -763,6 +783,7 @@ function redrawCanvas(layerdict) {
     prepareLayer(layerdict);
     drawBackground(layerdict);
     drawHighlightsOnLayer(layerdict);
+    prepareLayer(layerdict)
   }
 }
 
@@ -1058,6 +1079,7 @@ function initLayout() {
       fab: document.getElementById("F_fab"),
       silk: document.getElementById("F_slk"),
       highlight: document.getElementById("F_hl"),
+      anno: document.getElementById("F_an"),
       layer: "F",
     },
     back: {
@@ -1075,6 +1097,7 @@ function initLayout() {
       fab: document.getElementById("B_fab"),
       silk: document.getElementById("B_slk"),
       highlight: document.getElementById("B_hl"),
+      anno: document.getElementById("B_an"),
       layer: "B",
     }
   };
@@ -1145,6 +1168,21 @@ function initMouseHandlers() {
 
   drawToolLocations(canvasdict);
 
+  // if (IS_PROJECTOR) {
+  //   drawFPS(canvasdict);
+  //   drawCurrentSelection(canvasdict);
+  //   if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
+  //      drawMultiMenu(canvasdict, multimenu_active.hits);
+  //   }
+  // }
+
+}
+
+function drawAnnotationsOnLayer(canvasdict, clear=true) {
+  if (clear) {
+    clearCanvas(canvasdict.anno);
+  }
+
   if (IS_PROJECTOR) {
     drawFPS(canvasdict);
     drawCurrentSelection(canvasdict);
@@ -1152,7 +1190,6 @@ function initMouseHandlers() {
        drawMultiMenu(canvasdict, multimenu_active.hits);
     }
   }
-
 }
 
 /**
@@ -1257,11 +1294,15 @@ var r = 30;
 var t = 15;
 var l = 2;
 
-function circleAtPoint(layerdict, coords, color, radius) {
-  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
-  s = 1 / layerdict.transform.zoom;
-
-  var canvas = layerdict.highlight;
+function circleAtPoint(layerdict, coords, color, radius, anno=false) {
+  var canvas, s;
+  if (anno) {
+    canvas = layerdict.anno;
+    s = 1;
+  } else {
+    canvas = layerdict.highlight;
+    s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
+  }
   var style = getComputedStyle(topmostdiv);
   var ctx = canvas.getContext("2d");
 
@@ -1321,7 +1362,6 @@ function boxFromPoint(coords, size=1) {
 
 const times = [];
 let fps;
-
 function refreshLoop() {
   window.requestAnimationFrame(() => {
     const now = performance.now();
@@ -1336,22 +1376,28 @@ function refreshLoop() {
 refreshLoop();
 
 function drawFPS(layerdict) {
+  const fontsize = 40;
+  const padding = 20;
+  const textcolor = "white";
+
   if (!IS_PROJECTOR) {
     return;
   }
-  var canvas = layerdict.highlight;
+  var canvas = layerdict.anno;
   var ctx = canvas.getContext("2d");
-  var fontsize = 40;
-  var padding = 20;
-  ctx.font = `${fontsize / transform.z}px sans-serif`;
-  ctx.fillStyle = "black";
+  var style = getComputedStyle(topmostdiv);
+
+  ctx.fillStyle = style.getPropertyValue("background-color");
   ctx.beginPath();
-  var cornerpt = undoProjectorTransform(padding, padding);
-  ctx.rect(cornerpt.x, cornerpt.y, fontsize * 4 / transform.z, fontsize * 1.5 / transform.z);
+  // var cornerpt = undoProjectorTransform(padding, padding);
+  ctx.rect(padding, padding, fontsize * 4, fontsize * 1.5);
   ctx.fill();
-  ctx.fillStyle = "white";
-  var textpt = undoProjectorTransform(padding, padding + fontsize)
-  ctx.fillText(`FPS: ${fps}`, textpt.x, textpt.y);
+
+
+  ctx.font = `${fontsize}px sans-serif`;
+  ctx.fillStyle = textcolor;
+  // var textpt = undoProjectorTransform(padding, padding + fontsize)
+  ctx.fillText(`FPS: ${fps}`, padding, padding + fontsize);
 }
 
 var fps_interval = window.setInterval(() => {
@@ -1372,12 +1418,15 @@ function drawCurrentSelection(canvasdict) {
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.font = `${fontsize / transform.z}px sans-serif`;
 
-  var textpt = undoProjectorTransform(origin.x, origin.y)
+  // var textpt = undoProjectorTransform(origin.x, origin.y)
+  var textpt = {"x": origin.x, "y": origin.y}
   ctx.fillText(`Current Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
   if (active_session_is_recording) {
-    textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25);
+    // textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25);
+    textpt.y += fontsize * 1.25;
     ctx.fillText(`Pos Probe: ${getElementName(probes.pos.selection)}`, textpt.x, textpt.y);
-    textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25 * 2);
+    // textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25 * 2);
+    textpt.y += fontsize * 1.25;
     ctx.fillText(`Neg Probe: ${getElementName(probes.neg.selection)}`, textpt.x, textpt.y);
   }
 }
@@ -1403,8 +1452,10 @@ function drawMultiMenu(canvasdict, hits) {
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.lineWidth = 1 / transform.z;
-  ctx.font = `${fontsize / transform.z}px sans-serif`;
+  // ctx.lineWidth = 1 / transform.z;
+  ctx.lineWidth = 2;
+  // ctx.font = `${fontsize / transform.z}px sans-serif`;
+  ctx.font = `${fontsize}px sans-serif`;
 
   let point = {"x": anchor.x, "y": anchor.y};
   drawHLine(ctx, point, row_width, undoProjectorTransform);
@@ -1415,7 +1466,8 @@ function drawMultiMenu(canvasdict, hits) {
       drawHLine(ctx, point, row_width, undoProjectorTransform);
     }
     point.y += fontsize;
-    let tpoint = undoProjectorTransform(point.x + row_padding, point.y);
+    // let tpoint = undoProjectorTransform(point.x + row_padding, point.y);
+    let tpoint = {"x": point.x + row_padding, "y": point.y}
     ctx.fillText(getElementName(hits[i]), tpoint.x, tpoint.y, row_width - row_padding)
     point.y += row_padding;
     drawHLine(ctx, point, row_width, undoProjectorTransform);
@@ -1425,15 +1477,16 @@ function drawMultiMenu(canvasdict, hits) {
     "x": origin.x,
     "y": origin.y + (fontsize + row_padding) * probe_end_delta
   }
-  circleAtPoint(canvasdict, undoProjectorTransform(endpos.x, endpos.y), "blue", 10);
+  // circleAtPoint(canvasdict, undoProjectorTransform(endpos.x, endpos.y), "blue", 10);
+  circleAtPoint(canvasdict, {"x": endpos.x, "y": endpos.y}, "blue", 10, true);
 }
 
 function drawHLine(ctx, point, len, transform_fn=null) {
   var end = {"x": point.x + len, "y": point.y}
-  if (transform_fn !== null) {
-    point = transform_fn(point.x, point.y);
-    end = transform_fn(end.x, end.y);
-  }
+  // if (transform_fn !== null) {
+  //   point = transform_fn(point.x, point.y);
+  //   end = transform_fn(end.x, end.y);
+  // }
   ctx.beginPath();
   ctx.moveTo(point.x, point.y);
   ctx.lineTo(end.x, end.y);
