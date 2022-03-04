@@ -16,6 +16,8 @@ import threading
 import time
 
 import numpy as np
+from shapely.geometry import Point
+from shapely.affinity import rotate
 
 from tools import DebugCard, DebugSession
 from instrumentscripts.scpi_read import *
@@ -176,7 +178,7 @@ def get_datadicts():
 # -- socket --
 @socketio.on("connect")
 def handle_connect():
-    global active_connections, selection, projector_mode, projector_calibration, active_session
+    global active_connections, selection, projector_mode, projector_calibration, board_pos, active_session
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -192,6 +194,14 @@ def handle_connect():
     emit("projector-mode", projector_mode)
     for k, v in projector_calibration.items():
         emit("projector-adjust", {"type": k, "val": v})
+
+    final_pos = {
+        "tx": board_pos["x"] + projector_calibration["tx"],
+        "ty": board_pos["y"] + projector_calibration["ty"],
+        "r": projector_calibration["r"],
+        "z": projector_calibration["z"]
+    }
+    emit("board-update", final_pos)
 
     for tool in tools:
         for val, ready in tools[tool]["ready-elements"].items():
@@ -248,11 +258,19 @@ def handle_projectormode(mode):
 
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
-    global projector_calibration
-    #logging.info(f"Received projector adjust {adjust}")
+    global projector_calibration, board_pos
     projector_calibration[adjust["type"]] = adjust["val"]
     update_reselection_zone()
     socketio.emit("projector-adjust", adjust)
+
+    # projector-adjust also changes final board position
+    final_pos = {
+        "tx": board_pos["x"] + projector_calibration["tx"],
+        "ty": board_pos["y"] + projector_calibration["ty"],
+        "r": projector_calibration["r"],
+        "z": projector_calibration["z"]
+    }
+    socketio.emit("board-update", final_pos)
 
 
 @socketio.on("tool-request")
@@ -464,18 +482,35 @@ def init_data(pcbdata, schdata):
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
 
+# more magic numbers
+rotation_center = (148.5011, 105.0036)
+
 # converts optitrack pixels to layout mm in 2D
 def optitrack_to_layout_coords(point):
-    global projector_calibration
-    return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
-            -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
+    global board_pos, projector_calibration, rotation_center
+    x_off = board_pos["x"] + projector_calibration["tx"]
+    y_off = board_pos["y"] + projector_calibration["ty"]
+    r_off = board_pos["r"] + projector_calibration["r"]
+    z_factor = projector_calibration["z"]
+
+    sh_point = rotate(Point(point), -r_off, origin=rotation_center, use_radians=False)
+
+    return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
 
 
 # convert layout mm to optitrack pixels in 2D
 def layout_to_optitrack_coords(point):
-    global projector_calibration
-    return [(point[0] + projector_calibration["tx"]) * projector_calibration["z"],
-            (-point[1] + projector_calibration["ty"]) * projector_calibration["z"]]
+    global board_pos, projector_calibration, rotation_center
+    x_off = board_pos["x"] + projector_calibration["tx"]
+    y_off = board_pos["y"] + projector_calibration["ty"]
+    r_off = board_pos["r"] + projector_calibration["r"]
+    z_factor = projector_calibration["z"]
+
+    point[0] = (point[0] + x_off) * z_factor
+    point[1] = (point[1] + y_off) * z_factor
+    sh_point = rotate(Point(point), r_off, origin=rotation_center, use_radians=False)
+
+    return [sh_point.x, sh_point.y]
 
 
 # updates the selection safe zone in place (call any time we transform the projector)
@@ -848,6 +883,35 @@ def new_history(dwell_time, dim=2):
     return np.zeros((dim, history_len))
 
 
+def update_boardpos(x, y, r):
+    global board_pos, projector_calibration
+
+    # magic numbers, TODO move to config.ini
+    # also r is very wrong atm
+    boardpos_offset = {
+        "x": 588.26,
+        "y": -422.60,
+        "r": -132.44
+    }
+
+    # projector_calibration is now adjustment for observed board position
+    board_pos["x"] = (x - boardpos_offset["x"]) / projector_calibration["z"]
+    board_pos["y"] = (y - boardpos_offset["y"]) / projector_calibration["z"]
+    # board_pos["r"] = r - boardpos_offset["r"]
+    board_pos["r"] = 0
+
+
+    update_reselection_zone()
+
+    final_pos = {
+        "tx": board_pos["x"] + projector_calibration["tx"],
+        "ty": board_pos["y"] + projector_calibration["ty"],
+        "r": projector_calibration["r"],
+        "z": projector_calibration["z"]
+    }
+    socketio.emit("board-update", final_pos)
+
+
 def listen_udp():
     global socketio
 
@@ -887,7 +951,7 @@ def listen_udp():
         # red/grey end is x,y in pixels
         probe_tip = var[0:3]
         probe_end = var[3:5]
-        board_pos = var[5:8]
+        board_update = var[5:8]
         grey_tip = var[8:11]
         grey_end = var[11:13]
         board_rot = var[13]
@@ -895,10 +959,15 @@ def listen_udp():
         # convert z from real m to real mm to (roughly) match other coordinates
         probe_tip[2] *= 1000
         grey_tip[2] *= 1000
-        board_pos[2] *= 1000
+        board_update[2] *= 1000
 
         # to avoid crashes for now, ignoring z values
-        board_pos = board_pos[:2]
+        board_update = board_update[:2]
+
+        ts_board = time.perf_counter()
+        if config.getboolean("Dev", "TrackBoard"):
+            update_boardpos(board_update[0], board_update[1], board_rot)
+        ts_board = time.perf_counter() - ts_board
 
         ts_check = time.perf_counter()
         update_probe_history(probe_history, probe_tip, probe_end)
@@ -929,7 +998,7 @@ def listen_udp():
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
-            "boardpos": {"x": board_pos[0], "y": board_pos[1], "r": board_rot},
+            "boardpos": {"x": board_update[0], "y": board_update[1], "r": board_rot},
             # "tipdwell": tip_dwell,
             # "enddwell": end_dwell
         })
@@ -1048,6 +1117,11 @@ if __name__ == "__main__":
         "ty": config.getfloat("Dev", "DefaultTY"),
         "r": config.getfloat("Dev", "DefaultRotation"),
         "z": config.getfloat("Dev", "DefaultZoom")
+    }
+    board_pos = {
+        "x": 0,
+        "y": 0,
+        "r": 0
     }
 
     # Server tracks connected tools

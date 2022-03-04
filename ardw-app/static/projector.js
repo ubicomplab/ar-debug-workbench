@@ -140,6 +140,7 @@ function initSocket() {
     resizeAll();
   });
   socket.on("projector-adjust", (adjust) => {
+    return;
     transform[adjust["type"]] = adjust["val"];
 
     for (let layerdict of [allcanvas.front, allcanvas.back]) {
@@ -151,8 +152,19 @@ function initSocket() {
 
     resizeAll();
   })
+  socket.on("board-update", (update) => {
+    transform = update;
+
+    for (let layerdict of [allcanvas.front, allcanvas.back]) {
+      layerdict.transform.panx = layerdict.layer == "F" ? transform.tx : -transform.tx;
+      layerdict.transform.pany = transform.ty
+      ibom_settings.boardRotation = transform.r;
+      layerdict.transform.zoom = transform.z;
+    }
+    resizeAll();
+  })
   socket.on("udp", (data) => {
-    optitrackBoardposUpdate(data["boardpos"])
+    // optitrackBoardposUpdate(data["boardpos"])
     probes["pos"].location = data["tippos_layout"];
     probes["neg"].location = data["greytip"];
     probe_end_delta = data["endpos_delta"];

@@ -57,7 +57,7 @@ var probe_crosshair = false;
 
 /** offset of the center of rotation for the projector canvas
  * currently just the center of the edge cut bbox */ 
-const rotation_offset = {
+const rotation_center = {
   "x": 148.5011,
   "y": 105.0036
 }
@@ -672,11 +672,11 @@ function prepareCanvas(canvas, flip, transform, rotate) {
   if (IS_PROJECTOR) {
     ctx.scale(transform.zoom, transform.zoom);
     ctx.translate(transform.panx, transform.pany);
-    ctx.translate(rotation_offset.x, rotation_offset.y);
+    ctx.translate(rotation_center.x, rotation_center.y);
     if (rotate) {
       ctx.rotate(deg2rad(ibom_settings.boardRotation));
     }
-    ctx.translate(-rotation_offset.x, -rotation_offset.y);
+    ctx.translate(-rotation_center.x, -rotation_center.y);
     if (flip) {
       ctx.scale(-1, 1);
     }
