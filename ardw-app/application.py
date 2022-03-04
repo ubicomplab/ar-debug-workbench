@@ -18,6 +18,7 @@ import time
 import numpy as np
 
 from tools import DebugCard, DebugSession
+from instrumentscripts.scpi_read import *
 from boardgeometry.hitscan import hitscan
 
 
@@ -248,7 +249,7 @@ def handle_projectormode(mode):
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
     global projector_calibration
-    logging.info(f"Received projector adjust {adjust}")
+    #logging.info(f"Received projector adjust {adjust}")
     projector_calibration[adjust["type"]] = adjust["val"]
     update_reselection_zone()
     socketio.emit("projector-adjust", adjust)
@@ -546,17 +547,21 @@ def make_selection(new_selection):
         socketio.emit("selection", new_selection)
 
 
-# wrapper for getting DMM measurement from scipy
+# wrapper for getting DMM measurement from SCPI
 # returns tuple of unit, value
 def measure_dmm():
-    logging.error("measure_dmm() not yet implemented")
-    return None, None
+    logging.info("Making a voltage DMM measurement")
+    value = queryValue("dmm","voltage")
+    #logging.error("measure_dmm() not yet implemented")
+    return 'volts', value
 
 
-# wrapper for getting oscilloscope measurement from scipy
+# wrapper for getting oscilloscope measurement from SCPI
 # returns tuple of unit, value
 def measure_osc():
-    logging.error("measure_osc() not yet implemented")
+    logging.info("Making a osc frequency measurement")
+    value = queryValue("osc","frequency")
+    #logging.error("measure_osc() not yet implemented")
     return None, None
 
 
@@ -669,6 +674,8 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         logging.error("tool probe deselect NotYetImplemented")
         return
 
+    logging.info(f"attempting dmm selection for {probe}")
+
     # board layer is hardcoded for now
     layer = "F"
 
@@ -685,6 +692,7 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
 
         make_tool_selection(probe, hits[0])
     elif len(hits) > 1:
+        logging.info(f"probe {probe} hit {len(hits)} things")
         can_reselect[probe] = False
 
         # TODO auto disambiguation if we have a guided measurement
@@ -789,6 +797,8 @@ def check_probe_events(name: str, history: dict, selection_fn):
 
     ts_isz = time.perf_counter()
     if not in_selection_zone(tip_pos):
+        # logging.info(f"{name} is out of zone at {tip_pos[0]:.0f}, {tip_pos[1]:.0f}, {tip_pos[2]:.0f}")
+        # logging.info(f"zone is {reselection_zone}")
         can_reselect[name] = True
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
@@ -797,6 +807,8 @@ def check_probe_events(name: str, history: dict, selection_fn):
             selection_fn(name, tip_pos, end_pos, True)
         return tip_dwell, end_dwell
     ts_isz = time.perf_counter() - ts_isz
+
+    # logging.info(f"{name} is in zone with tip dwell {tip_dwell:.1f}")
 
     ts_op = time.perf_counter()
     ts_op_name = "none"
@@ -852,8 +864,8 @@ def listen_udp():
     dwell_time_end = config.getfloat("Optitrack", "DwellTimeEnd")
     probe_history = {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     dmm_probe_history = {
-        "pos": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)},
-        "neg": {"tip": new_history(dwell_time_tip), "end": new_history(dwell_time_end)}
+        "pos": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)},
+        "neg": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     }
 
     # tracks the previous value from udp for the EWMA filter
@@ -864,7 +876,7 @@ def listen_udp():
         ts = time.perf_counter()
         data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
         ts_wait = time.perf_counter() - ts
-        var = np.array(struct.unpack("f" * 13, data))
+        var = np.array(struct.unpack("f" * 14, data))
 
         # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
         if prev_var is not None:
@@ -878,6 +890,7 @@ def listen_udp():
         board_pos = var[5:8]
         grey_tip = var[8:11]
         grey_end = var[11:13]
+        board_rot = var[13]
 
         # convert z from real m to real mm to (roughly) match other coordinates
         probe_tip[2] *= 1000
@@ -885,18 +898,17 @@ def listen_udp():
         board_pos[2] *= 1000
 
         # to avoid crashes for now, ignoring z values
-        grey_tip = grey_tip[:2]
         board_pos = board_pos[:2]
 
         ts_check = time.perf_counter()
         update_probe_history(probe_history, probe_tip, probe_end)
-        tip_dwell, end_dwell = check_probe_events("probe", probe_history, selection_fn=probe_selection)
+        # tip_dwell, end_dwell = check_probe_events("probe", probe_history, selection_fn=probe_selection)
         ts_check = time.perf_counter() - ts_check
 
-        # for now, we don't have the necessary values
-        #for probe, history in dmm_probe_history.items():
-        #    update_probe_history(history, None, None)
-        #    check_probe_events(probe, history, selection_fn=dmm_selection)
+        update_probe_history(dmm_probe_history["pos"], probe_tip, probe_end)
+        check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
+        update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
+        check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
 
         # send the tip and end positions to the web app to display
         probe_tip_layout = optitrack_to_layout_coords(probe_tip)
@@ -917,9 +929,9 @@ def listen_udp():
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
-            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]},
-            "tipdwell": tip_dwell,
-            "enddwell": end_dwell
+            "boardpos": {"x": board_pos[0], "y": board_pos[1], "r": board_rot},
+            # "tipdwell": tip_dwell,
+            # "enddwell": end_dwell
         })
         ts_sock = time.perf_counter() - ts_sock
 
@@ -931,7 +943,7 @@ def listen_udp():
             #logging.info("frame early!")
             time.sleep(diff)
         elif diff < -1 / framerate:
-            logging.warning(f"low framerate: {-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            #logging.warning(f"low framerate: {-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")
@@ -999,6 +1011,7 @@ def autoconnect_tools(enabled):
         for element in tools[device]["ready-elements"]:
             tools[device]["ready-elements"][element] = True
 
+    initializeInstruments()
 
 if __name__ == "__main__":
     schdata = None

@@ -4,8 +4,11 @@
 // mainly for handling socket selection events
 
 /** Magic numbers for the offset between optitrack boardpos and our render */
-const BOARDPOS_OFFSET_X = 589.87;
-const BOARDPOS_OFFSET_Y = -420.96;
+var boardpos_offset = {
+    "x": 588.26,
+    "y": -422.60,
+    "r": -132.44
+}
 
 /** if True, the tx/ty of the transform */
 var trackboard = false;
@@ -149,7 +152,7 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-    optitrackBoardposUpdate(data["boardpos_pixel"])
+    optitrackBoardposUpdate(data["boardpos"])
     probes["pos"].location = data["tippos_layout"];
     probes["neg"].location = data["greytip"];
     probe_end_delta = data["endpos_delta"];
@@ -213,22 +216,42 @@ function initSocket() {
   })
 }
 
+var counter = 0;
+var sum = {"x": 0, "y": 0, "r": 0}
+var n = 100;
+
 // TODO uses magic numbers, instead use layout coords from server
 /** Updates the board position to match the given boardpos */
 function optitrackBoardposUpdate(boardpos) {
   var t = allcanvas.front.transform;
-  var x = (boardpos.x - BOARDPOS_OFFSET_X) / t.zoom;
-  var y = -(boardpos.y - BOARDPOS_OFFSET_Y) / t.zoom;
+  var x = (boardpos.x - boardpos_offset.x) / t.zoom;
+  var y = -(boardpos.y - boardpos_offset.y) / t.zoom;
+  var r = -boardpos.r - boardpos_offset.r;
+  if (r < -180) {
+    r += 360;
+  } else if (r > 180) {
+    r -= 360;
+  }
+
+  if (counter < n) {
+    sum.x += boardpos.x;
+    sum.y += boardpos.y;
+    sum.r += boardpos.r;
+  } else if (counter == n) {
+    console.log(`avg is ${(sum.x/n).toFixed(4)}, ${(sum.y/n).toFixed(4)}, r=${(sum.r/n).toFixed(4)}`)
+  }
+  counter++;
 
   if (trackboard) {
     socket.emit("projector-adjust", {"type": "tx", "val": x});
     socket.emit("projector-adjust", {"type": "ty", "val": y});
+//    socket.emit("projector-adjust", {"type": "r", "val": r});
   }
 }
 
-// board 599 -443 at 0,0,400%
-// board 998 -444 at 100,0,400%
-// board 1393, -440 at 200, 0, 400%
+
+// 907.4639, -502.3962, -132.4372
+// with tx=80, ty=20, z=3.99
 
 
 window.onload = () => {

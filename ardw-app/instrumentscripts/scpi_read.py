@@ -66,15 +66,32 @@ def initializeInstruments():
 
 def queryValue(instrumentType, function):
     if instrumentType == "dmm":
+        
+        # if function is None:
+        #     state = 
+
         if function == "voltage":
-            # TODO need to fix later so it doesn't just take the first instrument 
             value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
             print("Measured value = " + str(value) + " VDC")
             return value
 
+        if function == "resistance":
+            value = float(dmms[0].query(':MEAS:RES?'))
+            print("Measured value = " + str(value) + " ohms")
+            return value
+
+        if function == "continuity":
+            value = float(dmms[0].query(':MEAS:CONT?'))
+            print("Measured value = " + str(value))
+            return value
+
+        if function == "dc_current":
+            value = float(dmms[0].query(':MEAS:CURR:DC?'))
+            print("Measured value = " + str(value) + " A")
+            return value
+
     elif instrumentType == "osc":
         if function == "frequency":
-            # TODO need to fix later so it doesn't just take the first instrument 
             # oscs[0].write('MEASU:FREQ CHAN' + str(channel))
             # oscs[0].write(':MEASUrement:IMMed:SOUrce1 CH' + str(channel))
             # oscs[0].write(':MEASUrement:IMMed:TYPe FREQuency')
@@ -86,8 +103,7 @@ def queryValue(instrumentType, function):
             print("Measured value = " + str(value) + " Hz")
             return value
 
-        if function == "duty":
-            # TODO need to fix later so it doesn't just take the first instrument 
+        if function == "pduty":
             oscs[0].write(':MEAS:DUTY CHAN' + str(channel))
             value = float(oscs[0].query(':MEAS:DUTY?'))
             print("Measured value = " + str(value) + " %")
@@ -99,7 +115,8 @@ def queryValue(instrumentType, function):
 
 def main():
     initializeInstruments()
-    queryValue("osc", "frequency")
+    queryValue("dmm", "voltage")
+    #queryValue("osc", "frequency")
 
         
 
