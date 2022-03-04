@@ -820,6 +820,28 @@ function debugSessionEvent(data) {
 }
 
 /**
+ * Parses a text value (eg. from an input[type=text]) into a float
+ * @param {*} val text value
+ * @param {*} lo lower bound (inclusive)
+ * @param {*} hi upper bound (inclusive)
+ * @param {*} def default value if val is NaN (0 if not specified)
+ * @param {*} increment increment to be applied to parsed value (0 if not specified)
+ * @returns float value
+ */
+function floatFromText(val, lo, hi, def=0, increment=0) {
+  val = parseFloat(val) + increment;
+  if (isNaN(val)) {
+    return def;
+  } else if (val < lo) {
+    return lo;
+  } else if (val > hi) {
+    return hi;
+  } else {
+    return val;
+  }
+}
+
+/**
  * Initializes various page elements, such as the menu bar and popups
  */
 function initPage() {
@@ -1039,14 +1061,15 @@ function initPage() {
   });
 
   projector_sliders["tx"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -400, 400, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -4000, 4000, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "tx", "val": floatFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["tx"]["slider"] = document.getElementById("settings-projector-tx");
   projector_sliders["tx"]["label"] = document.getElementById("settings-projector-tx-label");
   projector_sliders.tx.slider.value = 0;
-  projector_sliders.tx.label.value = "0";
+  projector_sliders.tx.label.value = "0.0";
   projector_sliders.tx.slider.addEventListener("input", () => {
-    projector_sliders.tx.func(projector_sliders.tx.slider.value);
+    projector_sliders.tx.func(projector_sliders.tx.slider.value / 10);
   });
   projector_sliders.tx.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1056,14 +1079,15 @@ function initPage() {
   });
 
   projector_sliders["ty"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -400, 400, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -4000, 4000, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "ty", "val": floatFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["ty"]["slider"] = document.getElementById("settings-projector-ty");
   projector_sliders["ty"]["label"] = document.getElementById("settings-projector-ty-label");
   projector_sliders.ty.slider.value = 0;
-  projector_sliders.ty.label.value = 0;
+  projector_sliders.ty.label.value = "0.0";
   projector_sliders.ty.slider.addEventListener("input", () => {
-    projector_sliders.ty.func(projector_sliders.ty.slider.value);
+    projector_sliders.ty.func(projector_sliders.ty.slider.value / 10);
   });
   projector_sliders.ty.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1073,14 +1097,15 @@ function initPage() {
   });
 
   projector_sliders["r"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "r", "val": intFromText(val, -180, 180, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "r", "val": intFromText(val, -1800, 1800, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "r", "val": floatFromText(val, -180, 180, 0, increment)})
   }
   projector_sliders["r"]["slider"] = document.getElementById("settings-projector-rotation");
   projector_sliders["r"]["label"] = document.getElementById("settings-projector-rotation-label");
   projector_sliders.r.slider.value = 0;
-  projector_sliders.r.label.value = 0;
+  projector_sliders.r.label.value = "0.0";
   projector_sliders.r.slider.addEventListener("input", () => {
-    projector_sliders.r.func(projector_sliders.r.slider.value);
+    projector_sliders.r.func(projector_sliders.r.slider.value / 10);
   });
   projector_sliders.r.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1116,22 +1141,22 @@ function initPage() {
     if (adjust_with_keys) {
       switch (e.key) {
         case "a":
-          projector_sliders.tx.func(projector_sliders.tx.slider.value, -1);
+          projector_sliders.tx.func(projector_sliders.tx.slider.value / 10, -0.1);
           break;
         case "d":
-          projector_sliders.tx.func(projector_sliders.tx.slider.value, 1);
+          projector_sliders.tx.func(projector_sliders.tx.slider.value / 10, 0.1);
           break;
         case "w":
-          projector_sliders.ty.func(projector_sliders.ty.slider.value, -1);
+          projector_sliders.ty.func(projector_sliders.ty.slider.value / 10, -0.1);
           break;
         case "s":
-          projector_sliders.ty.func(projector_sliders.ty.slider.value, 1);
+          projector_sliders.ty.func(projector_sliders.ty.slider.value / 10, 0.1);
           break;
         case "q":
-          projector_sliders.r.func(projector_sliders.r.slider.value, -1);
+          projector_sliders.r.func(projector_sliders.r.slider.value / 10, -0.1);
           break;
         case "e":
-          projector_sliders.r.func(projector_sliders.r.slider.value, 1);
+          projector_sliders.r.func(projector_sliders.r.slider.value / 10, 0.1);
           break;
         case "r":
           projector_sliders.z.func(projector_sliders.z.slider.value, 1);
@@ -1332,9 +1357,13 @@ function initSocket() {
     }
   });
   socket.on("projector-adjust", (adjust) => {
-    let val = adjust.type === "z" ? adjust.val * 100 : adjust.val;
-    projector_sliders[adjust.type].slider.value = val;
-    projector_sliders[adjust.type].label.value = val;
+    if (adjust.type == "z") {
+      projector_sliders.z.slider.value = adjust.val * 100;
+      projector_sliders.z.label.value = adjust.val * 100;
+    } else {
+      projector_sliders[adjust.type].slider.value = adjust.val * 10;
+      projector_sliders[adjust.type].label.value = adjust.val.toFixed(1);
+    }
   });
 
   // tools
