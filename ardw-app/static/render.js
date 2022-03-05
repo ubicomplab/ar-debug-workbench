@@ -836,6 +836,8 @@ function resetTransform(layerdict) {
 function drawHighlights() {
   drawHighlightsOnLayer(allcanvas.front);
   drawHighlightsOnLayer(allcanvas.back);
+  drawAnnotationsOnLayer(allcanvas.front);
+  drawAnnotationsOnLayer(allcanvas.back);
 }
 // ----- End of layout render functions ----- //
 
@@ -1410,7 +1412,7 @@ var fps_interval = window.setInterval(() => {
 
 function drawCurrentSelection(canvasdict) {
   var style = getComputedStyle(topmostdiv);
-  var ctx = canvasdict.highlight.getContext("2d");
+  var ctx = canvasdict.anno.getContext("2d");
 
   var fontsize = 40;
   var origin = {"x": 20, "y": 120}

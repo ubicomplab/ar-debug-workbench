@@ -493,9 +493,11 @@ def optitrack_to_layout_coords(point):
     r_off = board_pos["r"] + projector_calibration["r"]
     z_factor = projector_calibration["z"]
 
+    point[0] = point[0] / z_factor - x_off
+    point[1] = -point[1] / z_factor - y_off
     sh_point = rotate(Point(point), -r_off, origin=rotation_center, use_radians=False)
-
-    return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
+    return [sh_point.x, sh_point.y]
+    # return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
 
 
 # convert layout mm to optitrack pixels in 2D
@@ -506,11 +508,12 @@ def layout_to_optitrack_coords(point):
     r_off = board_pos["r"] + projector_calibration["r"]
     z_factor = projector_calibration["z"]
 
-    point[0] = (point[0] + x_off) * z_factor
-    point[1] = (point[1] + y_off) * z_factor
     sh_point = rotate(Point(point), r_off, origin=rotation_center, use_radians=False)
+    result = [sh_point.x, sh_point.y]
+    result[0] = (result[0] + x_off) * z_factor
+    result[1] = -(result[1] + y_off) * z_factor
 
-    return [sh_point.x, sh_point.y]
+    return result
 
 
 # updates the selection safe zone in place (call any time we transform the projector)
