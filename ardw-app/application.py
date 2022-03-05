@@ -198,7 +198,7 @@ def handle_connect():
     final_pos = {
         "tx": board_pos["x"] + projector_calibration["tx"],
         "ty": board_pos["y"] + projector_calibration["ty"],
-        "r": projector_calibration["r"],
+        "r": board_pos["r"] + projector_calibration["r"],
         "z": projector_calibration["z"]
     }
     emit("board-update", final_pos)
@@ -267,7 +267,7 @@ def handle_projector_adjust(adjust):
     final_pos = {
         "tx": board_pos["x"] + projector_calibration["tx"],
         "ty": board_pos["y"] + projector_calibration["ty"],
-        "r": projector_calibration["r"],
+        "r": board_pos["r"] + projector_calibration["r"],
         "z": projector_calibration["z"]
     }
     socketio.emit("board-update", final_pos)
@@ -891,22 +891,20 @@ def update_boardpos(x, y, r):
     boardpos_offset = {
         "x": 588.26,
         "y": -422.60,
-        "r": -132.44
+        "r": 32.1183
     }
 
     # projector_calibration is now adjustment for observed board position
     board_pos["x"] = (x - boardpos_offset["x"]) / projector_calibration["z"]
-    board_pos["y"] = (y - boardpos_offset["y"]) / projector_calibration["z"]
-    # board_pos["r"] = r - boardpos_offset["r"]
-    board_pos["r"] = 0
-
+    board_pos["y"] = -(y - boardpos_offset["y"]) / projector_calibration["z"]
+    board_pos["r"] = -r - boardpos_offset["r"]
 
     update_reselection_zone()
 
     final_pos = {
         "tx": board_pos["x"] + projector_calibration["tx"],
         "ty": board_pos["y"] + projector_calibration["ty"],
-        "r": projector_calibration["r"],
+        "r": board_pos["r"] + projector_calibration["r"],
         "z": projector_calibration["z"]
     }
     socketio.emit("board-update", final_pos)

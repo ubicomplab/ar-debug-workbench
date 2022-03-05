@@ -164,7 +164,7 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-    // optitrackBoardposUpdate(data["boardpos"])
+     optitrackBoardposUpdate(data["boardpos"])
     probes["pos"].location = data["tippos_layout"];
     probes["neg"].location = data["greytip"];
     probe_end_delta = data["endpos_delta"];
@@ -238,7 +238,7 @@ function optitrackBoardposUpdate(boardpos) {
   var t = allcanvas.front.transform;
   var x = (boardpos.x - boardpos_offset.x) / t.zoom;
   var y = -(boardpos.y - boardpos_offset.y) / t.zoom;
-  var r = -boardpos.r - boardpos_offset.r;
+  var r = boardpos.r - boardpos_offset.r;
   if (r < -180) {
     r += 360;
   } else if (r > 180) {
@@ -255,8 +255,8 @@ function optitrackBoardposUpdate(boardpos) {
   counter++;
 
   if (trackboard) {
-    socket.emit("projector-adjust", {"type": "tx", "val": x});
-    socket.emit("projector-adjust", {"type": "ty", "val": y});
+//    socket.emit("projector-adjust", {"type": "tx", "val": x});
+//    socket.emit("projector-adjust", {"type": "ty", "val": y});
 //    socket.emit("projector-adjust", {"type": "r", "val": r});
   }
 }
@@ -264,6 +264,8 @@ function optitrackBoardposUpdate(boardpos) {
 
 // 907.4639, -502.3962, -132.4372
 // with tx=80, ty=20, z=3.99
+
+// -122.5995 at 90
 
 
 window.onload = () => {
