@@ -823,14 +823,11 @@ def check_probe_events(name: str, history: dict, selection_fn):
 
     ts = time.perf_counter()
 
-    tip_mean = np.mean(history["tip"], axis=1)
-    end_mean = np.mean(history["end"], axis=1)
-
     tip_pos = history["tip"][:, -1]
     end_pos = history["end"][:, -1]
 
-    tip_dwell = history_dwellvalue(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip"))
-    end_dwell = history_dwellvalue(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd"))
+    tip_dwell = history_dwellvalue(history["tip"], tip_pos, config.getfloat("Optitrack", "DwellRadiusTip"))
+    end_dwell = history_dwellvalue(history["end"], end_pos, config.getfloat("Optitrack", "DwellRadiusEnd"))
     ts_dwell = time.perf_counter() - ts
 
     ts_isz = time.perf_counter()
@@ -853,18 +850,11 @@ def check_probe_events(name: str, history: dict, selection_fn):
     if not board_multimenu["active"]:
         # no multimenu is open, we can select
         if can_reselect[name] and tip_dwell == 1:
-            selection_fn(name, tip_mean, end_mean)
+            selection_fn(name, tip_pos, end_pos)
         ts_op_name = "sel"
-    elif board_multimenu["source"] == name and False:
-        # a multimenu for this probe is open
-        if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
-                np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius") and \
-                end_dwell == 1:
-            # tip is still in place and end is dwelling outside the "safe zone"
-            multimenu_selection(name, end_mean)
     elif board_multimenu["source"] == name:
         # a multimenu for this probe is open)
-        anchordist = np.linalg.norm(tip_mean - board_multimenu["tip-anchor"])
+        anchordist = np.linalg.norm(tip_pos - board_multimenu["tip-anchor"])
         #logging.info(f"trying mm sel with dwell val of {end_dwell:.1f} and anchor dist {anchordist:.1f}")
         if end_dwell == 1 and anchordist <= config.getfloat("Optitrack", "MultiAnchorRadius"):
             # tip is still in place and end is dwelling
@@ -927,7 +917,7 @@ def listen_udp():
     # TODO transpose them back
     dwell_time_tip = config.getfloat("Optitrack", "DwellTime")
     dwell_time_end = config.getfloat("Optitrack", "DwellTimeEnd")
-    probe_history = {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
+    # probe_history = {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     dmm_probe_history = {
         "pos": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)},
         "neg": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
@@ -937,7 +927,9 @@ def listen_udp():
     prev_var = None
 
     nextframe = time.perf_counter() + 1. / framerate
+    frame_i = 0
     while True:
+        frame_i += 1
         ts = time.perf_counter()
         data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
         ts_wait = time.perf_counter() - ts
@@ -950,15 +942,15 @@ def listen_udp():
 
         # board and red/grey tips are x,y,z where x,y are in pixels and z is in real m
         # red/grey end is x,y in pixels
-        probe_tip = var[0:3]
-        probe_end = var[3:5]
+        red_tip = var[0:3]
+        red_end = var[3:5]
         board_update = var[5:8]
         grey_tip = var[8:11]
         grey_end = var[11:13]
         board_rot = var[13]
 
         # convert z from real m to real mm to (roughly) match other coordinates
-        probe_tip[2] *= 1000
+        red_tip[2] *= 1000
         grey_tip[2] *= 1000
         board_update[2] *= 1000
 
@@ -971,23 +963,25 @@ def listen_udp():
         ts_board = time.perf_counter() - ts_board
 
         ts_check = time.perf_counter()
-        update_probe_history(probe_history, probe_tip, probe_end)
-        # tip_dwell, end_dwell = check_probe_events("probe", probe_history, selection_fn=probe_selection)
+        # update_probe_history(probe_history, red_tip, red_end)
+        update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
+        update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
+        if config.getboolean("Dev", "ToolProbeMode"):
+            _, _ = check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
+            _, _ = check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
+        else:
+            _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=probe_selection)
+
         ts_check = time.perf_counter() - ts_check
 
-        update_probe_history(dmm_probe_history["pos"], probe_tip, probe_end)
-        check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
-        update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
-        check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
-
         # send the tip and end positions to the web app to display
-        probe_tip_layout = optitrack_to_layout_coords(probe_tip)
+        probe_tip_layout = optitrack_to_layout_coords(red_tip)
 
         if board_multimenu["active"]:
             # get the normalized probe end y-delta s.t. row height = 1
             #probe_end_delta = np.mean(probe_history["end"], axis=1)[1] - board_multimenu["end-origin"][1]
             #probe_end_delta = board_multimenu["end-origin"][1] - np.mean(probe_history["end"], axis=1)[1]
-            probe_end_delta = board_multimenu["end-origin"][1] - probe_end[1]
+            probe_end_delta = board_multimenu["end-origin"][1] - red_end[1]
             probe_end_delta /= config.getfloat("Optitrack", "MultiRowHeight")
         else:
             probe_end_delta = 0
@@ -1012,8 +1006,11 @@ def listen_udp():
         if diff > 0:
             #logging.info("frame early!")
             time.sleep(diff)
-        elif diff < -1 / framerate:
-            #logging.warning(f"low framerate: {-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+        elif -diff > 0.05:
+            # more than 50ms behind
+            logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
+                f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
+                f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")

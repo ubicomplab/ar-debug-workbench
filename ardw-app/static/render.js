@@ -1189,7 +1189,8 @@ function drawAnnotationsOnLayer(canvasdict, clear=true) {
     drawFPS(canvasdict);
     drawCurrentSelection(canvasdict);
     if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
-       drawMultiMenu(canvasdict, multimenu_active.hits);
+      var color = probes[multimenu_active.device].color.loc;
+      drawMultiMenu(canvasdict, multimenu_active.hits, color);
     }
   }
 }
@@ -1418,7 +1419,7 @@ function drawCurrentSelection(canvasdict) {
   var origin = {"x": 20, "y": 120}
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.font = `${fontsize / transform.z}px sans-serif`;
+  ctx.font = `${fontsize}px sans-serif`;
 
   // var textpt = undoProjectorTransform(origin.x, origin.y)
   var textpt = {"x": origin.x, "y": origin.y}
@@ -1433,7 +1434,7 @@ function drawCurrentSelection(canvasdict) {
   }
 }
 
-function drawMultiMenu(canvasdict, hits) {
+function drawMultiMenu(canvasdict, hits, color="blue") {
   // Config variables for the multi menu
   var fontsize = 40;
   var row_padding = 10;
@@ -1441,7 +1442,7 @@ function drawMultiMenu(canvasdict, hits) {
   var row_width = 300;
 
   var style = getComputedStyle(topmostdiv);
-  var canvas = canvasdict.highlight;
+  var canvas = canvasdict.anno;
   var ctx = canvas.getContext("2d");
 
   // ceil not floor so that if we have an odd number, the top has more
@@ -1480,7 +1481,7 @@ function drawMultiMenu(canvasdict, hits) {
     "y": origin.y + (fontsize + row_padding) * probe_end_delta
   }
   // circleAtPoint(canvasdict, undoProjectorTransform(endpos.x, endpos.y), "blue", 10);
-  circleAtPoint(canvasdict, {"x": endpos.x, "y": endpos.y}, "blue", 10, true);
+  circleAtPoint(canvasdict, {"x": endpos.x, "y": endpos.y}, color, 10, true);
 }
 
 function drawHLine(ctx, point, len, transform_fn=null) {

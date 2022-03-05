@@ -124,6 +124,7 @@ function initSocket() {
         break;
       case "cancel-multi":
         multimenu_active = null;
+        drawHighlights();
         break;
     }
   });
