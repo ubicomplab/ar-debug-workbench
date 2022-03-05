@@ -165,7 +165,7 @@ function initSocket() {
     resizeAll();
   })
   socket.on("udp", (data) => {
-     optitrackBoardposUpdate(data["boardpos"])
+    optitrackBoardposUpdate(data["boardpos"])
     probes["pos"].location = data["tippos_layout"];
     probes["neg"].location = data["greytip"];
     probe_end_delta = data["endpos_delta"];

@@ -783,6 +783,7 @@ function redrawCanvas(layerdict) {
     prepareLayer(layerdict);
     drawBackground(layerdict);
     drawHighlightsOnLayer(layerdict);
+    drawAnnotationsOnLayer(layerdict);
     prepareLayer(layerdict)
   }
 }
