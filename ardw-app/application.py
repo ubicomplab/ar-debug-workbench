@@ -493,9 +493,9 @@ def optitrack_to_layout_coords(point):
     r_off = board_pos["r"] + projector_calibration["r"]
     z_factor = projector_calibration["z"]
 
-    point[0] = point[0] / z_factor - x_off
-    point[1] = -point[1] / z_factor - y_off
-    sh_point = rotate(Point(point), -r_off, origin=rotation_center, use_radians=False)
+    x = point[0] / z_factor - x_off
+    y = -point[1] / z_factor - y_off
+    sh_point = rotate(Point(x, y), -r_off, origin=rotation_center, use_radians=False)
     return [sh_point.x, sh_point.y]
     # return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
 
@@ -793,7 +793,7 @@ def multimenu_selection_linear(name, endpos):
     # cell_i is 0 for safe cell, - if above safe cell, and + if below safe cell
     cell_i = int(np.floor(val / row_height + 0.5))
 
-    #logging.info(f"val {val:.1f}, cell_i {cell_i}")
+    # logging.info(f"val {val:.1f}, cell_i {cell_i}")
 
     if cell_i == 0:
         # we're in safe cell, do nothing
