@@ -178,7 +178,7 @@ def get_datadicts():
 # -- socket --
 @socketio.on("connect")
 def handle_connect():
-    global active_connections, selection, projector_mode, projector_calibration, board_pos, active_session
+    global active_connections, selection, projector_mode, projector_calibration, board_pos, active_session, active_session_is_recording
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -221,6 +221,13 @@ def handle_connect():
                 "id": i
             }
             emit("debug-session", data)
+
+        nextid, nextcard = active_session.get_next()
+        if nextid != -1:
+            emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
+
+    if active_session_is_recording:
+        emit("debug-session", {"event": "record", "record": "true"})
 
     # not sure if there's a better way to avoid spamming all clients every time one connects
     emit("config", {
@@ -365,10 +372,6 @@ def handle_tool_debug(data):
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
-
-@socketio.on("toggleboardpos")
-def handle_toggle(data):
-    socketio.emit("toggleboardpos", data)
 
 # -- end socket --
 
@@ -899,7 +902,11 @@ def update_boardpos(x, y, r):
     # projector_calibration is now adjustment for observed board position
     board_pos["x"] = (x - boardpos_offset["x"]) / projector_calibration["z"]
     board_pos["y"] = -(y - boardpos_offset["y"]) / projector_calibration["z"]
-    board_pos["r"] = -r - boardpos_offset["r"]
+
+    if config.getboolean("Dev", "TrackBoardRotation"):
+        board_pos["r"] = -r - boardpos_offset["r"]
+    else:
+        board_pos["r"] = 0
 
     update_reselection_zone()
 
@@ -997,7 +1004,6 @@ def listen_udp():
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
-            "boardpos": {"x": board_update[0], "y": board_update[1], "r": board_rot},
             # "tipdwell": tip_dwell,
             # "enddwell": end_dwell
         })

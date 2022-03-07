@@ -1393,14 +1393,12 @@ function drawFPS(layerdict) {
 
   ctx.fillStyle = style.getPropertyValue("background-color");
   ctx.beginPath();
-  // var cornerpt = undoProjectorTransform(padding, padding);
   ctx.rect(padding, padding, fontsize * 4, fontsize * 1.5);
   ctx.fill();
 
 
   ctx.font = `${fontsize}px sans-serif`;
   ctx.fillStyle = textcolor;
-  // var textpt = undoProjectorTransform(padding, padding + fontsize)
   ctx.fillText(`FPS: ${fps}`, padding, padding + fontsize);
 }
 
@@ -1427,16 +1425,13 @@ function drawCurrentSelection(canvasdict) {
     mode_text = "Debugging"
   }
 
-  // var textpt = undoProjectorTransform(origin.x, origin.y)
   var textpt = {"x": origin.x, "y": origin.y}
   ctx.fillText(`Mode: ${mode_text}`, textpt.x, textpt.y);
   textpt.y += fontsize * 1.25;
-  ctx.fillText(`Current Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
-  if (active_session_is_recording) {
-    // textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25);
-    textpt.y += fontsize * 1.25;
+  if (!active_session_is_recording) {
+    ctx.fillText(`Current Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
+  } else {
     ctx.fillText(`Pos Probe: ${getElementName(probes.pos.selection)}`, textpt.x, textpt.y);
-    // textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25 * 2);
     textpt.y += fontsize * 1.25;
     ctx.fillText(`Neg Probe: ${getElementName(probes.neg.selection)}`, textpt.x, textpt.y);
   }
@@ -1463,52 +1458,36 @@ function drawMultiMenu(canvasdict, hits, color="blue") {
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  // ctx.lineWidth = 1 / transform.z;
   ctx.lineWidth = 2;
-  // ctx.font = `${fontsize / transform.z}px sans-serif`;
   ctx.font = `${fontsize}px sans-serif`;
 
   let point = {"x": anchor.x, "y": anchor.y};
-  drawHLine(ctx, point, row_width, undoProjectorTransform);
+  drawHLine(ctx, point, row_width);
   for (let i = 0; i < hits.length; i++) {
     if (i == midpoint) {
       // If we're at the midpoint of the list, move us down one extra row
       point.y += fontsize + row_padding;
-      drawHLine(ctx, point, row_width, undoProjectorTransform);
+      drawHLine(ctx, point, row_width);
     }
     point.y += fontsize;
-    // let tpoint = undoProjectorTransform(point.x + row_padding, point.y);
     let tpoint = {"x": point.x + row_padding, "y": point.y}
     ctx.fillText(getElementName(hits[i]), tpoint.x, tpoint.y, row_width - row_padding)
     point.y += row_padding;
-    drawHLine(ctx, point, row_width, undoProjectorTransform);
+    drawHLine(ctx, point, row_width);
   }
 
   var endpos = {
     "x": origin.x,
     "y": origin.y + (fontsize + row_padding) * probe_end_delta
   }
-  // circleAtPoint(canvasdict, undoProjectorTransform(endpos.x, endpos.y), "blue", 10);
   circleAtPoint(canvasdict, {"x": endpos.x, "y": endpos.y}, color, 10, true);
 }
 
-function drawHLine(ctx, point, len, transform_fn=null) {
+function drawHLine(ctx, point, len) {
   var end = {"x": point.x + len, "y": point.y}
-  // if (transform_fn !== null) {
-  //   point = transform_fn(point.x, point.y);
-  //   end = transform_fn(end.x, end.y);
-  // }
   ctx.beginPath();
   ctx.moveTo(point.x, point.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
-}
-
-function undoProjectorTransform(x, y) {
-  if (!IS_PROJECTOR) {
-    logerr("Called undoProjectorTransform() from main page");
-    return;
-  }
-  return {"x": x / transform.z - transform.tx, "y": y / transform.z - transform.ty}
 }
 
