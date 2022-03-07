@@ -1422,8 +1422,15 @@ function drawCurrentSelection(canvasdict) {
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.font = `${fontsize}px sans-serif`;
 
+  var mode_text = "Selection";
+  if (active_session_is_recording) {
+    mode_text = "Debugging"
+  }
+
   // var textpt = undoProjectorTransform(origin.x, origin.y)
   var textpt = {"x": origin.x, "y": origin.y}
+  ctx.fillText(`Mode: ${mode_text}`, textpt.x, textpt.y);
+  textpt.y += fontsize * 1.25;
   ctx.fillText(`Current Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
   if (active_session_is_recording) {
     // textpt = undoProjectorTransform(origin.x, origin.y + fontsize * 1.25);

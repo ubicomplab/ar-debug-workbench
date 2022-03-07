@@ -624,19 +624,20 @@ def make_tool_selection(device, new_selection=None):
             _, nextcard = active_session.get_next()
             if nextcard is not None:
                 if (device == "pos" and nextcard.pos != new_selection) or \
-                    (device == "neg" and nextcard.neg != new_selection):
+                        (device == "neg" and nextcard.neg != new_selection):
                     socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
 
             # record a measurement if both probes are set
             if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
+                logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
+                return
                 dmm_unit, dmm_val = measure_dmm()
                 tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
-                socketio.emit("tool-selection", {"device": "pos", "selection": None})
-                socketio.emit("tool-selection", {"device": "neg", "selection": None})
+                make_tool_selection(None)
             if tool_selections["osc"] is not None:
                 osc_unit, osc_val = measure_osc()
                 tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
-                socketio.emit("tool-selection", {"device": "osc", "selection": None})
+                make_tool_selection(None)
 
 
 # handles a selection event from the client
@@ -669,7 +670,6 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
         # we dwelled down outside of the board
         make_selection(None)
         return
-
     # board layer is hardcoded for now
     layer = "F"
 
@@ -706,10 +706,15 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
 # handles a dmm selection event
 # assumes this event was triggered under valid circumstances
 def dmm_selection(probe, tippos, endpos, force_deselect=False):
-    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio, tool_selections
 
     if force_deselect:
-        logging.error("tool probe deselect NotYetImplemented")
+        tool_selections[probe] = None
+        socketio.emit("tool-selection", {"device": probe, "selection": None})
+        return
+
+    if not active_session_is_recording:
+        logging.info("attempted dmm selection without active session, ignoring")
         return
 
     logging.info(f"attempting dmm selection for {probe}")
@@ -787,7 +792,7 @@ def multimenu_selection_linear(name, endpos):
     #val = endpos[1] - board_multimenu["end-origin"][1]
 
     num_cells = len(board_multimenu["options"]) + 1
-    row_height = config.getfloat("Optitrack", "MultiRowHeight")
+    row_height = config.getfloat("Optitrack", "MultiMenuSensitivity")
 
     # origin is in the middle of the safe cell, so first correct for this
     # cell_i is 0 for safe cell, - if above safe cell, and + if below safe cell
@@ -810,7 +815,11 @@ def multimenu_selection_linear(name, endpos):
     #logging.info(f"option_i {option_i} of {len(board_multimenu['options'])} options")
 
     if 0 <= option_i < len(board_multimenu["options"]):
-        make_selection(board_multimenu["options"][option_i])
+        board_multimenu["active"] = False
+        if board_multimenu["source"] == "probe":
+            make_selection(board_multimenu["options"][option_i])
+        else:
+            make_tool_selection(board_multimenu["source"], board_multimenu["options"][option_i])
 
 
 # checks for probe dwelling (selection and disambiguation) and fires the appropriate event
@@ -904,7 +913,7 @@ def update_boardpos(x, y, r):
 
 
 def listen_udp():
-    global socketio
+    global socketio, active_session_is_recording
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -923,9 +932,6 @@ def listen_udp():
         "neg": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     }
 
-    # tracks the previous value from udp for the EWMA filter
-    prev_var = None
-
     nextframe = time.perf_counter() + 1. / framerate
     frame_i = 0
     while True:
@@ -934,11 +940,6 @@ def listen_udp():
         data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
         ts_wait = time.perf_counter() - ts
         var = np.array(struct.unpack("f" * 14, data))
-
-        # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
-        if prev_var is not None:
-            var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
-        prev_var = var
 
         # board and red/grey tips are x,y,z where x,y are in pixels and z is in real m
         # red/grey end is x,y in pixels
@@ -966,7 +967,7 @@ def listen_udp():
         # update_probe_history(probe_history, red_tip, red_end)
         update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
         update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
-        if config.getboolean("Dev", "ToolProbeMode"):
+        if active_session_is_recording:
             _, _ = check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
             _, _ = check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
         else:
@@ -981,7 +982,10 @@ def listen_udp():
             # get the normalized probe end y-delta s.t. row height = 1
             #probe_end_delta = np.mean(probe_history["end"], axis=1)[1] - board_multimenu["end-origin"][1]
             #probe_end_delta = board_multimenu["end-origin"][1] - np.mean(probe_history["end"], axis=1)[1]
-            probe_end_delta = board_multimenu["end-origin"][1] - red_end[1]
+            if board_multimenu["source"] == "probe" or board_multimenu["source"] == "pos":
+                probe_end_delta = board_multimenu["end-origin"][1] - red_end[1]
+            else:
+                probe_end_delta = board_multimenu["end-origin"][1] - grey_end[1]
             probe_end_delta /= config.getfloat("Optitrack", "MultiRowHeight")
         else:
             probe_end_delta = 0
