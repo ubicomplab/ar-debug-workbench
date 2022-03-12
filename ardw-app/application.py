@@ -20,7 +20,7 @@ from shapely.geometry import Point
 from shapely.affinity import rotate
 
 from tools import DebugCard, DebugSession
-from instrumentscripts.scpi_read import *
+from instrumentscripts.scpi_read_flask import initializeInstruments, queryValue
 from boardgeometry.hitscan import hitscan
 
 
@@ -74,6 +74,7 @@ def index():
         proj=url_for("projector_page"),
         tool=url_for("tool_debug_page"),
         study=url_for("study_page"),
+        instr=url_for("instrument_panel"),
         js=url_for("static", filename="index.js")
     )
 
@@ -184,6 +185,17 @@ def get_datadicts():
         "netdict": netdict,
         "pindict": pindict
     })
+
+
+@app.route("/queryValue/<function>")
+def query_value(instrumentType="dmm", function="no_function"):
+    return queryValue(instrumentType, function)
+
+
+@app.route("/instrument_panel")
+def instrument_panel():
+    return render_template("instrument_panel.html")
+
 
 # -- end app routing --
 
