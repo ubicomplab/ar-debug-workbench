@@ -106,9 +106,12 @@ def queryValue(instrumentType="dmm", function="no_function"):
             return Response("--------", mimetype='text')
 
         if function == "voltage":
-            value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
-            logging.info(f"Measured value = {value} VDC")
-            return Response(str(value), mimetype='text')
+            try:
+                value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
+                logging.info(f"Measured value = {value} VDC")
+                return Response(str(value), mimetype='text')
+            except:
+                dmms[0].write("*rst; status:preset; *cls")
 
         if function == "resistance":
             value = float(dmms[0].query(':MEAS:RES?'))
