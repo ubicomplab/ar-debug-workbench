@@ -189,7 +189,6 @@ def get_datadicts():
 
 @app.route("/queryValue/<function>")
 def query_value(instrumentType="dmm", function="no_function"):
-    print("yooooooo")
     return queryValue(instrumentType, function)
 
 
