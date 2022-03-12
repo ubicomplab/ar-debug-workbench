@@ -6,117 +6,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="93c75a18-e15b-4931-90ac-6178c2a7114f" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle00.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle01.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle01.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle02.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle02.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle03.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle03.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle10.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle10.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle11.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle11.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle12.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle12.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle13.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle13.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle20.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle20.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle21.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle21.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle22.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle22.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle23.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle23.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle30.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle30.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle31.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle31.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle32.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle32.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle33.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle33.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle40.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle40.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle41.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle41.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle42.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle42.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle43.jpg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/checkerBoardWithCircle43.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/collect_training_data.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/collect_training_data_tes.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_10_27_16_26_06.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_11_01_16_27_34.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_11_01_16_29_06.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_11_01_18_34_40.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_11_05_14_11_59.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_11_05_14_13_35.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_11_17_16_01_59.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_11_17_16_10_23.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_12_02_18_51_43.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_12_02_18_51_56.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/opti_21_12_21_15_24_59.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/projector_calib.py" beforeDir="false" afterPath="$PROJECT_DIR$/projector_calib.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ardw-app/application.py" beforeDir="false" afterPath="$PROJECT_DIR$/../ardw-app/application.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ardw-app/instrumentscripts/scpi_read_flask.py" beforeDir="false" afterPath="$PROJECT_DIR$/../ardw-app/instrumentscripts/scpi_read_flask.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
-  </component>
-  <component name="FileEditorManager">
-    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/opti_lib.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1003">
-              <caret line="59" selection-start-line="59" selection-end-line="62" selection-end-column="37" />
-              <folding>
-                <element signature="e#0#34#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/projector_calib.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="221">
-              <caret line="100" column="30" lean-forward="true" selection-start-line="100" selection-start-column="30" selection-end-line="100" selection-end-column="30" />
-              <folding>
-                <element signature="e#0#31#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/collect_data.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="153">
-              <caret line="9" column="13" lean-forward="true" selection-start-line="9" selection-start-column="13" selection-end-line="9" selection-end-column="13" />
-              <folding>
-                <element signature="e#0#24#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/extract_opti_cordinate.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="596">
-              <caret line="39" column="4" selection-start-line="39" selection-start-column="4" selection-end-line="39" selection-end-column="4" />
-              <folding>
-                <element signature="e#0#13#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-    </leaf>
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -148,17 +46,6 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
-  <component name="IdeDocumentHistory">
-    <option name="CHANGED_PATHS">
-      <list>
-        <option value="$PROJECT_DIR$/collect_training_data.py" />
-        <option value="$PROJECT_DIR$/read_data.py" />
-        <option value="$PROJECT_DIR$/extract_opti_cordinate.py" />
-        <option value="$PROJECT_DIR$/collect_training_data_tes.py" />
-        <option value="$PROJECT_DIR$/projector_calib.py" />
-      </list>
-    </option>
-  </component>
   <component name="ProjectFrameBounds">
     <option name="x" value="-7" />
     <option name="width" value="1734" />
@@ -166,32 +53,13 @@
   </component>
   <component name="ProjectId" id="224ASkp8Io2u07CLTGjzXFQt3fQ" />
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
-  <component name="ProjectView">
-    <navigator proportions="" version="1">
-      <foldersAlwaysOnTop value="true" />
-    </navigator>
-    <panes>
-      <pane id="ProjectPane">
-        <subPane>
-          <expand>
-            <path>
-              <item name="pyboard" type="b2602c69:ProjectViewProjectNode" />
-              <item name="pyboard" type="462c0819:PsiDirectoryNode" />
-            </path>
-          </expand>
-          <select />
-        </subPane>
-      </pane>
-      <pane id="Scope" />
-    </panes>
-  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/../ardw-app" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
   </component>
   <component name="RecentsManager">
@@ -362,60 +230,13 @@
     </task>
     <servers />
   </component>
-  <component name="ToolWindowManager">
-    <frame x="-7" y="0" width="1734" height="1407" extended-state="0" />
-    <editor active="true" />
-    <layout>
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.16804245" />
-      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info id="Favorites" order="2" side_tool="true" />
-      <window_info anchor="bottom" id="Message" order="0" />
-      <window_info anchor="bottom" id="Find" order="1" />
-      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.4985128" visible="true" weight="0.3477237" />
-      <window_info anchor="bottom" id="Debug" order="3" sideWeight="0.4991077" weight="0.39717427" />
-      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
-      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
-      <window_info anchor="bottom" id="TODO" order="6" />
-      <window_info anchor="bottom" id="Version Control" order="7" />
-      <window_info anchor="bottom" id="Terminal" order="8" />
-      <window_info anchor="bottom" id="Event Log" order="9" sideWeight="0.5014872" side_tool="true" weight="0.3196347" />
-      <window_info anchor="bottom" id="Python Console" order="10" />
-      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
-      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
-      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
-    </layout>
-    <layout-to-restore>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.21058893" />
-      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info id="Favorites" order="2" side_tool="true" />
-      <window_info anchor="bottom" id="Message" order="0" />
-      <window_info anchor="bottom" id="Find" order="1" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" sideWeight="0.4985128" visible="true" weight="0.3196347" />
-      <window_info anchor="bottom" id="Debug" order="3" sideWeight="0.4991077" weight="0.3980213" />
-      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
-      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
-      <window_info anchor="bottom" id="TODO" order="6" />
-      <window_info anchor="bottom" id="Version Control" order="7" />
-      <window_info anchor="bottom" id="Terminal" order="8" />
-      <window_info anchor="bottom" id="Event Log" order="9" sideWeight="0.5014872" side_tool="true" visible="true" weight="0.3196347" />
-      <window_info anchor="bottom" id="Python Console" order="10" />
-      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
-      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
-      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
-    </layout-to-restore>
-  </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">
       <map>
         <entry key="MAIN">
           <value>
             <State>
-              <option name="RECENTLY_FILTERED_USER_GROUPS">
-                <collection />
-              </option>
-              <option name="RECENTLY_FILTERED_BRANCH_GROUPS">
-                <collection />
-              </option>
+              <option name="COLUMN_ORDER" />
             </State>
           </value>
         </entry>
@@ -500,174 +321,5 @@
         </breakpoint>
       </default-breakpoints>
     </breakpoint-manager>
-  </component>
-  <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/controller_lib.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <folding>
-            <element signature="e#0#9#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/utility_layers.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="279">
-          <caret line="319" column="4" selection-start-line="319" selection-start-column="4" selection-end-line="319" selection-end-column="4" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/plotting/scatter.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="568">
-          <caret line="111" column="37" lean-forward="true" selection-start-line="111" selection-start-column="37" selection-end-line="111" selection-end-column="37" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/matplotlib/axes/_base.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="132">
-          <caret line="3022" column="25" lean-forward="true" selection-start-line="3022" selection-start-column="25" selection-end-line="3022" selection-end-column="25" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/matplotlib/figure.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-1254">
-          <caret line="1134" column="8" selection-start-line="1134" selection-start-column="8" selection-end-line="1134" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/mpl_toolkits/mplot3d/axes3d.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="513">
-          <caret line="399" column="23" selection-start-line="399" selection-start-column="16" selection-end-line="399" selection-end-column="23" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/plotting/base.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="126">
-          <caret line="323" column="8" selection-start-line="323" selection-start-column="8" selection-end-line="323" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/filter_layers.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="68">
-          <caret line="5" column="8" selection-start-line="5" selection-start-column="8" selection-end-line="5" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/layer.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="268">
-          <caret line="304" column="6" selection-start-line="304" selection-start-column="6" selection-end-line="304" selection-end-column="6" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/NatNetClient.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="534">
-          <caret line="546" column="74" selection-start-line="546" selection-start-column="61" selection-end-line="546" selection-end-column="74" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/collect_training_data.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="238">
-          <caret line="14" column="13" lean-forward="true" selection-start-line="14" selection-start-column="13" selection-end-line="14" selection-end-column="13" />
-          <folding>
-            <element signature="e#0#24#0" expanded="true" />
-            <marker date="1640129008151" expanded="true" signature="2786:2809" ph="..." />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/pygame.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="102">
-          <caret line="6" column="6" selection-start-line="6" selection-start-column="6" selection-end-line="6" selection-end-column="6" />
-          <folding>
-            <element signature="e#0#16#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/read_data.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="391">
-          <caret line="23" selection-start-line="23" selection-end-line="25" selection-end-column="42" />
-          <folding>
-            <element signature="e#556#584#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="jar://$USER_HOME$/AppData/Local/Programs/Python/Python37-32/Lib/site-packages/PyRealtime-0.1.11-py3.7.egg!/pyrealtime/network_layers.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="268">
-          <caret line="172" column="8" selection-start-line="172" selection-start-column="8" selection-end-line="172" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/prt_natnet.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="85">
-          <caret line="7" column="8" selection-start-line="7" selection-start-column="8" selection-end-line="7" selection-end-column="8" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/opti_lib.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1003">
-          <caret line="59" selection-start-line="59" selection-end-line="62" selection-end-column="37" />
-          <folding>
-            <element signature="e#0#34#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/extract_opti_cordinate.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="596">
-          <caret line="39" column="4" selection-start-line="39" selection-start-column="4" selection-end-line="39" selection-end-column="4" />
-          <folding>
-            <element signature="e#0#13#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/collect_training_data_tes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="204">
-          <caret line="12" column="17" lean-forward="true" selection-start-line="12" selection-start-column="17" selection-end-line="12" selection-end-column="17" />
-          <folding>
-            <element signature="e#0#24#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/projector_calib.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="221">
-          <caret line="100" column="30" lean-forward="true" selection-start-line="100" selection-start-column="30" selection-end-line="100" selection-end-column="30" />
-          <folding>
-            <element signature="e#0#31#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/collect_data.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="153">
-          <caret line="9" column="13" lean-forward="true" selection-start-line="9" selection-start-column="13" selection-end-line="9" selection-end-column="13" />
-          <folding>
-            <element signature="e#0#24#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
   </component>
 </project>

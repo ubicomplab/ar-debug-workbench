@@ -102,6 +102,7 @@ def queryValue(instrumentType="dmm", function="no_function"):
     if instrumentType == "dmm":
 
         if function == "no_function":
+            print("i'm called properly")
             return Response("--------", mimetype='text')
 
         if function == "voltage":
