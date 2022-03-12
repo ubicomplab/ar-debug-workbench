@@ -194,7 +194,10 @@ def query_value(instrumentType="dmm", function="no_function"):
 
 @app.route("/instrument_panel")
 def instrument_panel():
-    return render_template("instrument_panel.html")
+    return render_template(
+        "instrument_panel.html",
+        query=url_for("query_value", function=""),
+    )
 
 
 # -- end app routing --

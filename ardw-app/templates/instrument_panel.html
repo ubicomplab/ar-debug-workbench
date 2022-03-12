@@ -19,7 +19,7 @@
         var measurement_text_banner = document.getElementById("measurement_text_banner")
 
         setInterval(() => {
-            fetch("http://127.0.0.1:8080/queryValue/" + mode)
+            fetch("{{query}}" + mode)
             .then(response => {
                 response.text().then(t => {measurement_text_banner.innerHTML = t})
             });
