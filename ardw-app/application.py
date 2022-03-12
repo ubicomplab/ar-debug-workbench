@@ -197,6 +197,7 @@ def instrument_panel():
     return render_template(
         "instrument_panel.html",
         query=url_for("query_value", function=""),
+        freq=config.getint("Study", "DmmPanelRefreshFrequency")
     )
 
 
