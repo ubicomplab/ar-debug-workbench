@@ -592,7 +592,7 @@ def make_selection(new_selection):
 # returns tuple of unit, value
 def measure_dmm():
     logging.info("Making a voltage DMM measurement")
-    value = queryValue("dmm","voltage")
+    value = queryValue("dmm", "voltage")
     #logging.error("measure_dmm() not yet implemented")
     return 'volts', value
 

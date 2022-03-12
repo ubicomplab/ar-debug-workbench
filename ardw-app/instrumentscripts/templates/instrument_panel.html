@@ -1,32 +1,34 @@
 <div class='container'>
-    <h3>Test</h3>
+    <h3>Instrument Panel Test</h3>
+    <p>Click button to put DMM into a mode:</p>
         <form>
             <a href=# id=voltage_mode><button class='btn btn-default'>Voltage</button></a>
             <a href=# id=resistance_mode><button class='btn btn-default'>Resistance</button></a>
         </form>
 
-        <p id="measurement">Measurement</p>
+        <p id="measurement_text_banner">Measurement</p>
 </div>
 
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
 <script type=text/javascript>
-        var measurement = document.getElementById("measurement")
-        setInterval(() => {
-            fetch("http://127.0.0.1:8080/queryValue/voltage")
-            .then(response => {
-                response.text().then(t => {measurement.innerHTML = t})
-            });
-         }, 300);
 
-<!--        setInterval(() {-->
-<!--        $.ajax({-->
-<!--        type: "GET"-->
-<!--        url: http://127.0.0.1:8080/queryValue/-->
-<!--        });-->
+
+        var measurement_refresh_rate = 600; //ms
+        var mode = "no_function";
+
+        var measurement_text_banner = document.getElementById("measurement_text_banner")
+
+        setInterval(() => {
+            fetch("http://127.0.0.1:8080/queryValue/" + mode)
+            .then(response => {
+                response.text().then(t => {measurement_text_banner.innerHTML = t})
+            });
+         }, 600);
 
         $(function() {
           $('a#voltage_mode').on('click', function(e) {
             e.preventDefault()
+            mode = "voltage"
             $.getJSON('/queryValue/voltage',
                 function(data) {
                 //do nothing
@@ -34,9 +36,11 @@
             return false;
           });
         });
+
         $(function() {
           $('a#resistance_mode').on('click', function(e) {
             e.preventDefault()
+            mode = "resistance"
             $.getJSON('/queryValue/resistance',
                 function(data) {
               //do nothing
