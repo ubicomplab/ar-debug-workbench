@@ -73,6 +73,7 @@ def index():
         main=url_for("main_page"),
         proj=url_for("projector_page"),
         tool=url_for("tool_debug_page"),
+        study=url_for("study_page"),
         js=url_for("static", filename="index.js")
     )
 
@@ -118,6 +119,17 @@ def tool_debug_page():
     return render_template(
         "tool-test.html",
         js=url_for("static", filename="tool-test.js"),
+        socketiojs=url_for("static", filename="socket.io.min.js")
+    )
+
+
+@app.route("/study")
+def study_page():
+    return render_template(
+        "study.html",
+        css=url_for("static", filename="style.css"),
+        icon=url_for("static", filename="favicon.ico"),
+        js=url_for("static", filename="study.js"),
         socketiojs=url_for("static", filename="socket.io.min.js")
     )
 
@@ -367,6 +379,47 @@ def handle_tool_debug(data):
         tool_connect(data["type"], data["val"])
     elif name == "measurement":
         tool_measure(**data["measurement"])
+
+
+@socketio.on("study-event")
+def handle_study_event(data):
+    global study_state, study_modules
+
+    if len(study_modules) == 0:
+        logging.error("Received study event, but modules failed to initialize, ignoring")
+        return
+
+    if data["event"] == "task":
+        if data["task"] == "off":
+            study_log("Turning study mode off")
+            study_state["active"] = False
+            study_state["task"] = None
+        else:
+            study_log(f"Switching study task to {data['task']}")
+            study_state["active"] = True
+            study_state["task"] = data["task"]
+
+            shuffled = study_modules.copy()
+            np.random.shuffle(shuffled)
+            study_state["current_modules"] = shuffled
+            study_state["step"] = -1
+            study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
+
+        socketio.emit("study-event", data)
+    elif data["event"] == "step":
+        # only permit a step if we're actually doing a study and the participant has finished their step
+        if study_state["active"] and study_state["step-done"]:
+            study_state["step"] += 1
+            if study_state["step"] == 10 and (study_state["task"] == "1A" or study_state["task"] == "1B"):
+                study_state["boardviz"] = not config.getboolean("Study", f"Task{study_state['task']}WithBoardVizFirst")
+            # TODO similar check for Task 2
+
+            # TODO highlight the next thing
+    elif data["event"] == "skip":
+        # TODO allow facilitator to manually skip a step that the participant fails to complete
+        pass
+    elif data["event"] == "note":
+        study_log(data["note"])
     
 
 @socketio.on("debug")
@@ -1090,6 +1143,16 @@ def autoconnect_tools(enabled):
 
     initializeInstruments()
 
+
+def study_log(msg):
+    global study_state
+    t = study_state["task"]
+    s = study_state["step"]
+    sb = "*" if study_state["step-done"] else ""
+    logging.info(f"Study (Task {t} Step {s}{sb}) {msg}")
+
+
+
 if __name__ == "__main__":
     schdata = None
     pcbdata = None
@@ -1205,6 +1268,23 @@ if __name__ == "__main__":
     if config.getboolean("Dev", "AutoconnectTools"):
         # we just assume ptr and dmm are already connected
         autoconnect_tools(["ptr", "dmm"])
+
+    study_state = {
+        "active": False,            # iff True, study mode is on
+        "task": None,               # "1A", "1B", or "2"
+        "current_modules": None,    # if active, is the shuffled list of modules
+        "step": 0,                  # current index in current_modules (can be -1)
+        "step-done": False,         # iff False, participant has not yet completed this step
+        "boardviz": True            # iff True, BoardViz is on for this step
+    }
+    study_modules = config.get("Study", "ComponentList").split(",")
+    try:
+        study_modules = [ref_to_id[ref] for ref in study_modules]
+        logging.info("Study component list loaded properly, study can be run")
+    except KeyError:
+        study_modules = []
+        logging.error("Study component list contained unknown comp ref, study cannot be run")
+
 
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
