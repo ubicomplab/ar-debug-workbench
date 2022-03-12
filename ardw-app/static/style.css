@@ -659,3 +659,21 @@ div.canvas-container>canvas {
     background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
     cursor: row-resize;
 }
+
+
+.study-buttons {
+    display: flex;
+    text-align: center;
+}
+.study-buttons > .button {
+    border: 1px solid #000;
+    background-color: #ccc;
+    border-radius: 4px;
+    margin: 0 4px;
+    width: 70px;
+    cursor: pointer;
+}
+.study-buttons > .button.selected {
+    background-color: rgba(0, 123, 255, 0.5);
+}
+
