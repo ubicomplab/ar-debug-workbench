@@ -11,9 +11,6 @@
 
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
 <script type=text/javascript>
-
-
-        var measurement_refresh_rate = 600; //ms
         var mode = "no_function";
 
         var measurement_text_banner = document.getElementById("measurement_text_banner")
@@ -23,7 +20,7 @@
             .then(response => {
                 response.text().then(t => {measurement_text_banner.innerHTML = t})
             });
-         }, measurement_refresh_rate);
+         }, {{freq}});
 
         $(function() {
           $('a#voltage_mode').on('click', function(e) {

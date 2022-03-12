@@ -189,7 +189,6 @@ def get_datadicts():
 
 @app.route("/queryValue/<function>")
 def query_value(instrumentType="dmm", function="no_function"):
-    print("yooooooo")
     return queryValue(instrumentType, function)
 
 
@@ -198,6 +197,7 @@ def instrument_panel():
     return render_template(
         "instrument_panel.html",
         query=url_for("query_value", function=""),
+        freq=config.getint("Study", "DmmPanelRefreshFrequency")
     )
 
 

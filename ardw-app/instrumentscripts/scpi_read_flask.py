@@ -18,6 +18,7 @@ may need to restart terminal/computer after libusb installation
 from flask import Flask, render_template, Response, request, redirect, url_for
 # import package
 import pyvisa
+import logging
 
 # import argparse
 
@@ -61,28 +62,28 @@ def json():
 
 def initializeInstruments():
     if len(resources) == 0:
-        print("No resources found")
+        logging.warning("No resources found")
         return
 
     for counter in range(len(resources)):
-        print("Connecting to resource " + str(counter) + ": " + resources[counter])
+        logging.info(f"Connecting to resource {counter}: {resources[counter]}")
 
         if "USB" in resources[counter]:
             current_resource = rm.open_resource(resources[counter])
-            print("Connected to: " + current_resource.query("*IDN?"))
+            logging.info(f"Connected to: {current_resource.query('*IDN?')}")
             if current_resource.query("*IDN?").split(",")[1] in supported_dmms:
-                print("Resource " + str(counter) + " is a supported DMM")
+                logging.info(f"Resource {counter} is a supported DMM")
                 dmms.append(current_resource)
 
             elif current_resource.query("*IDN?").split(",")[1] in supported_oscs:
-                print("Resource " + str(counter) + " is a supported oscilliscope")
+                logging.info(f"Resource {counter} is a supported oscilliscope")
                 oscs.append(current_resource)
                 current_resource.write('VERBOSE ON')
 
             else:
-                print("Resource " + current_resource + " isn't a supported DMM or oscilliscope")
+                logging.info(f"Resource {current_resource} isn't a supported DMM or oscilliscope")
         else:
-            print(resources[counter] + " isn't a USB device. Can't connect.")
+            logging.info(f"{resources[counter]} isn't a USB device. Can't connect.")
 
     # inst.write("*rst; status:preset; *cls")
 
@@ -102,27 +103,26 @@ def queryValue(instrumentType="dmm", function="no_function"):
     if instrumentType == "dmm":
 
         if function == "no_function":
-            print("i'm called properly")
             return Response("--------", mimetype='text')
 
         if function == "voltage":
             value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
-            print("Measured value = " + str(value) + " VDC")
+            logging.info(f"Measured value = {value} VDC")
             return Response(str(value), mimetype='text')
 
         if function == "resistance":
             value = float(dmms[0].query(':MEAS:RES?'))
-            print("Measured value = " + str(value) + " ohms")
+            logging.info(f"Measured value = {value} ohms")
             return Response(str(value), mimetype='text')
 
         if function == "continuity":
             value = float(dmms[0].query(':MEAS:CONT?'))
-            print("Measured value = " + str(value))
+            logging.info(f"Measured value = {value}")
             return Response(str(value), mimetype='text')
 
         if function == "dc_current":
             value = float(dmms[0].query(':MEAS:CURR:DC?'))
-            print("Measured value = " + str(value) + " A")
+            logging.info(f"Measured value = {value} A")
             return Response(str(value), mimetype='text')
 
     elif instrumentType == "osc":
@@ -135,7 +135,7 @@ def queryValue(instrumentType="dmm", function="no_function"):
             oscs[0].write(':MEASUrement:MEAS1:SOUrce1 CH' + str(channel))
             oscs[0].write(':MEASUrement:MEAS1:TYPe FREQuency')
             value = str(oscs[0].query(':MEASUrement:MEAS1:VALue?'))
-            print("Measured value = " + str(value) + " Hz")
+            logging.info(f"Measured value = {value} Hz")
             return value
 
         if function == "pduty":
@@ -143,11 +143,11 @@ def queryValue(instrumentType="dmm", function="no_function"):
             oscs[0].write(':MEASUrement:MEAS1:SOUrce1 CH' + str(channel))
             oscs[0].write(':MEASUrement:MEAS1:TYPe PDUTY')
             value = str(oscs[0].query(':MEASUrement:MEAS1:VALue?'))
-            print("Measured value = " + str(value) + " %")
+            logging.info(f"Measured value = {value} %")
             return value
 
     else:
-        print("Invalid instrument type provided to queryValue")
+        logging.info("Invalid instrument type provided to queryValue")
         return
 
 
@@ -157,7 +157,6 @@ if __name__ == "__main__":
 
     initializeInstruments()
     app.run(host=host, port=port, threaded=True, debug=True)
-    print("Go to http://127.0.0.1:8080/instrument_panel for test")
 
     # queryValue("dmm", "voltage")
     # queryValue("osc", "frequency")
