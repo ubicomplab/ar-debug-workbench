@@ -1412,6 +1412,7 @@ function initSocket() {
         study_listening_for_1B = false;
         break;
       case "highlight":
+        deselectAll();
         if (data.task == "1A") {
           selectComponent(data.refid);
         } else if (data.task == "1B") {

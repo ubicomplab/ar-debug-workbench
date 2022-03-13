@@ -209,6 +209,7 @@ function initSocket() {
   socket.on("study-event", (data) => {
     switch (data.event) {
       case "highlight":
+        projectorDeselectAll()
         if (data.task == "1A" && data.boardviz) {
           projectorSelectComponent(data.refid);
         } else if (data.task == "1B") {

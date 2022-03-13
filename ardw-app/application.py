@@ -765,7 +765,7 @@ def make_study_select(refid, src_text):
     if refid == study_state["current_modules"][study_state["step"]]:
         study_state["step_done"] = True
         study_log(f"Correct {src_text} after {runtime:.3f}s")
-        socketio.emit("study-event", {"event": "success", "refid": refid})
+        socketio.emit("study-event", {"event": "success", "refid": refid, "task": study_state["task"]})
     else:
         study_log(f"Incorrect {src_text} after {runtime:.3f}s")
         socketio.emit("study-event", {"event": "failure"})
@@ -908,7 +908,7 @@ def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=N
         layer = "F"
         pads = True
         tracks = False
-        padding = config.getfloat("Optitrack", "PinPadding")
+        padding = config.getfloat("Study", "CompPadding")
 
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=pads,
         render_tracks=tracks, padding=padding, types=["comp"])
