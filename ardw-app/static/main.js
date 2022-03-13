@@ -1410,9 +1410,10 @@ function initSocket() {
     switch (data.event) {
       case "task":
         study_listening_for_1B = false;
+        deselectAll(true);
         break;
       case "highlight":
-        deselectAll();
+        deselectAll(true);
         if (data.task == "1A") {
           selectComponent(data.refid);
         } else if (data.task == "1B") {

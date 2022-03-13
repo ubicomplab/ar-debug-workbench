@@ -433,8 +433,15 @@ def handle_study_event(data):
             step = study_state["step"]
             task = study_state["task"]
 
-            if step == 10 and (task == "1A" or task == "1B"):
-                study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+            if task == "1A" or task == "1B":
+                if step == 10:
+                    study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+                elif step == 20:
+                    study_log("Finished")
+                    study_state["active"] = False
+                    study_state["task"] = None
+                    socketio.emit("study-event", {"event": "task", "task": "off"})
+                    return
             # TODO similar check for Task 2
 
             refid = study_state["current_modules"][step]
@@ -456,6 +463,7 @@ def handle_study_event(data):
             #socketio.emit("study-event", {"event": "step", "step": step})
     elif data["event"] == "skip":
         # TODO allow facilitator to manually skip a step that the participant fails to complete
+        logging.warning("study skip NotYetImplemented")
         pass
     elif data["event"] == "note":
         study_log(f"Custom note: {data['note']}")
@@ -891,7 +899,7 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
 
 # handles a study selection event, either from the client layout or optitrack
 def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=None):
-    global study_state, pcbdata, pinref_to_idx
+    global study_state, pcbdata, pinref_to_idx, can_reselect
 
     if name == "layout":
         # we're from layout, so we have data
@@ -909,6 +917,9 @@ def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=N
         pads = True
         tracks = False
         padding = config.getfloat("Study", "CompPadding")
+
+        # prevent failure spam
+        can_reselect[name] = False
 
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=pads,
         render_tracks=tracks, padding=padding, types=["comp"])
@@ -1183,9 +1194,9 @@ def listen_udp():
             time.sleep(diff)
         elif -diff > 0.05:
             # more than 50ms behind
-            logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
-                f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
-                f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            # logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
+            #     f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
+            #     f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")

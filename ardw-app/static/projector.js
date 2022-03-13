@@ -208,8 +208,11 @@ function initSocket() {
 
   socket.on("study-event", (data) => {
     switch (data.event) {
+      case "task":
+        projectorDeselectAll();
+        break;
       case "highlight":
-        projectorDeselectAll()
+        projectorDeselectAll();
         if (data.task == "1A" && data.boardviz) {
           projectorSelectComponent(data.refid);
         } else if (data.task == "1B") {
@@ -220,6 +223,7 @@ function initSocket() {
         if (data.task == "1A") {
           projectorSelectComponent(data.refid);
         }
+        break;
       default:
         console.log(data);
         break;
