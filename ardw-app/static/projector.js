@@ -205,6 +205,25 @@ function initSocket() {
       probes[device].color.zone = colors[1];
     }
   })
+
+  socket.on("study-event", (data) => {
+    switch (data.event) {
+      case "highlight":
+        if (data.task == "1A" && data.boardviz) {
+          projectorSelectComponent(data.refid);
+        } else if (data.task == "1B") {
+          projectorSelectComponent(data.refid);
+        }
+        break;
+      case "success":
+        if (data.task == "1A") {
+          projectorSelectComponent(data.refid);
+        }
+      default:
+        console.log(data);
+        break;
+    }
+  })
 }
 
 

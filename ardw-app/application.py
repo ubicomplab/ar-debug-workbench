@@ -399,7 +399,7 @@ def handle_tool_debug(data):
 
 @socketio.on("study-event")
 def handle_study_event(data):
-    global study_state, study_modules
+    global study_state, study_timer, study_modules, compdict
 
     if len(study_modules) == 0:
         logging.error("Received study event, but modules failed to initialize, ignoring")
@@ -419,24 +419,66 @@ def handle_study_event(data):
             np.random.shuffle(shuffled)
             study_state["current_modules"] = shuffled
             study_state["step"] = -1
+            study_state["step_done"] = True
             study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
 
         socketio.emit("study-event", data)
     elif data["event"] == "step":
         # only permit a step if we're actually doing a study and the participant has finished their step
-        if study_state["active"] and study_state["step-done"]:
+        if study_state["active"] and study_state["step_done"]:
             study_state["step"] += 1
-            if study_state["step"] == 10 and (study_state["task"] == "1A" or study_state["task"] == "1B"):
-                study_state["boardviz"] = not config.getboolean("Study", f"Task{study_state['task']}WithBoardVizFirst")
+            study_state["step_done"] = False
+            study_state["step_start"] = time.time()
+
+            step = study_state["step"]
+            task = study_state["task"]
+
+            if step == 10 and (task == "1A" or task == "1B"):
+                study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
             # TODO similar check for Task 2
 
+            refid = study_state["current_modules"][step]
+            ref = compdict[refid]["ref"]
+            boardviz_text = "with" if study_state["boardviz"] else "without"
+            study_log(f"Component {ref} {boardviz_text} BoardViz")
+
             # TODO highlight the next thing
+            highlight_data = {
+                "event": "highlight",
+                "task": task,
+                "refid": refid,
+                "ref": ref,
+                "boardviz": study_state["boardviz"],
+                "step": step
+            }
+            socketio.emit("study-event", highlight_data)
+
+            #socketio.emit("study-event", {"event": "step", "step": step})
     elif data["event"] == "skip":
         # TODO allow facilitator to manually skip a step that the participant fails to complete
         pass
     elif data["event"] == "note":
-        study_log(data["note"])
-    
+        study_log(f"Custom note: {data['note']}")
+    elif data["event"] == "select":
+        if study_state["task"] == "1B" and not study_state["boardviz"]:
+            # this event should only be sent for Task 1B Without BoardViz
+            if "point" in data:
+                study_selection("layout", data=data)
+            else:
+                make_study_select(data["refid"], "schematic click")
+    elif data["event"] == "timer":
+        display_time = 0
+        if data["turn_on"]:
+            study_timer["on"] = True
+            study_timer["start"] = time.time()
+            study_log("Custom timer started")
+        else:
+            study_timer["on"] = False
+            display_time = time.time() - study_timer["start"]
+            study_log(f"Custom timer took {display_time:.3f}s")
+
+        socketio.emit("study-event", {"event": "timer", "on": study_timer["on"], "time": display_time})
+
 
 @socketio.on("debug")
 def handle_debug(data):
@@ -712,6 +754,23 @@ def make_tool_selection(device, new_selection=None):
                 make_tool_selection(None)
 
 
+def make_study_select(refid, src_text):
+    global study_state
+
+    if study_state["task"] == "2":
+        logging.error("Task 2 NotYetImplemented")
+        return
+
+    runtime = time.time() - study_state["step_start"]
+    if refid == study_state["current_modules"][study_state["step"]]:
+        study_state["step_done"] = True
+        study_log(f"Correct {src_text} after {runtime:.3f}s")
+        socketio.emit("study-event", {"event": "success", "refid": refid})
+    else:
+        study_log(f"Incorrect {src_text} after {runtime:.3f}s")
+        socketio.emit("study-event", {"event": "failure"})
+
+
 # handles a selection event from the client
 def client_selection(data):
     global pcbdata, pinref_to_idx, socketio
@@ -828,6 +887,39 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         
         # TODO display multimeter disambiguation menu
         socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
+
+
+# handles a study selection event, either from the client layout or optitrack
+def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=None):
+    global study_state, pcbdata, pinref_to_idx
+
+    if name == "layout":
+        # we're from layout, so we have data
+        src_text = "layout click"
+        point = data["point"]
+        layer = data["layer"]
+        pads = data["pads"]
+        tracks = data["tracks"]
+        padding = 0
+    else:
+        # we're from probe, so we have tippos
+        src_text = "probe dwell"
+        point = optitrack_to_layout_coords(tippos)
+        layer = "F"
+        pads = True
+        tracks = False
+        padding = config.getfloat("Optitrack", "PinPadding")
+
+    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=pads,
+        render_tracks=tracks, padding=padding, types=["comp"])
+
+    refid = None
+    for hit in hits:
+        if hit["val"] == study_state["current_modules"][study_state["step"]]:
+            refid = hit["val"]
+            break
+
+    make_study_select(refid, src_text)
 
 
 # handles a board multimeter selection event
@@ -989,7 +1081,7 @@ def update_boardpos(x, y, r):
 
 
 def listen_udp():
-    global socketio, active_session_is_recording
+    global socketio, active_session_is_recording, study_state
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1043,7 +1135,9 @@ def listen_udp():
         # update_probe_history(probe_history, red_tip, red_end)
         update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
         update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
-        if active_session_is_recording:
+        if study_state["active"]:
+            _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=study_selection)
+        elif active_session_is_recording:
             _, _ = check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
             _, _ = check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
         else:
@@ -1164,8 +1258,9 @@ def study_log(msg):
     global study_state
     t = study_state["task"]
     s = study_state["step"]
-    sb = "*" if study_state["step-done"] else ""
-    logging.info(f"Study (Task {t} Step {s}{sb}) {msg}")
+    sb = "*" if study_state["step_done"] else ""
+    tt = f"Task {t} Step {s}{sb}" if study_state["active"] else "Inactive"
+    logging.info(f"Study ({tt}) {msg}")
 
 
 
@@ -1290,8 +1385,13 @@ if __name__ == "__main__":
         "task": None,               # "1A", "1B", or "2"
         "current_modules": None,    # if active, is the shuffled list of modules
         "step": 0,                  # current index in current_modules (can be -1)
-        "step-done": False,         # iff False, participant has not yet completed this step
+        "step_done": False,         # iff False, participant has not yet completed this step
+        "step_start": 0,            # time.time() at the start of this step
         "boardviz": True            # iff True, BoardViz is on for this step
+    }
+    study_timer = {
+        "on": False,
+        "start": 0
     }
     study_modules = config.get("Study", "ComponentList").split(",")
     try:
