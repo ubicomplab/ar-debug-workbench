@@ -3,7 +3,6 @@
 // It also contains some custom functions for the projector page,
 // mainly for handling socket selection events
 
-
 // Set to true so that functions in render.js ignore the resize transform (s/x/y)
 IS_PROJECTOR = true;
 
@@ -14,6 +13,9 @@ var transform = {
   "r": 0,
   "z": 1
 };
+
+var active_session_is_recording = false;
+
 
 /** Sets various ibom settings to false to avoid displaying unwanted things */
 function initSettings() {
@@ -82,6 +84,34 @@ function projectorDeselectAll() {
   drawHighlights();
 }
 
+var counter = 0;
+var n = 200;
+var sums = {
+  "x": 0,
+  "y": 0,
+  "r": 0,
+}
+function calcBoardOffset(boardpos) {
+  if (counter < n) {
+    sums.x += boardpos.x;
+    sums.y += boardpos.y;
+    sums.r += boardpos.z
+  } else if (counter == n) {
+    sums.x /= n;
+    sums.y /= n;
+    sums.r /= n;
+
+    console.log(`transform is x=${transform.tx.toFixed(4)}, y=${transform.ty.toFixed(4)}, r=${transform.r.toFixed(4)}`);
+    console.log(`boardpos was x=${sums.x.toFixed(4)}, y=${sums.y.toFixed(4)}, r=${sums.r.toFixed(4)}`);
+
+    var offx = -transform.tx * transform.z + sums.x;
+    var offy = transform.ty * transform.z + sums.y;
+    var offr = -transform.r - sums.r;
+    console.log(`theoretical offset is x=${offx.toFixed(4)}, y=${offy.toFixed(4)}, r=${offr.toFixed(4)}`)
+  }
+  counter++;
+}
+
 /** Initializes all socket listeners for the projector */
 function initSocket() {
   socket = io();
@@ -105,11 +135,13 @@ function initSocket() {
         break;
       case "multi":
         if (selection.from_optitrack) {
-          multimenu_active = {"hits": selection.hits, "layer": selection.layer}
+          multimenu_active = {"hits": selection.hits, "layer": selection.layer, "device": "probe"}
+          drawHighlights();
         }
         break;
       case "cancel-multi":
         multimenu_active = null;
+        drawHighlights();
         break;
     }
   });
@@ -125,8 +157,8 @@ function initSocket() {
     }
     resizeAll();
   });
-  socket.on("projector-adjust", (adjust) => {
-    transform[adjust["type"]] = adjust["val"];
+  socket.on("board-update", (update) => {
+    transform = update;
 
     for (let layerdict of [allcanvas.front, allcanvas.back]) {
       layerdict.transform.panx = layerdict.layer == "F" ? transform.tx : -transform.tx;
@@ -134,39 +166,93 @@ function initSocket() {
       ibom_settings.boardRotation = transform.r;
       layerdict.transform.zoom = transform.z;
     }
-
     resizeAll();
   })
   socket.on("udp", (data) => {
-    optitrackBoardposUpdate(data["boardpos_pixel"])
-    udp_selection = data["tippos_layout"]
-    udp_grey = data["greytip"]
-    drawHighlights()
+    probes["pos"].location = data["tippos_layout"];
+    probes["neg"].location = data["greytip"];
+    probe_end_delta = data["endpos_delta"];
+    drawHighlights();
+
+    calcBoardOffset(data["boardpos"]);
   })
-  socket.on("toggleboardpos", (val) => {
-    trackboard = val;
-    optitrackBoardposUpdate(udpboardpos)
+  socket.on("tool-selection", (data) => {
+    if (data.selection == "multi") {
+      // TODO multi menu
+      multimenu_active = {"hits": data.hits, "layer": data.layer, "device": data.device}
+      drawHighlights();
+    } else {
+      probes[data.device].selection = data.selection;
+      drawHighlights();
+    }
+  })
+
+  socket.on("debug-session", (data) => {
+    // projector page just needs simplified debug session state for now
+    console.log(data)
+    switch (data.event) {
+      case "record":
+        active_session_is_recording = data.record;
+        if (!active_session_is_recording) {
+          probes.pos.selection = null;
+          probes.neg.selection = null;
+          probes.osc.selection = null;
+        }
+        drawHighlights();
+        break;
+      case "next":
+        // TODO support osc
+        if (active_session_is_recording) {
+          if (data.id == -1) {
+            // deselect
+            probes.pos.selection = null;
+            probes.neg.selection = null;
+            probes.osc.selection = null;
+            drawHighlights();
+          } else {
+            // show user where to measure next
+            probes.pos.selection = data.card.pos;
+            probes.neg.selection = data.card.neg;
+            drawHighlights();
+          }
+        }
+        break;
+    }
+  })
+
+  socket.on("config", (data) => {
+    for (let device in data.devices) {
+      let colors = data.devices[device];
+      probes[device].color.loc = colors[0];
+      probes[device].color.sel = colors[1];
+      probes[device].color.zone = colors[1];
+    }
+  })
+
+  socket.on("study-event", (data) => {
+    switch (data.event) {
+      case "task":
+        projectorDeselectAll();
+        break;
+      case "highlight":
+        projectorDeselectAll();
+        if (data.task == "1A" && data.boardviz) {
+          projectorSelectComponent(data.refid);
+        } else if (data.task == "1B") {
+          projectorSelectComponent(data.refid);
+        }
+        break;
+      case "success":
+        if (data.task == "1A") {
+          projectorSelectComponent(data.refid);
+        }
+        break;
+      default:
+        console.log(data);
+        break;
+    }
   })
 }
-
-trackboard = false;
-udpboardpos = {}
-
-// TODO uses magic numbers, instead use layout coords from server
-/** Updates the board position to match the given boardpos */
-function optitrackBoardposUpdate(boardpos) {
-  var t = allcanvas.front.transform;
-  var x = (boardpos.x - 600) / t.zoom;
-  var y = -(boardpos.y + 445) / t.zoom;
-  if (trackboard) {
-    socket.emit("projector-adjust", {"type": "tx", "val": x});
-    socket.emit("projector-adjust", {"type": "ty", "val": y});
-  }
-}
-
-// board 599 -443 at 0,0,400%
-// board 998 -444 at 100,0,400%
-// board 1393, -440 at 200, 0, 400%
 
 
 window.onload = () => {

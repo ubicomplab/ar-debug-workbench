@@ -16,8 +16,11 @@ import threading
 import time
 
 import numpy as np
+from shapely.geometry import Point
+from shapely.affinity import rotate
 
 from tools import DebugCard, DebugSession
+from instrumentscripts.scpi_read_flask import initializeInstruments, queryValue
 from boardgeometry.hitscan import hitscan
 
 
@@ -52,6 +55,7 @@ app.config["SECRET_KEY"] = "secret!"
 socketio = SocketIO(app, async_mode="eventlet")
 thread = None
 
+
 # -- app routing --
 @app.route("/")
 def index():
@@ -69,6 +73,8 @@ def index():
         main=url_for("main_page"),
         proj=url_for("projector_page"),
         tool=url_for("tool_debug_page"),
+        study=url_for("study_page"),
+        instr=url_for("instrument_panel"),
         js=url_for("static", filename="index.js")
     )
 
@@ -114,6 +120,17 @@ def tool_debug_page():
     return render_template(
         "tool-test.html",
         js=url_for("static", filename="tool-test.js"),
+        socketiojs=url_for("static", filename="socket.io.min.js")
+    )
+
+
+@app.route("/study")
+def study_page():
+    return render_template(
+        "study.html",
+        css=url_for("static", filename="style.css"),
+        icon=url_for("static", filename="favicon.ico"),
+        js=url_for("static", filename="study.js"),
         socketiojs=url_for("static", filename="socket.io.min.js")
     )
 
@@ -169,12 +186,27 @@ def get_datadicts():
         "pindict": pindict
     })
 
+
+@app.route("/queryValue/<function>")
+def query_value(instrumentType="dmm", function="no_function"):
+    return queryValue(instrumentType, function)
+
+
+@app.route("/instrument_panel")
+def instrument_panel():
+    return render_template(
+        "instrument_panel.html",
+        query=url_for("query_value", function=""),
+        freq=config.getint("Study", "DmmPanelRefreshFrequency")
+    )
+
+
 # -- end app routing --
 
 # -- socket --
 @socketio.on("connect")
 def handle_connect():
-    global active_connections, selection, projector_mode, projector_calibration, active_session
+    global active_connections, selection, projector_mode, projector_calibration, board_pos, active_session, active_session_is_recording
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -182,11 +214,22 @@ def handle_connect():
     for k, v in selection.items():
         if v is not None:
             emit("selection", {"type": k, "val": v})
-            break
+
+    for device, sel in tool_selections.items():
+        if sel is not None:
+            emit("tool-selection", {"device": device, "selection": sel})
 
     emit("projector-mode", projector_mode)
     for k, v in projector_calibration.items():
         emit("projector-adjust", {"type": k, "val": v})
+
+    final_pos = {
+        "tx": board_pos["x"] + projector_calibration["tx"],
+        "ty": board_pos["y"] + projector_calibration["ty"],
+        "r": board_pos["r"] + projector_calibration["r"],
+        "z": projector_calibration["z"]
+    }
+    emit("board-update", final_pos)
 
     for tool in tools:
         for val, ready in tools[tool]["ready-elements"].items():
@@ -207,12 +250,31 @@ def handle_connect():
             }
             emit("debug-session", data)
 
+        nextid, nextcard = active_session.get_next()
+        if nextid != -1:
+            emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
+
+    if active_session_is_recording:
+        emit("debug-session", {"event": "record", "record": "true"})
+
+    # not sure if there's a better way to avoid spamming all clients every time one connects
+    emit("config", {
+        "devices": {
+            "probe": [config.get("Rendering", "ProbeDotColor"), config.get("Rendering", "ProbeSelectionColor")],
+            "pos": [config.get("Rendering", "DmmPosDotColor"), config.get("Rendering", "DmmPosSelectionColor")],
+            "neg": [config.get("Rendering", "DmmNegDotColor"), config.get("Rendering", "DmmNegSelectionColor")],
+            "osc": [config.get("Rendering", "OscDotColor"), config.get("Rendering", "OscSelectionColor")],
+        },
+        "track_board": config.getboolean("Dev", "TrackBoard")
+    })
+
 
 @socketio.on("disconnect")
 def handle_disconnect():
     global active_connections
     active_connections -= 1
     logging.info(f"Client disconnected ({active_connections} active)")
+
 
 @socketio.on("selection")
 def handle_selection(data):
@@ -231,11 +293,19 @@ def handle_projectormode(mode):
 
 @socketio.on("projector-adjust")
 def handle_projector_adjust(adjust):
-    global projector_calibration
-    logging.info(f"Received projector adjust {adjust}")
+    global projector_calibration, board_pos
     projector_calibration[adjust["type"]] = adjust["val"]
     update_reselection_zone()
     socketio.emit("projector-adjust", adjust)
+
+    # projector-adjust also changes final board position
+    final_pos = {
+        "tx": board_pos["x"] + projector_calibration["tx"],
+        "ty": board_pos["y"] + projector_calibration["ty"],
+        "r": board_pos["r"] + projector_calibration["r"],
+        "z": projector_calibration["z"]
+    }
+    socketio.emit("board-update", final_pos)
 
 
 @socketio.on("tool-request")
@@ -281,19 +351,25 @@ def handle_debug_session(data):
         i = active_session.add_card(card)
 
         # for now, just add the card without checking for duplicates
-        newdata = {
+        socketio.emit("debug-session", {
             "event": "custom",
             "update": False,
             "id": i,
             "card": card.to_dict()
-        }
-        socketio.emit("debug-session", newdata)
+        })
+
+        nextid, nextcard = active_session.get_next()
+        if nextid != -1:
+            socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
     elif data["event"] == "record":
         # client is turning recording on or off
         if data["record"] != active_session_is_recording:
             active_session_is_recording = data["record"]
             socketio.emit("debug-session", data)
-            # TODO highlight or deselect next custom card as necessary
+
+            nextid, nextcard = active_session.get_next()
+            if nextid != -1:
+                socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
     elif data["event"] == "save":
         # client wants to save and exit session
         session_history.append(active_session)
@@ -318,16 +394,103 @@ def handle_tool_debug(data):
     elif name == "tool-connect":
         tool_connect(data["type"], data["val"])
     elif name == "measurement":
-        tool_measure(data["measurement"])
-    
+        tool_measure(**data["measurement"])
+
+
+@socketio.on("study-event")
+def handle_study_event(data):
+    global study_state, study_timer, study_modules, compdict
+
+    if len(study_modules) == 0:
+        logging.error("Received study event, but modules failed to initialize, ignoring")
+        return
+
+    if data["event"] == "task":
+        if data["task"] == "off":
+            study_log("Turning study mode off")
+            study_state["active"] = False
+            study_state["task"] = None
+        else:
+            study_log(f"Switching study task to {data['task']}")
+            study_state["active"] = True
+            study_state["task"] = data["task"]
+
+            shuffled = study_modules.copy()
+            np.random.shuffle(shuffled)
+            study_state["current_modules"] = shuffled
+            study_state["step"] = -1
+            study_state["step_done"] = True
+            study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
+
+        socketio.emit("study-event", data)
+    elif data["event"] == "step":
+        # only permit a step if we're actually doing a study and the participant has finished their step
+        if study_state["active"] and study_state["step_done"]:
+            study_state["step"] += 1
+            study_state["step_done"] = False
+            study_state["step_start"] = time.time()
+
+            step = study_state["step"]
+            task = study_state["task"]
+
+            if task == "1A" or task == "1B":
+                if step == 10:
+                    study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+                elif step == 20:
+                    study_log("Finished")
+                    study_state["active"] = False
+                    study_state["task"] = None
+                    socketio.emit("study-event", {"event": "task", "task": "off"})
+                    return
+            # TODO similar check for Task 2
+
+            refid = study_state["current_modules"][step]
+            ref = compdict[refid]["ref"]
+            boardviz_text = "with" if study_state["boardviz"] else "without"
+            study_log(f"Component {ref} {boardviz_text} BoardViz")
+
+            # TODO highlight the next thing
+            highlight_data = {
+                "event": "highlight",
+                "task": task,
+                "refid": refid,
+                "ref": ref,
+                "boardviz": study_state["boardviz"],
+                "step": step
+            }
+            socketio.emit("study-event", highlight_data)
+
+            #socketio.emit("study-event", {"event": "step", "step": step})
+    elif data["event"] == "skip":
+        # TODO allow facilitator to manually skip a step that the participant fails to complete
+        logging.warning("study skip NotYetImplemented")
+        pass
+    elif data["event"] == "note":
+        study_log(f"Custom note: {data['note']}")
+    elif data["event"] == "select":
+        if study_state["task"] == "1B" and not study_state["boardviz"]:
+            # this event should only be sent for Task 1B Without BoardViz
+            if "point" in data:
+                study_selection("layout", data=data)
+            else:
+                make_study_select(data["refid"], "schematic click")
+    elif data["event"] == "timer":
+        display_time = 0
+        if data["turn_on"]:
+            study_timer["on"] = True
+            study_timer["start"] = time.time()
+            study_log("Custom timer started")
+        else:
+            study_timer["on"] = False
+            display_time = time.time() - study_timer["start"]
+            study_log(f"Custom timer took {display_time:.3f}s")
+
+        socketio.emit("study-event", {"event": "timer", "on": study_timer["on"], "time": display_time})
+
 
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
-
-@socketio.on("toggleboardpos")
-def handle_toggle(data):
-    socketio.emit("toggleboardpos", data)
 
 # -- end socket --
 
@@ -441,17 +604,38 @@ def init_data(pcbdata, schdata):
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
 
+# more magic numbers
+rotation_center = (148.5011, 105.0036)
+
 # converts optitrack pixels to layout mm in 2D
 def optitrack_to_layout_coords(point):
-    global projector_calibration
-    return [point[0] / projector_calibration["z"] - projector_calibration["tx"],
-            -point[1] / projector_calibration["z"] - projector_calibration["ty"]]
+    global board_pos, projector_calibration, rotation_center
+    x_off = board_pos["x"] + projector_calibration["tx"]
+    y_off = board_pos["y"] + projector_calibration["ty"]
+    r_off = board_pos["r"] + projector_calibration["r"]
+    z_factor = projector_calibration["z"]
+
+    x = point[0] / z_factor - x_off
+    y = -point[1] / z_factor - y_off
+    sh_point = rotate(Point(x, y), -r_off, origin=rotation_center, use_radians=False)
+    return [sh_point.x, sh_point.y]
+    # return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
+
 
 # convert layout mm to optitrack pixels in 2D
 def layout_to_optitrack_coords(point):
-    global projector_calibration
-    return [(point[0] + projector_calibration["tx"]) * projector_calibration["z"],
-            (-point[1] + projector_calibration["ty"]) * projector_calibration["z"]]
+    global board_pos, projector_calibration, rotation_center
+    x_off = board_pos["x"] + projector_calibration["tx"]
+    y_off = board_pos["y"] + projector_calibration["ty"]
+    r_off = board_pos["r"] + projector_calibration["r"]
+    z_factor = projector_calibration["z"]
+
+    sh_point = rotate(Point(point), r_off, origin=rotation_center, use_radians=False)
+    result = [sh_point.x, sh_point.y]
+    result[0] = (result[0] + x_off) * z_factor
+    result[1] = -(result[1] + y_off) * z_factor
+
+    return result
 
 
 # updates the selection safe zone in place (call any time we transform the projector)
@@ -463,13 +647,15 @@ def update_reselection_zone():
     bounds = np.array([layout_to_optitrack_coords(point) for point in bounds])
 
     hbuffer = config.getfloat("Optitrack", "ReselectHorizontalBuffer")
-    vbuffer = config.getfloat("Optitrack", "ReselectVerticalBuffer")
+    vmin = config.getfloat("Optitrack", "ReselectVerticalMinimum")
+    vmax = config.getfloat("Optitrack", "ReselectVerticalMaximum")
     bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
+    bounds = np.sort(bounds, axis=0)
 
     reselection_zone = {
         "x": bounds[:, 0],
         "y": bounds[:, 1],
-        "z": [0, vbuffer]
+        "z": [vmin, vmax]
     }
 
 
@@ -484,8 +670,17 @@ def in_selection_zone(tippos):
 
 # returns true iff all the points in history are within threshold of refpoint
 def history_within_threshold(history, refpoint, threshold):
+    #history_len = np.shape(history)[1]
+    #return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+    return history_dwellvalue(history, refpoint, threshold) == 1
+
+
+# returns the percentage (0 to 1) of points of the history that are within threshold
+def history_dwellvalue(history, refpoint, threshold):
     history_len = np.shape(history)[1]
-    return np.all(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+    count = np.count_nonzero(np.linalg.norm(np.transpose(history) - np.tile(refpoint, (history_len, 1)), axis=1) <= threshold)
+    #print(history, refpoint, threshold, count)
+    return count / history_len
 
 
 # returns both histories shifted left with the update added to the end
@@ -503,9 +698,85 @@ def make_selection(new_selection):
     selection["comp"] = None
     selection["pin"] = None
     selection["net"] = None
-    if (new_selection["type"] != "deselect"):
+    if new_selection is None or new_selection["type"] == "deselect":
+        socketio.emit("selection", {"type": "deselect", "val": None})
+    else:
+        # selection and tool selection are mutually exclusive
+        make_tool_selection(None)
         selection[new_selection["type"]] = new_selection["val"]
-    socketio.emit("selection", new_selection)
+        socketio.emit("selection", new_selection)
+
+
+# wrapper for getting DMM measurement from SCPI
+# returns tuple of unit, value
+def measure_dmm():
+    logging.info("Making a voltage DMM measurement")
+    value = queryValue("dmm", "voltage")
+    #logging.error("measure_dmm() not yet implemented")
+    return 'volts', value
+
+
+# wrapper for getting oscilloscope measurement from SCPI
+# returns tuple of unit, value
+def measure_osc():
+    logging.info("Making a osc frequency measurement")
+    value = queryValue("osc","frequency")
+    #logging.error("measure_osc() not yet implemented")
+    return None, None
+
+
+# actually makes a tool selection and echoes it to all clients to be displayed
+def make_tool_selection(device, new_selection=None):
+    global tool_selections
+    logging.info(f"Making tool selection {device}: {new_selection}")
+
+    if device is None:
+        # deselect all tools
+        for tool in tool_selections:
+            tool_selections[tool] = None
+            socketio.emit("tool-selection", {"device": tool, "selection": None})
+    else:
+        # selection and tool selection are mutually exclusive
+        make_selection(None)
+        tool_selections[device] = new_selection
+        socketio.emit("tool-selection", {"device": device, "selection": new_selection})
+
+        if active_session_is_recording and new_selection is not None:
+            # if we hit something that is not the next card, stop highlighting the next card
+            _, nextcard = active_session.get_next()
+            if nextcard is not None:
+                if (device == "pos" and nextcard.pos != new_selection) or \
+                        (device == "neg" and nextcard.neg != new_selection):
+                    socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
+
+            # record a measurement if both probes are set
+            if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
+                logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
+                return
+                dmm_unit, dmm_val = measure_dmm()
+                tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
+                make_tool_selection(None)
+            if tool_selections["osc"] is not None:
+                osc_unit, osc_val = measure_osc()
+                tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
+                make_tool_selection(None)
+
+
+def make_study_select(refid, src_text):
+    global study_state
+
+    if study_state["task"] == "2":
+        logging.error("Task 2 NotYetImplemented")
+        return
+
+    runtime = time.time() - study_state["step_start"]
+    if refid == study_state["current_modules"][study_state["step"]]:
+        study_state["step_done"] = True
+        study_log(f"Correct {src_text} after {runtime:.3f}s")
+        socketio.emit("study-event", {"event": "success", "refid": refid, "task": study_state["task"]})
+    else:
+        study_log(f"Incorrect {src_text} after {runtime:.3f}s")
+        socketio.emit("study-event", {"event": "failure"})
 
 
 # handles a selection event from the client
@@ -515,7 +786,7 @@ def client_selection(data):
     if "point" in data:
         # a click in layout
         hits = hitscan(data["point"][0], data["point"][1], pcbdata, pinref_to_idx, layer=data["layer"],
-                       render_pads=data["pads"], render_tracks=data["tracks"], pin_padding=0)
+                       render_pads=data["pads"], render_tracks=data["tracks"], padding=0)
         
         if len(hits) == 0:
             make_selection({"type": "deselect", "val": None})
@@ -531,9 +802,13 @@ def client_selection(data):
 
 # handles a probe selection event
 # assumes this event was triggered under valid circumstances
-def probe_selection(name, tippos, endpos):
+def probe_selection(name, tippos, endpos, force_deselect=False):
     global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
 
+    if force_deselect:
+        # we dwelled down outside of the board
+        make_selection(None)
+        return
     # board layer is hardcoded for now
     layer = "F"
 
@@ -542,7 +817,7 @@ def probe_selection(name, tippos, endpos):
     # TODO let user click on tracks?
     # TODO user setting for what types can be probed
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
-                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
+                   padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
 
     if len(hits) == 1:
         can_reselect[name] = False
@@ -554,10 +829,14 @@ def probe_selection(name, tippos, endpos):
         board_multimenu["source"] = name
         board_multimenu["tip-anchor"] = tippos
         board_multimenu["end-origin"] = endpos
+
+        """
         # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
         if len(hits) < 4:
             hits += [None] * (4 - len(hits))
         board_multimenu["options"] = hits[:4]
+        """
+        board_multimenu["options"] = hits
 
         # don't need a point since main.js ignores selection if from_optitrack=True
         socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
@@ -565,8 +844,19 @@ def probe_selection(name, tippos, endpos):
 
 # handles a dmm selection event
 # assumes this event was triggered under valid circumstances
-def dmm_selection(probe, tippos, endpos):
-    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+def dmm_selection(probe, tippos, endpos, force_deselect=False):
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio, tool_selections
+
+    if force_deselect:
+        tool_selections[probe] = None
+        socketio.emit("tool-selection", {"device": probe, "selection": None})
+        return
+
+    if not active_session_is_recording:
+        logging.info("attempted dmm selection without active session, ignoring")
+        return
+
+    logging.info(f"attempting dmm selection for {probe}")
 
     # board layer is hardcoded for now
     layer = "F"
@@ -575,14 +865,16 @@ def dmm_selection(probe, tippos, endpos):
 
     # the multimeter doesn't want to select components
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=True,
-                   pin_padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
+                   padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
 
     if len(hits) == 1:
         logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
 
         can_reselect[probe] = False
-        # TODO store and display multimeter selection state
+
+        make_tool_selection(probe, hits[0])
     elif len(hits) > 1:
+        logging.info(f"probe {probe} hit {len(hits)} things")
         can_reselect[probe] = False
 
         # TODO auto disambiguation if we have a guided measurement
@@ -592,15 +884,53 @@ def dmm_selection(probe, tippos, endpos):
         board_multimenu["source"] = probe
         board_multimenu["tip-anchor"] = tippos
         board_multimenu["end-origin"] = endpos
+
+        """
         # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
         if len(hits) < 4:
             hits += [None] * (4 - len(hits))
         board_multimenu["options"] = hits[:4]
+        """
+        board_multimenu["options"] = hits
         
         # TODO display multimeter disambiguation menu
-        #socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
+        socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
 
-        pass
+
+# handles a study selection event, either from the client layout or optitrack
+def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=None):
+    global study_state, pcbdata, pinref_to_idx, can_reselect
+
+    if name == "layout":
+        # we're from layout, so we have data
+        src_text = "layout click"
+        point = data["point"]
+        layer = data["layer"]
+        pads = data["pads"]
+        tracks = data["tracks"]
+        padding = 0
+    else:
+        # we're from probe, so we have tippos
+        src_text = "probe dwell"
+        point = optitrack_to_layout_coords(tippos)
+        layer = "F"
+        pads = True
+        tracks = False
+        padding = config.getfloat("Study", "CompPadding")
+
+        # prevent failure spam
+        can_reselect[name] = False
+
+    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=pads,
+        render_tracks=tracks, padding=padding, types=["comp"])
+
+    refid = None
+    for hit in hits:
+        if hit["val"] == study_state["current_modules"][study_state["step"]]:
+            refid = hit["val"]
+            break
+
+    make_study_select(refid, src_text)
 
 
 # handles a board multimeter selection event
@@ -628,109 +958,248 @@ def multimenu_selection(name, endpos):
         make_selection(choice)
 
 
+def multimenu_selection_linear(name, endpos):
+    global board_multimenu
+
+    # for linear, we only care about the y value
+    # if val is positive, we've moved up (-y)
+    val = board_multimenu["end-origin"][1] - endpos[1]
+    #val = endpos[1] - board_multimenu["end-origin"][1]
+
+    num_cells = len(board_multimenu["options"]) + 1
+    row_height = config.getfloat("Optitrack", "MultiMenuSensitivity")
+
+    # origin is in the middle of the safe cell, so first correct for this
+    # cell_i is 0 for safe cell, - if above safe cell, and + if below safe cell
+    cell_i = int(np.floor(val / row_height + 0.5))
+
+    # logging.info(f"val {val:.1f}, cell_i {cell_i}")
+
+    if cell_i == 0:
+        # we're in safe cell, do nothing
+        return
+
+    if cell_i > 0:
+        # we're above the safe cell, so decrement our index bc the safe cell is not in options
+        cell_i -= 1
+
+    # safe cell is at midpoint (ceil) of cells
+    # option_i is index within options
+    option_i = cell_i + num_cells // 2
+
+    #logging.info(f"option_i {option_i} of {len(board_multimenu['options'])} options")
+
+    if 0 <= option_i < len(board_multimenu["options"]):
+        board_multimenu["active"] = False
+        if board_multimenu["source"] == "probe":
+            make_selection(board_multimenu["options"][option_i])
+        else:
+            make_tool_selection(board_multimenu["source"], board_multimenu["options"][option_i])
+
+
 # checks for probe dwelling (selection and disambiguation) and fires the appropriate event
 # name is "probe", "pos", "neg", "osc" and history is {"tip": [], "end": []}
 # selection_fn is called when the tip is dwelling and wants to fire a selection event
+#   must take name, tip_pos, end_pos, and optional force_deselect
+# returns the dwell values of the tip and end
 def check_probe_events(name: str, history: dict, selection_fn):
     global board_multimenu, can_reselect, socketio
 
-    if not in_selection_zone(history["tip"][:, -1]):
+    ts = time.perf_counter()
+
+    tip_pos = history["tip"][:, -1]
+    end_pos = history["end"][:, -1]
+
+    tip_dwell = history_dwellvalue(history["tip"], tip_pos, config.getfloat("Optitrack", "DwellRadiusTip"))
+    end_dwell = history_dwellvalue(history["end"], end_pos, config.getfloat("Optitrack", "DwellRadiusEnd"))
+    ts_dwell = time.perf_counter() - ts
+
+    ts_isz = time.perf_counter()
+    if not in_selection_zone(tip_pos):
+        # logging.info(f"{name} is out of zone at {tip_pos[0]:.0f}, {tip_pos[1]:.0f}, {tip_pos[2]:.0f}")
+        # logging.info(f"zone is {reselection_zone}")
         can_reselect[name] = True
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
             socketio.emit("selection", {"type": "cancel-multi"})
-        return
+        if tip_pos[2] <= config.getfloat("Optitrack", "OutsideVerticalBuffer"):
+            selection_fn(name, tip_pos, end_pos, True)
+        return tip_dwell, end_dwell
+    ts_isz = time.perf_counter() - ts_isz
 
-    tip_mean = np.mean(history["tip"], axis=1)
-    end_mean = np.mean(history["tip"], axis=1)
+    # logging.info(f"{name} is in zone with tip dwell {tip_dwell:.1f}")
 
+    ts_op = time.perf_counter()
+    ts_op_name = "none"
     if not board_multimenu["active"]:
         # no multimenu is open, we can select
-        if can_reselect[name] and history_within_threshold(history["tip"], tip_mean, config.getfloat("Optitrack", "DwellRadiusTip")):
-            selection_fn(name, tip_mean, end_mean)
+        if can_reselect[name] and tip_dwell == 1:
+            selection_fn(name, tip_pos, end_pos)
+        ts_op_name = "sel"
     elif board_multimenu["source"] == name:
-        # a multimenu for this probe is open
-        if np.linalg.norm(tip_mean - board_multimenu["tip-anchor"]) <= config.getfloat("Optitrack", "MultiAnchorRadius") and \
-                history_within_threshold(history["end"], end_mean, config.getfloat("Optitrack", "DwellRadiusEnd")) and \
-                np.linalg.norm(end_mean - board_multimenu["end-origin"]) > config.getfloat("Optitrack", "MultiSafeRadius"):
-            # tip is still in place and end is dwelling outside the "safe zone"
-            multimenu_selection(name, end_mean)
+        # a multimenu for this probe is open)
+        anchordist = np.linalg.norm(tip_pos - board_multimenu["tip-anchor"])
+        #logging.info(f"trying mm sel with dwell val of {end_dwell:.1f} and anchor dist {anchordist:.1f}")
+        if end_dwell == 1 and anchordist <= config.getfloat("Optitrack", "MultiAnchorRadius"):
+            # tip is still in place and end is dwelling
+            multimenu_selection_linear(name, end_pos)
+        ts_op_name = "mm"
+    ts_op = time.perf_counter() - ts_op
+
+    ts = time.perf_counter() - ts
+    if ts > .01:
+        logging.info(f"check {name} took {ts*1000:.0f}ms ({ts_dwell*1000:.0f}ms dwell, {ts_isz*1000:.0f}ms isz, {ts_op*1000:.0f}ms op {ts_op_name})")
+        pass
+
+    return tip_dwell, end_dwell
+
+
+# generates a new history of zeroes of the appropriate size (determined by config.ini)
+def new_history(dwell_time, dim=2):
+    history_len = int(config.getint("Server", "UDPFramerate") * dwell_time)
+    return np.zeros((dim, history_len))
+
+
+def update_boardpos(x, y, r):
+    global board_pos, projector_calibration
+
+    boardname = config.get("Study", "BoardName")
+    boardpos_offset = {
+        "x": config.get(boardname, "BoardposOffsetX"),
+        "y": config.get(boardname, "BoardposOffsetY"),
+        "r": config.get(boardname, "BoardposOffsetR"),
+    }
+
+    # projector_calibration is now adjustment for observed board position
+    board_pos["x"] = (x - boardpos_offset["x"]) / projector_calibration["z"]
+    board_pos["y"] = -(y - boardpos_offset["y"]) / projector_calibration["z"]
+
+    if config.getboolean("Dev", "TrackBoardRotation"):
+        board_pos["r"] = -r - boardpos_offset["r"]
+    else:
+        board_pos["r"] = 0
+
+    update_reselection_zone()
+
+    final_pos = {
+        "tx": board_pos["x"] + projector_calibration["tx"],
+        "ty": board_pos["y"] + projector_calibration["ty"],
+        "r": board_pos["r"] + projector_calibration["r"],
+        "z": projector_calibration["z"]
+    }
+    socketio.emit("board-update", final_pos)
 
 
 def listen_udp():
-    global socketio
+    global socketio, active_session_is_recording, study_state
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind((config.get("Server", "UDPAddress"), config.getint("Server", "UDPPort")))
 
     framerate = config.getint("Server", "UDPFramerate")
-    history_len = int(framerate * config.getfloat("Optitrack", "DwellTime"))
 
     # probe histories have "tip" and "end", each of which is a 2D array of points from oldest to newest
     # blame Ishan for the fact that these arrays are transposed s.t. the ith point is at [:, i] not [i]
     # TODO transpose them back
-    probe_history = {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+    dwell_time_tip = config.getfloat("Optitrack", "DwellTime")
+    dwell_time_end = config.getfloat("Optitrack", "DwellTimeEnd")
+    # probe_history = {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     dmm_probe_history = {
-        "pos": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))},
-        "neg": {"tip": np.zeros((2, history_len)), "end": np.zeros((2, history_len))}
+        "pos": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)},
+        "neg": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     }
 
-    # tracks the previous value from udp for the EWMA filter
-    prev_var = None
-
-    nextframe = time.time() + 1. / framerate
+    nextframe = time.perf_counter() + 1. / framerate
+    frame_i = 0
     while True:
+        frame_i += 1
+        ts = time.perf_counter()
         data, addr = sock.recvfrom(config.getint("Server", "UDPPacketSize"))
-        var = np.array(struct.unpack("f" * 13, data))
+        ts_wait = time.perf_counter() - ts
+        var = np.array(struct.unpack("f" * 14, data))
 
-        # TODO tune EWMAAlpha or switch to more complex low-pass/Kalman filter
-        if prev_var is not None:
-            var = var + config.getfloat("Optitrack", "EWMAAlpha") * (prev_var - var)
-        prev_var = var
-
-        # board and red/grey tips are x,y,z where x,y are in pixels and z is in real mm
+        # board and red/grey tips are x,y,z where x,y are in pixels and z is in real m
         # red/grey end is x,y in pixels
-        probe_tip = var[0:3]
-        probe_end = var[3:5]
-        board_pos = var[5:8]
+        red_tip = var[0:3]
+        red_end = var[3:5]
+        board_update = var[5:8]
         grey_tip = var[8:11]
         grey_end = var[11:13]
+        board_rot = var[13]
+
+        # convert z from real m to real mm to (roughly) match other coordinates
+        red_tip[2] *= 1000
+        grey_tip[2] *= 1000
+        board_update[2] *= 1000
 
         # to avoid crashes for now, ignoring z values
-        probe_tip = probe_tip[:2]
-        grey_tip = grey_tip[:2]
-        board_pos = board_pos[:2]
+        board_update = board_update[:2]
 
+        ts_board = time.perf_counter()
+        if config.getboolean("Dev", "TrackBoard"):
+            update_boardpos(board_update[0], board_update[1], board_rot)
+        ts_board = time.perf_counter() - ts_board
 
-        update_probe_history(probe_history, probe_tip, probe_end)
-        check_probe_events("probe", probe_history, selection_fn=probe_selection)
+        ts_check = time.perf_counter()
+        # update_probe_history(probe_history, red_tip, red_end)
+        update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
+        update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
+        if study_state["active"]:
+            if not study_state["step_done"]:
+                # we only actually want to check for events if we are actively doing a step
+                _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=study_selection)
+        elif active_session_is_recording:
+            _, _ = check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
+            _, _ = check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
+        else:
+            _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=probe_selection)
 
-        # for now, we don't have the necessary values
-        update_probe_history(dmm_probe_history["pos"], None, None)
-        update_probe_history(dmm_probe_history["neg"], None, None)
-        for probe, history in dmm_probe_history.items():
-            check_probe_events(probe, history, selection_fn=dmm_selection)
+        ts_check = time.perf_counter() - ts_check
 
         # send the tip and end positions to the web app to display
-        probe_tip_layout = optitrack_to_layout_coords(probe_tip)
-        probe_end_layout = optitrack_to_layout_coords(probe_end)
+        probe_tip_layout = optitrack_to_layout_coords(red_tip)
+
+        if board_multimenu["active"]:
+            # get the normalized probe end y-delta s.t. row height = 1
+            #probe_end_delta = np.mean(probe_history["end"], axis=1)[1] - board_multimenu["end-origin"][1]
+            #probe_end_delta = board_multimenu["end-origin"][1] - np.mean(probe_history["end"], axis=1)[1]
+            if board_multimenu["source"] == "probe" or board_multimenu["source"] == "pos":
+                probe_end_delta = board_multimenu["end-origin"][1] - red_end[1]
+            else:
+                probe_end_delta = board_multimenu["end-origin"][1] - grey_end[1]
+            probe_end_delta /= config.getfloat("Optitrack", "MultiMenuSensitivity")
+        else:
+            probe_end_delta = 0
 
         grey_tip_layout = optitrack_to_layout_coords(grey_tip)
 
+        ts_sock = time.perf_counter()
         socketio.emit("udp", {
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
-            "endpos_layout": {"x": probe_end_layout[0], "y": probe_end_layout[1]},
+            "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
-            "boardpos_pixel": {"x": board_pos[0], "y": board_pos[1]}
+            "boardpos": {"x": board_update[0], "y": board_update[1], "r": board_rot},
+            # "tipdwell": tip_dwell,
+            # "enddwell": end_dwell
         })
+        ts_sock = time.perf_counter() - ts_sock
 
-        now = time.time()
+        now = time.perf_counter()
+        ts = now - ts
         diff = nextframe - now
+        #logging.info(f"diff is {diff * 1000:.0f}ms")
         if diff > 0:
+            #logging.info("frame early!")
             time.sleep(diff)
+        elif -diff > 0.05:
+            # more than 50ms behind
+            # logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
+            #     f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
+            #     f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            pass
         else:
-            #logging.warning(f"low framerate: {int(-diff * 1000)}ms behind")
+            #logging.info("frame (sorta) on time")
             pass
         nextframe = now + 1. / framerate
 
@@ -763,27 +1232,29 @@ def tool_connect(device, element, success=True):
 
 # handles a tool measurement event, which comes from optitrack
 # measurement is {device, pos, neg, unit, val}, ie. optitrack hitscan is done already
-def tool_measure(measurement):
+def tool_measure(device, pos, neg, unit, val):
     global tools, active_session, active_session_is_recording
 
     if not active_session_is_recording:
         logging.warning("measurement while there was no debug session")
         return
 
-    device = measurement["device"]
     if not tools[device]["ready"]:
         logging.warning("measurement before tool was setup, ignoring")
         return
 
-    # TODO do something different for osc
-    card, id, update = active_session.measure(measurement)
-    data = {
+    card, id, update = active_session.measure(device, pos, neg, unit, val)
+
+    socketio.emit("debug-session", {
         "event": "measurement",
         "card": card.to_dict(),
         "id": id,
         "update": update
-    }
-    socketio.emit("debug-session", data)
+    })
+
+    nextid, nextcard = active_session.get_next()
+    if nextid != -1:
+        socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
 
 
 def autoconnect_tools(enabled):
@@ -792,6 +1263,18 @@ def autoconnect_tools(enabled):
         tools[device]["ready"] = True
         for element in tools[device]["ready-elements"]:
             tools[device]["ready-elements"][element] = True
+
+    initializeInstruments()
+
+
+def study_log(msg):
+    global study_state
+    t = study_state["task"]
+    s = study_state["step"]
+    sb = "*" if study_state["step_done"] else ""
+    tt = f"Task {t} Step {s}{sb}" if study_state["active"] else "Inactive"
+    logging.info(f"Study ({tt}) {msg}")
+
 
 
 if __name__ == "__main__":
@@ -816,6 +1299,7 @@ if __name__ == "__main__":
     active_connections = 0
 
     # Server tracks current selections and settings
+    # TODO no need to store these as separate keys rather than a single value
     selection = {
         "comp": None,
         "pin": None,
@@ -828,6 +1312,11 @@ if __name__ == "__main__":
         "ty": config.getfloat("Dev", "DefaultTY"),
         "r": config.getfloat("Dev", "DefaultRotation"),
         "z": config.getfloat("Dev", "DefaultZoom")
+    }
+    board_pos = {
+        "x": 0,
+        "y": 0,
+        "r": 0
     }
 
     # Server tracks connected tools
@@ -867,9 +1356,17 @@ if __name__ == "__main__":
 
     # active_session: DebugSession = None
     active_session = None
+
     # if True, measurements are added to the current session and the next custom card is highlighted
     # if False, measurements are ignored and custom cards are not highlighted
     active_session_is_recording = False
+
+    tool_selections = {
+        "probe": None,
+        "pos": None,
+        "neg": None,
+        "osc": None
+    }
 
     # controls whether or not various probes can make a new selection
     can_reselect = {
@@ -892,14 +1389,36 @@ if __name__ == "__main__":
     reselection_zone = None
     update_reselection_zone()
 
+    if config.getboolean("Dev", "AutoconnectTools"):
+        # we just assume ptr and dmm are already connected
+        autoconnect_tools(["ptr", "dmm"])
+
+    study_state = {
+        "active": False,            # iff True, study mode is on
+        "task": None,               # "1A", "1B", or "2"
+        "current_modules": None,    # if active, is the shuffled list of modules
+        "step": 0,                  # current index in current_modules (can be -1)
+        "step_done": False,         # iff False, participant has not yet completed this step
+        "step_start": 0,            # time.time() at the start of this step
+        "boardviz": True            # iff True, BoardViz is on for this step
+    }
+    study_timer = {
+        "on": False,
+        "start": 0
+    }
+    study_modules = config.get("Study", "ComponentList").split(",")
+    try:
+        study_modules = [ref_to_id[ref] for ref in study_modules]
+        logging.info("Study component list loaded properly, study can be run")
+    except KeyError:
+        study_modules = []
+        logging.error("Study component list contained unknown comp ref, study cannot be run")
+
+
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
     else:
         port = config.getint("Server", "Port")
-
-    if config.getboolean("Dev", "AutoconnectTools"):
-        # we just assume ptr and dmm are already connected
-        autoconnect_tools(["ptr", "dmm"])
 
     socketio.run(app, port=port, debug=True)
 

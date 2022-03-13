@@ -25,8 +25,54 @@ var current_selection = {
   "val": null
 }
 
-/** list of {type, val, coords, color}; mutually exclusive with current_selection */
-var tool_selections = [];
+/**
+ * Keeps track of locations and "selections" for each probe
+ * Colors come from config.ini
+ * location is {x, y} in layout mm, selection is {type, val}
+ * Note: tool selections are mutually exclusive with current_selection
+ * Note: selections can also come from the debug session highlighting the next card
+ */
+var probes = {
+  "probe": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  },
+  "pos": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  },
+  "neg": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  },
+  "osc": {
+    "location": null,
+    "selection": null,
+    "color": {
+      "loc": null,
+      "sel": null,
+      "zone": null
+    }
+  }
+}
+
+/** Keeps track of the normalized probe end y-delta, s.t. row height is 1 */
+var probe_end_delta = null;
 
 /** Maximum zoom level where entire schematic fits in the available space
  * Note this differs for each schematic sheet */
@@ -40,6 +86,13 @@ var target_boxes = {
   "F": null,
   "B": null
 };
+
+
+/** iff true, we're currently doing a Task 1B step and need different click behavior */
+var study_listening_for_1B = false;
+
+/** iff study_listening_for_1B is true, this contains the refid of the component we're looking for */
+var study_component = null;
 
 
 /** Updates the bounding boxes that are used internally to zoom to selected components */
@@ -611,6 +664,17 @@ function handleMouseClick(layerdict, e = null) {
       }
     }
 
+    if (study_listening_for_1B) {
+      // We're doing study task 1B, so auto disambiguate
+      for (let hit of hits) {
+        if (hit.type == "comp" && hit.val == study_component) {
+          socket.emit("study-event", {"event": "select", "refid": hit.val})
+          break;
+        }
+      }
+      return;
+    }
+
     if (hits.length == 1) {
       // Single click, just select what was clicked
       clickedType[hits[0].type](hits[0].val);
@@ -618,17 +682,28 @@ function handleMouseClick(layerdict, e = null) {
       multiMenu([e.clientX, e.clientY], layerdict.layer, hits)
     } else {
       // Clicked on nothing
-//      document.getElementById("sch-multi-click").classList.add("hidden");
-//      document.getElementById("search-content").classList.add("hidden");
       deselectClicked();
     }
   } else {
     // Click in layout, send to server instead of processing here
     var coords = offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict)
-    console.log(`layout click at (${coords[0]},${coords[1]}`)
+    // console.log(`layout click at (${coords[0]},${coords[1]}`)
+
+    if (study_listening_for_1B) {
+      // We're doing study task 1B, so pass it to server
+      socket.emit("study-event", {
+        event: "select",
+        point: coords,
+        layer: layerdict.layer,
+        pads: ibom_settings.renderPads,
+        tracks: ibom_settings.renderTracks
+      })
+      return;
+    }
+
     socket.emit("selection", {
       source: "point",
-      point: offsetToLayoutCoords([e.offsetX, e.offsetY], layerdict),
+      point: coords,
       layer: layerdict.layer,
       pads: ibom_settings.renderPads,
       tracks: ibom_settings.renderTracks

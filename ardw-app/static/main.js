@@ -55,12 +55,11 @@ var sidebar_custom_selection = {
   }
 };
 
-var active_debug_session = false;
-
 /** true iff sidebar is open; independent of debug session state */
 var sidebar_is_open = false;
 
-var recording_is_on = false;
+/** true iff we are currently recording measurements */
+var active_session_is_recording = false;
 
 /**
  * Tracks all the currently enabled tools
@@ -70,7 +69,7 @@ var recording_is_on = false;
  * - selection: {probe: null when not connected, false when connected,
             and true (WIP) when it's the source of the last selection}
  */
-var tools = {
+var tool_ready_state = {
   "ptr": {
     "name": "Selection Probe",
     "ready": false,
@@ -103,21 +102,21 @@ var active_tool_request = false;
 var sidebar_shown = false;
 
 /** Controls size of debug session sidebar */
-sidebar_split = Split(["#display", "#sidebar"], {
+var sidebar_split = Split(["#display", "#sidebar"], {
   sizes: [100, 0],
   minSize: 0,
   gutterSize: 5,
   onDragEnd: resizeAll
 });
 /** Controls relative size of schematic and layout views */
-display_split = Split(["#schematic-div", "#layout-div"], {
+var display_split = Split(["#schematic-div", "#layout-div"], {
   sizes: [50, 50],
   minSize: 0,
   gutterSize: 5,
   onDragEnd: resizeAll
 });
 /** Controls relative size of front and back layout views */
-canvas_split = Split(["#front-canvas", "#back-canvas"], {
+var canvas_split = Split(["#front-canvas", "#back-canvas"], {
   sizes: [50, 50],
   minSize: 0,
   gutterSize: 5,
@@ -354,10 +353,10 @@ function toolPopupX() {
 }
 
 function toolButton(type) {
-  if (!tools[type].ready && !active_tool_request) {
+  if (!tool_ready_state[type].ready && !active_tool_request) {
     console.log(`Requesting ${type} tool`);
     socket.emit("tool-request", { "type": type, "val": "device" });
-  } else if (tools[type].ready) {
+  } else if (tool_ready_state[type].ready) {
     console.log(`tool ${type} is already ready`);
   } else {
     // Show active tool request
@@ -373,19 +372,19 @@ function toolRequest(data) {
 
   console.log(data)
 
-  if (tools[data.type].ready) {
+  if (tool_ready_state[data.type].ready) {
     // This should never happen
     logerr(`Received ${data.type} tool request from server that was already ready`);
-    popup_title.innerText = tools[data.type].name;
+    popup_title.innerText = tool_ready_state[data.type].name;
     popup_text.innerText = "Already connected, closing...";
     popup_buttons.innerHTML = "";
     popup.classList.remove("hidden");
     setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
   } else {
-    popup_title.innerText = `Connecting ${tools[data.type].name}`;
+    popup_title.innerText = `Connecting ${tool_ready_state[data.type].name}`;
     switch (data.type) {
       case "ptr":
-        popup_text.innerHTML = `Connecting ${tools.ptr.name.toLowerCase()} with Optitrack<br />{optitrack instructions}`;
+        popup_text.innerHTML = `Connecting ${tool_ready_state.ptr.name.toLowerCase()} with Optitrack<br />{optitrack instructions}`;
         popup_buttons.innerHTML = "";
         break;
       case "dmm":
@@ -412,7 +411,7 @@ function toolConnect(data) {
   var popup_text = document.getElementById("tool-popup-text");
   var popup_buttons = document.getElementById("tool-popup-buttons");
 
-  popup_title.innerText = `Connecting ${tools[data.type].name}`;
+  popup_title.innerText = `Connecting ${tool_ready_state[data.type].name}`;
 
   // for now, everything is a success
   data["status"] = "success";
@@ -421,8 +420,8 @@ function toolConnect(data) {
     switch (data.type) {
       case "ptr":
         console.log("ptr connected and ready to use");
-        tools.ptr.ready = true;
-        tools.ptr.selection = false;
+        tool_ready_state.ptr.ready = true;
+        tool_ready_state.ptr.selection = false;
 
         popup_text.innerHTML = "Probe connected! Closing..."
         popup_buttons.innerHTML = "";
@@ -436,24 +435,24 @@ function toolConnect(data) {
       case "dmm":
         if (data.val == "pos") {
           console.log("dmm pos probe connected");
-          tools.dmm.selection.pos = false;
+          tool_ready_state.dmm.selection.pos = false;
           popup_text.innerHTML = "Positive probe connected.";
         } else if (data.val == "neg") {
           console.log("dmm neg probe connected");
-          tools.dmm.selection.neg = false;
+          tool_ready_state.dmm.selection.neg = false;
           popup_text.innerHTML = "Negative probe connected.";
         } else {
           console.log("dmm connected");
-          tools.dmm.device = true;
+          tool_ready_state.dmm.device = true;
           popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
         }
 
         popup_buttons.innerHTML = "";
-        for (let dir in tools.dmm.selection) {
+        for (let dir in tool_ready_state.dmm.selection) {
           let div = document.createElement("div");
           div.classList.add("button");
           div.classList.add(`dmm-probe-${dir}`);
-          if (tools.dmm.selection[dir] === null) {
+          if (tool_ready_state.dmm.selection[dir] === null) {
             // has not yet been added
             div.innerHTML = `+ ${dir.toUpperCase()}`;
             div.addEventListener("click", () => {
@@ -471,9 +470,9 @@ function toolConnect(data) {
         // if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
         if (data.ready) {
           console.log("dmm ready to use")
-          tools.dmm.ready = true;
+          tool_ready_state.dmm.ready = true;
 
-          popup_text.innerHTML += `<br />${tools.dmm.name} ready to use, closing...`
+          popup_text.innerHTML += `<br />${tool_ready_state.dmm.name} ready to use, closing...`
           setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
 
           var toolbutton = document.getElementById("tools-dmm");
@@ -484,25 +483,25 @@ function toolConnect(data) {
       case "osc":
         if (data.val == "osc") {
           console.log("osc connected");
-          tools.osc.device = true;
+          tool_ready_state.osc.device = true;
           popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
 
         } else {
           console.log(`osc chan ${data.val} probe connected`);
-          tools.osc.selection[data.val] = false;
+          tool_ready_state.osc.selection[data.val] = false;
         }
-        if (tools.osc.device) {
+        if (tool_ready_state.osc.device) {
           let channels_ready = 0;
-          for (let chan in tools.osc.selection) {
-            if (tools.osc.selection[chan] !== null) {
+          for (let chan in tool_ready_state.osc.selection) {
+            if (tool_ready_state.osc.selection[chan] !== null) {
               channels_ready += 1;
             }
           }
           if (channels_ready > 1) {
             console.log("osc ready to use");
-            tools.osc.ready = true;
+            tool_ready_state.osc.ready = true;
 
-            popup_text.innerHTML += `<br />${tools.osc.name} ready to use`;
+            popup_text.innerHTML += `<br />${tool_ready_state.osc.name} ready to use`;
             if (channels_ready == 4) {
               popup_text.innerHTML += ", closing...";
               setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
@@ -521,7 +520,7 @@ function toolConnect(data) {
 
     if (data.val === "device") {
       // Device connection failed
-      popup_text.innerHTML = `${tools[data.type].name} was not found or failed to connect.`;
+      popup_text.innerHTML = `${tool_ready_state[data.type].name} was not found or failed to connect.`;
       popup_buttons.innerHTML = "";
 
       let retry_button = document.createElement("div");
@@ -541,11 +540,11 @@ function toolConnect(data) {
       // Probe connection failed
       popup_text.innerHTML = `Probe ${data.val} failed to connect. Ensure Optitrack is working and try again.`;
       popup_buttons.innerHTML = "";
-      for (let dir in tools.dmm.selection) {
+      for (let dir in tool_ready_state.dmm.selection) {
         let div = document.createElement("div");
         div.classList.add("button");
         div.classList.add(`dmm-probe-${dir}`);
-        if (tools.dmm.selection[dir] === null) {
+        if (tool_ready_state.dmm.selection[dir] === null) {
           // has not yet been added
           div.innerHTML = `+ ${dir.toUpperCase()}`;
           div.addEventListener("click", () => {
@@ -583,7 +582,7 @@ function toggleSidebar(x = false) {
 
 /** Handler for the debug session record button */
 function recordButton() {
-  socket.emit("debug-session", { "event": "record", "record": !recording_is_on });
+  socket.emit("debug-session", { "event": "record", "record": !active_session_is_recording });
 }
 
 /** Updates the client recording state */
@@ -593,11 +592,11 @@ function setRecordState(record) {
   if (record) {
     button.classList.add("on");
     icon.classList.remove("hidden");
-    recording_is_on = true
+    active_session_is_recording = true
   } else {
     button.classList.remove("on");
     icon.classList.add("hidden");
-    recording_is_on = false
+    active_session_is_recording = false
   }
 }
 
@@ -735,7 +734,6 @@ function debugSessionEvent(data) {
     case "new":
     case "edit":
       // A client requested a new debug session or is editing an existing one
-      active_debug_session = true
       sidebar.querySelector('*[name="sidebar-name"]').value = data.name;
       sidebar.querySelector('*[name="sidebar-notes"]').value = data.notes;
       sidebar.querySelector('*[name="sidebar-timestamp"]').innerHTML = data.timestamp;
@@ -752,6 +750,12 @@ function debugSessionEvent(data) {
       break;
     case "record":
       setRecordState(data.record);
+      if (!active_session_is_recording) {
+        probes.pos.selection = null;
+        probes.neg.selection = null;
+        probes.osc.selection = null;
+        drawHighlights();
+      }
       break;
     case "save":
       // Session was saved and exited, so wipe all fields and close the sidebar
@@ -768,11 +772,25 @@ function debugSessionEvent(data) {
       setRecordState(false);
       toggleSidebar(true);
 
-      active_debug_session = false;
-
       break;
     case "export":
       console.log("export is WIP");
+      break;
+    case "next":
+      // TODO support osc
+      if (active_session_is_recording) {
+        if (data.id == -1) {
+          probes.pos.selection = null;
+          probes.neg.selection = null;
+          probes.osc.selection = null;
+          drawHighlights();
+        } else {
+          // Highlight the next card
+          probes.pos.selection = data.card.pos;
+          probes.neg.selection = data.card.neg;
+          drawHighlights();
+        }
+      }
       break;
   }
 }
@@ -790,6 +808,28 @@ function debugSessionEvent(data) {
  */
  function intFromText(val, lo, hi, def = 0, increment = 0) {
   val = parseInt(val) + increment;
+  if (isNaN(val)) {
+    return def;
+  } else if (val < lo) {
+    return lo;
+  } else if (val > hi) {
+    return hi;
+  } else {
+    return val;
+  }
+}
+
+/**
+ * Parses a text value (eg. from an input[type=text]) into a float
+ * @param {*} val text value
+ * @param {*} lo lower bound (inclusive)
+ * @param {*} hi upper bound (inclusive)
+ * @param {*} def default value if val is NaN (0 if not specified)
+ * @param {*} increment increment to be applied to parsed value (0 if not specified)
+ * @returns float value
+ */
+function floatFromText(val, lo, hi, def=0, increment=0) {
+  val = parseFloat(val) + increment;
   if (isNaN(val)) {
     return def;
   } else if (val < lo) {
@@ -1021,14 +1061,15 @@ function initPage() {
   });
 
   projector_sliders["tx"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -400, 400, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -4000, 4000, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "tx", "val": floatFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["tx"]["slider"] = document.getElementById("settings-projector-tx");
   projector_sliders["tx"]["label"] = document.getElementById("settings-projector-tx-label");
   projector_sliders.tx.slider.value = 0;
-  projector_sliders.tx.label.value = "0";
+  projector_sliders.tx.label.value = "0.0";
   projector_sliders.tx.slider.addEventListener("input", () => {
-    projector_sliders.tx.func(projector_sliders.tx.slider.value);
+    projector_sliders.tx.func(projector_sliders.tx.slider.value / 10);
   });
   projector_sliders.tx.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1038,14 +1079,15 @@ function initPage() {
   });
 
   projector_sliders["ty"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -400, 400, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -4000, 4000, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "ty", "val": floatFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["ty"]["slider"] = document.getElementById("settings-projector-ty");
   projector_sliders["ty"]["label"] = document.getElementById("settings-projector-ty-label");
   projector_sliders.ty.slider.value = 0;
-  projector_sliders.ty.label.value = 0;
+  projector_sliders.ty.label.value = "0.0";
   projector_sliders.ty.slider.addEventListener("input", () => {
-    projector_sliders.ty.func(projector_sliders.ty.slider.value);
+    projector_sliders.ty.func(projector_sliders.ty.slider.value / 10);
   });
   projector_sliders.ty.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1055,14 +1097,15 @@ function initPage() {
   });
 
   projector_sliders["r"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "r", "val": intFromText(val, -180, 180, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "r", "val": intFromText(val, -1800, 1800, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "r", "val": floatFromText(val, -180, 180, 0, increment)})
   }
   projector_sliders["r"]["slider"] = document.getElementById("settings-projector-rotation");
   projector_sliders["r"]["label"] = document.getElementById("settings-projector-rotation-label");
   projector_sliders.r.slider.value = 0;
-  projector_sliders.r.label.value = 0;
+  projector_sliders.r.label.value = "0.0";
   projector_sliders.r.slider.addEventListener("input", () => {
-    projector_sliders.r.func(projector_sliders.r.slider.value);
+    projector_sliders.r.func(projector_sliders.r.slider.value / 10);
   });
   projector_sliders.r.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1098,22 +1141,22 @@ function initPage() {
     if (adjust_with_keys) {
       switch (e.key) {
         case "a":
-          projector_sliders.tx.func(projector_sliders.tx.slider.value, -1);
+          projector_sliders.tx.func(projector_sliders.tx.slider.value / 10, -0.1);
           break;
         case "d":
-          projector_sliders.tx.func(projector_sliders.tx.slider.value, 1);
+          projector_sliders.tx.func(projector_sliders.tx.slider.value / 10, 0.1);
           break;
         case "w":
-          projector_sliders.ty.func(projector_sliders.ty.slider.value, -1);
+          projector_sliders.ty.func(projector_sliders.ty.slider.value / 10, -0.1);
           break;
         case "s":
-          projector_sliders.ty.func(projector_sliders.ty.slider.value, 1);
+          projector_sliders.ty.func(projector_sliders.ty.slider.value / 10, 0.1);
           break;
         case "q":
-          projector_sliders.r.func(projector_sliders.r.slider.value, -1);
+          projector_sliders.r.func(projector_sliders.r.slider.value / 10, -0.1);
           break;
         case "e":
-          projector_sliders.r.func(projector_sliders.r.slider.value, 1);
+          projector_sliders.r.func(projector_sliders.r.slider.value / 10, 0.1);
           break;
         case "r":
           projector_sliders.z.func(projector_sliders.z.slider.value, 1);
@@ -1222,6 +1265,13 @@ function initPage() {
         new_card.neg.val = sidebar_custom_selection.neg.val;
       }
 
+      if (new_card.pos.type == "pin") {
+        new_card.pos.val = parseInt(new_card.pos.val);
+      }
+      if (new_card.neg.type == "pin") {
+        new_card.neg.val = parseInt(new_card.neg.val);
+      }
+
       // Rest of info can be taken straight from form
       var sidebar_custom = document.getElementById("sidebar-custom-dmm");
 
@@ -1307,9 +1357,13 @@ function initSocket() {
     }
   });
   socket.on("projector-adjust", (adjust) => {
-    let val = adjust.type === "z" ? adjust.val * 100 : adjust.val;
-    projector_sliders[adjust.type].slider.value = val;
-    projector_sliders[adjust.type].label.value = val;
+    if (adjust.type == "z") {
+      projector_sliders.z.slider.value = adjust.val * 100;
+      projector_sliders.z.label.value = adjust.val * 100;
+    } else {
+      projector_sliders[adjust.type].slider.value = adjust.val * 10;
+      projector_sliders[adjust.type].label.value = adjust.val.toFixed(1);
+    }
   });
 
   // tools
@@ -1329,9 +1383,57 @@ function initSocket() {
 
   printcounter = 0
   socket.on("udp", (data) => {
-//    console.log(data)
-    udp_selection = data["tippos_layout"]
+    probes["pos"].location = data["tippos_layout"];
+    probes["neg"].location = data["greytip"];
     drawHighlights();
+  })
+
+  socket.on("tool-selection", (data) => {
+    if (data.selection == "multi") {
+      // multi menu, so main page does nothing
+    } else {
+      probes[data.device].selection = data.selection;
+      drawHighlights();
+    }
+  })
+
+  socket.on("config", (data) => {
+    for (let device in data.devices) {
+      let colors = data.devices[device];
+      probes[device].color.loc = colors[0];
+      probes[device].color.sel = colors[1];
+      probes[device].color.zone = colors[1];
+    }
+  })
+
+  socket.on("study-event", (data) => {
+    switch (data.event) {
+      case "task":
+        study_listening_for_1B = false;
+        deselectAll(true);
+        break;
+      case "highlight":
+        deselectAll(true);
+        if (data.task == "1A") {
+          selectComponent(data.refid);
+        } else if (data.task == "1B") {
+          if (data.boardviz) {
+            study_listening_for_1B = false;
+          } else {
+            study_listening_for_1B = true;
+            study_component = data.refid;
+          }
+        }
+        break;
+      case "success":
+        if (data.task == "1B") {
+          selectComponent(data.refid);
+        }
+        break;
+      default:
+        console.log(data);
+        break;
+    }
   })
 }
 

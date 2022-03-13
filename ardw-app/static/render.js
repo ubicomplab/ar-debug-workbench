@@ -47,19 +47,20 @@ var ibom_settings = {
   renderEdgeCuts: true,
 }
 
-/** {type, val, coords, color} */
-var udp_selection = null;
-var udp_grey = null;
-
 /** if not null, display multimenu
  *  {hits: [], layer: str} */
 var multimenu_active = null;
 
-/** The color of the probe dot/crosshair */
-var PROBE_COLOR = "purple";
-
 /** If true, draw a crosshair where the probe currently is. If false, draw a dot. */
 var probe_crosshair = false;
+
+
+/** offset of the center of rotation for the projector canvas
+ * currently just the center of the edge cut bbox */ 
+const rotation_center = {
+  "x": 148.5011,
+  "y": 105.0036
+}
 
 
 // ----- Functions for rendering the layout (DO NOT MODIFY) ----- //
@@ -357,6 +358,7 @@ function drawPadHole(ctx, pad, padHoleColor) {
   ctx.restore();
 }
 
+// Note: outlineColor and outline are always null and false (we don't draw pin1 outlines)
 function drawFootprint(ctx, layer, scalefactor, footprint, padColor, padHoleColor, outlineColor, highlight, outline) {
   if (highlight) {
     // draw bounding box
@@ -406,74 +408,94 @@ function drawEdgeCuts(canvas, scalefactor) {
   }
 }
 
-function drawPins(canvas, layer) {
+function drawPins(canvas, layer, highlight) {
+  if (!highlight) {
+    // Background "pins", ie. pads, are already drawn by drawFootprints()
+    return;
+  }
+
   var style = getComputedStyle(topmostdiv);
-  var padColor = style.getPropertyValue('--pad-color-highlight');
-  var padHoleColor = style.getPropertyValue('--pad-hole-color');
   var ctx = canvas.getContext("2d");
 
   var highlight_list = [];
   if (current_selection.type === "pin") {
-    highlight_list.push(current_selection.val);
+    highlight_list.push({
+      "val": current_selection.val,
+      "color": style.getPropertyValue('--pad-color-highlight')
+    });
   } else {
-    for (let selection of tool_selections) {
-      if (selection.type === "pin") {
-        highlight_list.push(selection.val);
+    for (let probe_name in probes) {
+      let probe_info = probes[probe_name];
+      if (probe_info.selection && probe_info.selection.type == "pin") {
+        highlight_list.push({
+          "val": probe_info.selection.val,
+          "color": probe_info.color.sel
+        });
       }
     }
   }
 
-  for (let pinidx of highlight_list) {
-    var pin = pindict[pinidx];
+  for (let highlight of highlight_list) {
+    let pinidx = highlight.val;
+    let pin = pindict[pinidx];
     if (pin == undefined) {
       logerr(`highlighted pin ${pinidx} is not in pindict`);
       return;
     }
     // Trusting that every pin in pindict has a corresponding comp with a valid refid
-    var pads = pcbdata.footprints[ref_to_id[pin.ref]].pads;
-    var padDrawn = false;
-    for (var pad of pads) {
+    let pads = pcbdata.footprints[ref_to_id[pin.ref]].pads;
+    let padDrawn = false;
+    for (let pad of pads) {
       // padname should match pin.num, not pin.name
       if (pad.padname == pin.num && pad.layers.includes(layer)) {
-        drawPad(ctx, pad, padColor, false);
+        drawPad(ctx, pad, highlight.color, false);
         padDrawn = true;
       }
     }
     if (padDrawn && ibom_settings.renderPads) {
       // redraw all pad holes because some pads may overlap
-      for (var pad of pads) {
-        drawPadHole(ctx, pad, padHoleColor);
+      for (let pad of pads) {
+        drawPadHole(ctx, pad, style.getPropertyValue('--pad-hole-color'));
       }
     }
   }
 }
 
 function drawFootprints(canvas, layer, scalefactor, highlight) {
-  var highlight_list = [];
-  if (current_selection.type === "comp") {
-    highlight_list.push(current_selection.val);
-  } else {
-    for (let selection of tool_selections) {
-      if (selection.type === "comp") {
-        highlight_list.push(selection.val);
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  ctx.lineWidth = 3 / scalefactor;
+
+  if (highlight) {
+    var highlight_list = [];
+    if (current_selection.type == "comp") {
+      highlight_list.push({
+        "val": current_selection.val,
+        "color": style.getPropertyValue('--pad-color-highlight')
+      });
+    } else {
+      for (let probe_name in probes) {
+        let probe_info = probes[probe_name];
+        if (probe_info.selection && probe_info.selection.type == "comp") {
+          highlight_list.push({
+            "val": probe_info.selection.val,
+            "color": probe_info.color.sel
+          });
+        }
       }
     }
-  }
-  var ctx = canvas.getContext("2d");
-  ctx.lineWidth = 3 / scalefactor;
-  var style = getComputedStyle(topmostdiv);
-  var padColor = style.getPropertyValue('--pad-color');
-  var padHoleColor = style.getPropertyValue('--pad-hole-color');
-  var outlineColor = style.getPropertyValue('--pin1-outline-color');
-  if (highlight) {
-    padColor = style.getPropertyValue('--pad-color-highlight');
-    outlineColor = style.getPropertyValue('--pin1-outline-color-highlight');
-  }
-  for (var i = 0; i < pcbdata.footprints.length; i++) {
-    var mod = pcbdata.footprints[i];
-    var outline = ibom_settings.renderDnpOutline && pcbdata.bom.skipped.includes(i);
-    if (!highlight || highlight_list.includes(i)) {
-      drawFootprint(ctx, layer, scalefactor, mod, padColor, padHoleColor, outlineColor, highlight, outline);
+
+    for (let highlight_info of highlight_list) {
+      drawFootprint(ctx, layer, scalefactor, pcbdata.footprints[highlight_info.val],
+        highlight_info.color, style.getPropertyValue('--pad-hole-color'),
+        null, highlight, false);
+    }
+  } else {
+    for (let footprint of pcbdata.footprints) {
+      drawFootprint(ctx, layer, scalefactor, footprint,
+        style.getPropertyValue('--pad-color'), style.getPropertyValue('--pad-hole-color'),
+        null, highlight, false);
     }
   }
 }
@@ -491,13 +513,18 @@ function drawBgLayer(layername, canvas, layer, scalefactor, edgeColor, polygonCo
   }
 }
 
-function drawTracks(canvas, layer, color, highlight) {
+function drawTracks(canvas, layer, color, highlight, highlight_dict) {
   ctx = canvas.getContext("2d");
   ctx.strokeStyle = color;
   ctx.lineCap = "round";
   for (var track of pcbdata.tracks[layer]) {
-    // Note: if highlight is true, then current_selection is guaranteed to be a net
-    if (highlight && current_selection.val != track.net) continue;
+    if (highlight) {
+      if (track.net in highlight_dict) {
+        ctx.strokeStyle = highlight_dict[track.net].track
+      } else {
+        continue;
+      }
+    }
     ctx.lineWidth = track.width;
     ctx.beginPath();
     if ('radius' in track) {
@@ -514,17 +541,23 @@ function drawTracks(canvas, layer, color, highlight) {
   }
 }
 
-function drawZones(canvas, layer, color, highlight) {
+function drawZones(canvas, layer, color, highlight, highlight_dict) {
   ctx = canvas.getContext("2d");
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineJoin = "round";
   for (var zone of pcbdata.zones[layer]) {
+    if (highlight) {
+      if (zone.net in highlight_dict) {
+        ctx.strokeStyle = highlight_dict[zone.net].zone;
+        ctx.fillStyle = highlight_dict[zone.net].zone;
+      } else {
+        continue;
+      }
+    }
     if (!zone.path2d) {
       zone.path2d = getPolygonsPath(zone);
     }
-    // Note: if highlight is true, then current_selection is guaranteed to be a net
-    if (highlight && current_selection.val != zone.net) continue;
     ctx.fill(zone.path2d);
     if (zone.width > 0) {
       ctx.lineWidth = zone.width;
@@ -548,32 +581,50 @@ function clearCanvas(canvas, color = null) {
 
 function drawNets(canvas, layer, highlight) {
   var style = getComputedStyle(topmostdiv);
+  var ctx = canvas.getContext("2d");
+
+  var highlight_dict = {};
+  if (highlight) {
+    if (current_selection.type == "net") {
+      highlight_dict[current_selection.val] = {
+        "pad": style.getPropertyValue('--pad-color-highlight'),
+        "track": style.getPropertyValue("--track-color-highlight"),
+        "zone": style.getPropertyValue("--zone-color-highlight")
+      }
+    } else {
+      for (let probe_name in probes) {
+        let probe_info = probes[probe_name];
+        if (probe_info.selection && probe_info.selection.type == "net") {
+          highlight_dict[probe_info.selection.val] = {
+            "pad": probe_info.color.sel,
+            "track": probe_info.color.sel,
+            "zone": probe_info.color.zone
+          }
+        }
+      }
+    }
+  }
+
   if (ibom_settings.renderTracks) {
-    var trackColor = style.getPropertyValue(highlight ? '--track-color-highlight' : '--track-color');
-    drawTracks(canvas, layer, trackColor, highlight);
+    drawTracks(canvas, layer, style.getPropertyValue("--track-color"), highlight, highlight_dict);
   }
   if (ibom_settings.renderZones) {
-    var zoneColor = style.getPropertyValue(highlight ? '--zone-color-highlight' : '--zone-color');
-    drawZones(canvas, layer, zoneColor, highlight);
+    drawZones(canvas, layer, style.getPropertyValue("--zone-color"), highlight, highlight_dict);
   }
-  if (highlight && ibom_settings.renderPads) {
-    var padColor = style.getPropertyValue('--pad-color-highlight');
-    var padHoleColor = style.getPropertyValue('--pad-hole-color');
-    var ctx = canvas.getContext("2d");
+  if (highlight) {
     for (var footprint of pcbdata.footprints) {
       // draw pads
       var padDrawn = false;
       for (var pad of footprint.pads) {
-        if (current_selection.val != pad.net) continue;
-        if (pad.layers.includes(layer)) {
-          drawPad(ctx, pad, padColor, false);
+        if (pad.net in highlight_dict && pad.layers.includes(layer)) {
+          drawPad(ctx, pad, highlight_dict[pad.net].pad, false);
           padDrawn = true;
         }
       }
-      if (padDrawn) {
+      if (padDrawn && ibom_settings.renderPads) {
         // redraw all pad holes because some pads may overlap
         for (var pad of footprint.pads) {
-          drawPadHole(ctx, pad, padHoleColor);
+          drawPadHole(ctx, pad, style.getPropertyValue('--pad-hole-color'));
         }
       }
     }
@@ -588,8 +639,7 @@ function drawBackground(canvasdict, clear = true) {
   }
 
   drawNets(canvasdict.bg, canvasdict.layer, false);
-  drawFootprints(canvasdict.bg, canvasdict.layer,
-    canvasdict.transform.s * canvasdict.transform.zoom, false);
+  drawFootprints(canvasdict.bg, canvasdict.layer, canvasdict.transform.s * canvasdict.transform.zoom, false);
 
   if (ibom_settings.renderEdgeCuts) {
     drawEdgeCuts(canvasdict.bg, canvasdict.transform.s);
@@ -619,17 +669,29 @@ function drawBackground(canvasdict, clear = true) {
 function prepareCanvas(canvas, flip, transform, rotate) {
   var ctx = canvas.getContext("2d");
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  var fontsize = 1.55;
-  ctx.scale(transform.zoom, transform.zoom);
-  ctx.translate(transform.panx, transform.pany);
-  if (flip) {
-    ctx.scale(-1, 1);
+  if (IS_PROJECTOR) {
+    ctx.scale(transform.zoom, transform.zoom);
+    ctx.translate(transform.panx, transform.pany);
+    ctx.translate(rotation_center.x, rotation_center.y);
+    if (rotate) {
+      ctx.rotate(deg2rad(ibom_settings.boardRotation));
+    }
+    ctx.translate(-rotation_center.x, -rotation_center.y);
+    if (flip) {
+      ctx.scale(-1, 1);
+    }
+  } else {
+    ctx.scale(transform.zoom, transform.zoom);
+    ctx.translate(transform.panx, transform.pany);
+    if (flip) {
+      ctx.scale(-1, 1);
+    }
+    ctx.translate(transform.x, transform.y);
+    if (rotate) {
+      ctx.rotate(deg2rad(ibom_settings.boardRotation));
+    }
+    ctx.scale(transform.s, transform.s);
   }
-  ctx.translate(transform.x, transform.y);
-  if (rotate) {
-    ctx.rotate(deg2rad(ibom_settings.boardRotation));
-  }
-  ctx.scale(transform.s, transform.s);
 }
 
 function prepareLayer(canvasdict) {
@@ -699,7 +761,7 @@ function recalcLayerScale(layerdict, width, height, rotate) {
     }
     layerdict.transform.y = -((bbox.maxy + bbox.miny) * scalefactor - height) * 0.5;
   }
-  for (var c of ["bg", "fab", "silk", "highlight"]) {
+  for (var c of ["bg", "fab", "silk", "highlight", "anno"]) {
     canvas = layerdict[c];
     if (canvas) {
       canvas.width = width;
@@ -721,6 +783,8 @@ function redrawCanvas(layerdict) {
     prepareLayer(layerdict);
     drawBackground(layerdict);
     drawHighlightsOnLayer(layerdict);
+    drawAnnotationsOnLayer(layerdict);
+    prepareLayer(layerdict)
   }
 }
 
@@ -773,6 +837,8 @@ function resetTransform(layerdict) {
 function drawHighlights() {
   drawHighlightsOnLayer(allcanvas.front);
   drawHighlightsOnLayer(allcanvas.back);
+  drawAnnotationsOnLayer(allcanvas.front);
+  drawAnnotationsOnLayer(allcanvas.back);
 }
 // ----- End of layout render functions ----- //
 
@@ -1016,6 +1082,7 @@ function initLayout() {
       fab: document.getElementById("F_fab"),
       silk: document.getElementById("F_slk"),
       highlight: document.getElementById("F_hl"),
+      anno: document.getElementById("F_an"),
       layer: "F",
     },
     back: {
@@ -1033,6 +1100,7 @@ function initLayout() {
       fab: document.getElementById("B_fab"),
       silk: document.getElementById("B_slk"),
       highlight: document.getElementById("B_hl"),
+      anno: document.getElementById("B_an"),
       layer: "B",
     }
   };
@@ -1092,41 +1160,39 @@ function initMouseHandlers() {
   if (clear) {
     clearCanvas(canvasdict.highlight);
   }
-  if (current_selection.type === "comp") {
-    drawFootprints(canvasdict.highlight, canvasdict.layer,
-      canvasdict.transform.s * canvasdict.transform.zoom, true);
-  }
-  if (current_selection.type === "pin") {
-    drawPins(canvasdict.highlight, canvasdict.layer);
-  }
-  if (current_selection.type === "net") {
-    drawNets(canvasdict.highlight, canvasdict.layer, true);
-  }
+
+  drawNets(canvasdict.highlight, canvasdict.layer, true);
+  drawFootprints(canvasdict.highlight, canvasdict.layer, canvasdict.transform.s * canvasdict.transform.zoom, true);
+  drawPins(canvasdict.highlight, canvasdict.layer, true);
 
   if (draw_crosshair) {
     drawCrosshair(canvasdict);
   }
-  if (tool_selections.length > 0) {
-    drawToolSelections(canvasdict);
-  }
 
-  if (udp_selection !== null) {
-    if (probe_crosshair) {
-      crosshairAtPoint(canvasdict, udp_selection, PROBE_COLOR);
-    } else {
-      circleAtPoint(canvasdict, udp_selection, PROBE_COLOR, 6);
-    }
-  }
+  drawToolLocations(canvasdict);
 
-  if (udp_grey !== null) {
-    circleAtPoint(canvasdict, udp_grey, "green", 6);
+  // if (IS_PROJECTOR) {
+  //   drawFPS(canvasdict);
+  //   drawCurrentSelection(canvasdict);
+  //   if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
+  //      drawMultiMenu(canvasdict, multimenu_active.hits);
+  //   }
+  // }
+
+}
+
+function drawAnnotationsOnLayer(canvasdict, clear=true) {
+  if (clear) {
+    clearCanvas(canvasdict.anno);
   }
 
   if (IS_PROJECTOR) {
-    drawFPS(allcanvas.front);
-  }
-  if (multimenu_active !== null && canvasdict.layer == multimenu_active.layer) {
-    drawMultiMenu(canvasdict, multimenu_active.hits)
+    drawFPS(canvasdict);
+    drawCurrentSelection(canvasdict);
+    if (multimenu_active !== null && multimenu_active.layer == canvasdict.layer) {
+      var color = probes[multimenu_active.device].color.loc;
+      drawMultiMenu(canvasdict, multimenu_active.hits, color);
+    }
   }
 }
 
@@ -1232,11 +1298,15 @@ var r = 30;
 var t = 15;
 var l = 2;
 
-function circleAtPoint(layerdict, coords, color, radius) {
-  var s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
-  s = 1 / layerdict.transform.zoom;
-
-  var canvas = layerdict.highlight;
+function circleAtPoint(layerdict, coords, color, radius, anno=false) {
+  var canvas, s;
+  if (anno) {
+    canvas = layerdict.anno;
+    s = 1;
+  } else {
+    canvas = layerdict.highlight;
+    s = 1 / (layerdict.transform.s * layerdict.transform.zoom);
+  }
   var style = getComputedStyle(topmostdiv);
   var ctx = canvas.getContext("2d");
 
@@ -1252,6 +1322,16 @@ function circleAtPoint(layerdict, coords, color, radius) {
 function crosshairAtPoint(layerdict, coords, color) {
   box = [coords.x, coords.y, coords.x, coords.y];
   crosshairOnBox(layerdict, box, color);
+}
+
+function drawToolLocations(layerdict) {
+  var radius = IS_PROJECTOR ? 6 : 1;
+  for (let probe_name in probes) {
+    let probe_info = probes[probe_name];
+    if (probe_info.location !== null) {
+      circleAtPoint(layerdict, probe_info.location, probe_info.color.loc, radius);
+    }
+  }
 }
 
 function toolIconAtPoint(layerdict, coords, color) {
@@ -1283,22 +1363,9 @@ function boxFromPoint(coords, size=1) {
   return [coords.x - size / 2, coords.y - size / 2, coords.x + size / 2, coords.y + size / 2];
 }
 
-function drawToolSelections(layerdict) {
-  for (let selection of tool_selections) {
-    if (selection.coords.layer == layerdict.layer) {
-      if (settings["tool-selection-display"] == "xhair") {
-        crosshairOnBox(layerdict, boxFromPoint(selection.coords), selection.color);
-      } else {
-        toolIconAtPoint(layerdict, selection.coords, selection.color);
-      }
-    }
-  }
-}
-
 
 const times = [];
 let fps;
-
 function refreshLoop() {
   window.requestAnimationFrame(() => {
     const now = performance.now();
@@ -1313,15 +1380,26 @@ function refreshLoop() {
 refreshLoop();
 
 function drawFPS(layerdict) {
-  var canvas = layerdict.highlight;
+  const fontsize = 40;
+  const padding = 20;
+  const textcolor = "white";
+
+  if (!IS_PROJECTOR) {
+    return;
+  }
+  var canvas = layerdict.anno;
   var ctx = canvas.getContext("2d");
-  ctx.font = "10px sans-serif";
-  ctx.fillStyle = "black";
+  var style = getComputedStyle(topmostdiv);
+
+  ctx.fillStyle = style.getPropertyValue("background-color");
   ctx.beginPath();
-  ctx.rect(20, 10, 40, 16);
+  ctx.rect(padding, padding, fontsize * 4, fontsize * 1.5);
   ctx.fill();
-  ctx.fillStyle = "white";
-  ctx.fillText(`FPS: ${fps}`, 20, 20);
+
+
+  ctx.font = `${fontsize}px sans-serif`;
+  ctx.fillStyle = textcolor;
+  ctx.fillText(`FPS: ${fps}`, padding, padding + fontsize);
 }
 
 var fps_interval = window.setInterval(() => {
@@ -1332,29 +1410,84 @@ var fps_interval = window.setInterval(() => {
   }
 }, 500)
 
-function drawMultiMenu(canvasdict, hits) {
-  if (hits.length > 4) {
-    console.log("Error: too many hits")
-    return;
-  }
-  var canvas = canvasdict.highlight;
+function drawCurrentSelection(canvasdict) {
   var style = getComputedStyle(topmostdiv);
+  var ctx = canvasdict.anno.getContext("2d");
+
+  var fontsize = 40;
+  var origin = {"x": 20, "y": 120}
+
+  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.font = `${fontsize}px sans-serif`;
+
+  var mode_text = "Selection";
+  if (active_session_is_recording) {
+    mode_text = "Debugging"
+  }
+
+  var textpt = {"x": origin.x, "y": origin.y}
+  ctx.fillText(`Mode: ${mode_text}`, textpt.x, textpt.y);
+  textpt.y += fontsize * 1.25;
+  if (!active_session_is_recording) {
+    ctx.fillText(`Current Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
+  } else {
+    ctx.fillText(`Pos Probe: ${getElementName(probes.pos.selection)}`, textpt.x, textpt.y);
+    textpt.y += fontsize * 1.25;
+    ctx.fillText(`Neg Probe: ${getElementName(probes.neg.selection)}`, textpt.x, textpt.y);
+  }
+}
+
+function drawMultiMenu(canvasdict, hits, color="blue") {
+  // Config variables for the multi menu
+  var fontsize = 40;
+  var row_padding = 10;
+  var anchor = {"x": 1000, "y": 20}
+  var row_width = 300;
+
+  var style = getComputedStyle(topmostdiv);
+  var canvas = canvasdict.anno;
   var ctx = canvas.getContext("2d");
 
-  var flip = canvasdict.layer === "B" ? -1 : 1;
+  // ceil not floor so that if we have an odd number, the top has more
+  var midpoint = Math.ceil(hits.length / 2);
 
-  var centerpoint = [50, 100]
-  var offset_len = 25
-  var offset_deltas = [[-offset_len, 0], [0, -offset_len], [offset_len, 0], [0, offset_len]]
+  var origin = {
+    "x": anchor.x + row_width / 2,
+    "y": anchor.y + (fontsize + row_padding) * (midpoint + 0.5)
+  }
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.strokeStyle = style.getPropertyValue('--pad-color-highlight');
-  ctx.font = "4px sans-serif";
+  ctx.lineWidth = 2;
+  ctx.font = `${fontsize}px sans-serif`;
 
-  for (let i in hits) {
-    let hit = hits[i];
-    let text = getElementName(hit);
-    ctx.fillText(text, centerpoint[0] + offset_deltas[i][0], centerpoint[1] + offset_deltas[i][1], 50)
+  let point = {"x": anchor.x, "y": anchor.y};
+  drawHLine(ctx, point, row_width);
+  for (let i = 0; i < hits.length; i++) {
+    if (i == midpoint) {
+      // If we're at the midpoint of the list, move us down one extra row
+      point.y += fontsize + row_padding;
+      drawHLine(ctx, point, row_width);
+    }
+    point.y += fontsize;
+    let tpoint = {"x": point.x + row_padding, "y": point.y}
+    ctx.fillText(getElementName(hits[i]), tpoint.x, tpoint.y, row_width - row_padding)
+    point.y += row_padding;
+    drawHLine(ctx, point, row_width);
   }
+
+  var endpos = {
+    "x": origin.x,
+    "y": origin.y + (fontsize + row_padding) * probe_end_delta
+  }
+  circleAtPoint(canvasdict, {"x": endpos.x, "y": endpos.y}, color, 10, true);
+}
+
+function drawHLine(ctx, point, len) {
+  var end = {"x": point.x + len, "y": point.y}
+  ctx.beginPath();
+  ctx.moveTo(point.x, point.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
 }
 

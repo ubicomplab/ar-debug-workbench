@@ -121,21 +121,21 @@
                         </div>
                         <div class="settings-item slider-item">
                             <span>Translate X</span>
-                            <input type="text" id="settings-projector-tx-label" value="0" />mm
+                            <input type="text" id="settings-projector-tx-label" value="0.0" />mm
                             <br />
-                            <input type="range" id="settings-projector-tx" value="0" min="-400" max="400" />
+                            <input type="range" id="settings-projector-tx" value="0" min="-4000" max="4000" />
                         </div>
                         <div class="settings-item slider-item">
                             <span>Translate Y</span>
-                            <input type="text" id="settings-projector-ty-label" value="0" />mm
+                            <input type="text" id="settings-projector-ty-label" value="0.0" />mm
                             <br />
-                            <input type="range" id="settings-projector-ty" value="0" min="-400" max="400" />
+                            <input type="range" id="settings-projector-ty" value="0" min="-4000" max="4000" />
                         </div>
                         <div class="settings-item slider-item">
                             <span>Rotation</span>
-                            <input type="text" id="settings-projector-rotation-label" value="0" />&deg;
+                            <input type="text" id="settings-projector-rotation-label" value="0.0" />&deg;
                             <br />
-                            <input type="range" id="settings-projector-rotation" value="0" min="-180" max="180" />
+                            <input type="range" id="settings-projector-rotation" value="0" min="-1800" max="1800" />
                         </div>
                         <div class="settings-item slider-item">
                             <span>Scale</span>
@@ -168,6 +168,7 @@
                             <canvas id="F_fab" style="z-index: 11"></canvas>
                             <canvas id="F_slk" style="z-index: 12"></canvas>
                             <canvas id="F_hl" style="z-index: 13"></canvas>
+                            <canvas id="F_an" style="z-index: 14"></canvas>
                         </div>
                     </div>
                     <div id="back-canvas" touch-action="none">
@@ -176,6 +177,7 @@
                             <canvas id="B_fab" style="z-index: 11"></canvas>
                             <canvas id="B_slk" style="z-index: 12"></canvas>
                             <canvas id="B_hl" style="z-index: 13"></canvas>
+                            <canvas id="B_an" style="z-index: 14"></canvas>
                         </div>
                     </div>
                 </div>

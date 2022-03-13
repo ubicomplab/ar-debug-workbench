@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>AR Debug Workbench Study Control Panel</title>
+    <link rel="stylesheet" type="text/css" href="{{css}}">
+    <link rel="shortcut icon" type="image/png" href="{{icon}}">
+</head>
+
+<body style="padding:20px;">
+    <h2>Study Control Panel</h2>
+
+    <h4>Task</h4>
+    <div class="study-buttons">
+        <div id="task-off" class="button selected">Off</div>
+        <div id="task-1a" class="button">Task 1A</div>
+        <div id="task-1b" class="button">Task 1B</div>
+        <div id="task-2" class="button">Task 2</div>
+    </div>
+
+    <h4>Current State</h4>
+    <div class="study-buttons">
+        <div id="step" class="text">Step N/A<span id="status"></span></div>
+        <div id="next" class="button">Next</div>
+    </div>
+    <div class="study-buttons">
+        <div class="text">BoardViz: <span id="boardviz">N/A</span></div>
+    </div>
+    <div class="study-buttons">
+        <div class="text">Current Component:&nbsp;</div>
+        <div id="comp" class="text">N/A</div>
+    </div>
+
+    <h4>Custom</h4>
+    <div class="study-buttons">
+        <input type="text" id="custom-input"/>
+        <div id="custom-btn" class="button">Log</div>
+    </div>
+    <div class="study-buttons">
+        <div class="text">Timer: <span id="timer-text">00:00.000</span></div>
+        <div id="timer-btn" class="button">Start</div>
+    </div>
+
+    <script src="{{socketiojs}}"></script>
+    <script src="{{js}}"></script>
+</body>
+
+</html>
