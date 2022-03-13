@@ -23,7 +23,7 @@
             .then(response => {
                 response.text().then(t => {measurement_text_banner.innerHTML = t})
             });
-         }, 600);
+         }, measurement_refresh_rate);
 
         $(function() {
           $('a#voltage_mode').on('click', function(e) {
