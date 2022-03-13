@@ -1063,12 +1063,11 @@ def new_history(dwell_time, dim=2):
 def update_boardpos(x, y, r):
     global board_pos, projector_calibration
 
-    # magic numbers, TODO move to config.ini
-    # also r is very wrong atm
+    boardname = config.get("Study", "BoardName")
     boardpos_offset = {
-        "x": 588.26,
-        "y": -422.60,
-        "r": 32.1183
+        "x": config.get(boardname, "BoardposOffsetX"),
+        "y": config.get(boardname, "BoardposOffsetY"),
+        "r": config.get(boardname, "BoardposOffsetR"),
     }
 
     # projector_calibration is now adjustment for observed board position
@@ -1180,6 +1179,7 @@ def listen_udp():
             "tippos_layout": {"x": probe_tip_layout[0], "y": probe_tip_layout[1]},
             "endpos_delta": probe_end_delta,
             "greytip": {"x": grey_tip_layout[0], "y": grey_tip_layout[1]},
+            "boardpos": {"x": board_update[0], "y": board_update[1], "r": board_rot},
             # "tipdwell": tip_dwell,
             # "enddwell": end_dwell
         })

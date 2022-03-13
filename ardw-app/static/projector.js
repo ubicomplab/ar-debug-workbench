@@ -3,13 +3,6 @@
 // It also contains some custom functions for the projector page,
 // mainly for handling socket selection events
 
-/** Magic numbers for the offset between optitrack boardpos and our render */
-var boardpos_offset = {
-    "x": 588.26,
-    "y": -422.60,
-    "r": -132.44
-}
-
 // Set to true so that functions in render.js ignore the resize transform (s/x/y)
 IS_PROJECTOR = true;
 
@@ -91,6 +84,34 @@ function projectorDeselectAll() {
   drawHighlights();
 }
 
+var counter = 0;
+var n = 200;
+var sums = {
+  "x": 0,
+  "y": 0,
+  "r": 0,
+}
+function calcBoardOffset(boardpos) {
+  if (counter < n) {
+    sums.x += boardpos.x;
+    sums.y += boardpos.y;
+    sums.r += boardpos.z
+  } else if (counter == n) {
+    sums.x /= n;
+    sums.y /= n;
+    sums.r /= n;
+
+    console.log(`transform is x=${transform.tx.toFixed(4)}, y=${transform.ty.toFixed(4)}, r=${transform.r.toFixed(4)}`);
+    console.log(`boardpos was x=${sums.x.toFixed(4)}, y=${sums.y.toFixed(4)}, r=${sums.r.toFixed(4)}`);
+
+    var offx = -transform.tx * transform.z + sums.x;
+    var offy = transform.ty * transform.z + sums.y;
+    var offr = -transform.r - sums.r;
+    console.log(`theoretical offset is x=${offx.toFixed(4)}, y=${offy.toFixed(4)}, r=${offr.toFixed(4)}`)
+  }
+  counter++;
+}
+
 /** Initializes all socket listeners for the projector */
 function initSocket() {
   socket = io();
@@ -152,6 +173,8 @@ function initSocket() {
     probes["neg"].location = data["greytip"];
     probe_end_delta = data["endpos_delta"];
     drawHighlights();
+
+    calcBoardOffset(data["boardpos"]);
   })
   socket.on("tool-selection", (data) => {
     if (data.selection == "multi") {
