@@ -71,18 +71,21 @@ socket.on("study-event", (data) => {
                 step_text.innerText = "Step N/A";
                 status_text.innerText = "";
             } else {
-                step_text.innerText = `Ready to Start`;
+                step_text.innerText = "Ready to Start";
+                next_button.innerText = "Start";
                 status_text.innerText = "";
             }
             break;
         case "highlight":
             step_text.innerText = `Step ${data.step + 1}`;
+            next_button.innerText = "Skip";
             status_text.innerText = "In-Progress";
             boardviz_text.innerText = data.boardviz ? "On" : "Off";
             comp_text.innerText = data.ref;
             break;
         case "success":
             status_text.innerText = "Complete";
+            next_button.innerText = "Next";
             break;
         case "timer":
             timer_on = data.on;

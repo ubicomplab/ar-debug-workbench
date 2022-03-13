@@ -1136,7 +1136,9 @@ def listen_udp():
         update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
         update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
         if study_state["active"]:
-            _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=study_selection)
+            if not study_state["step_done"]:
+                # we only actually want to check for events if we are actively doing a step
+                _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=study_selection)
         elif active_session_is_recording:
             _, _ = check_probe_events("pos", dmm_probe_history["pos"], selection_fn=dmm_selection)
             _, _ = check_probe_events("neg", dmm_probe_history["neg"], selection_fn=dmm_selection)
@@ -1156,7 +1158,7 @@ def listen_udp():
                 probe_end_delta = board_multimenu["end-origin"][1] - red_end[1]
             else:
                 probe_end_delta = board_multimenu["end-origin"][1] - grey_end[1]
-            probe_end_delta /= config.getfloat("Optitrack", "MultiRowHeight")
+            probe_end_delta /= config.getfloat("Optitrack", "MultiMenuSensitivity")
         else:
             probe_end_delta = 0
 
