@@ -6,6 +6,7 @@ import math
 import pickle
 import os
 import pygame
+from scipy.spatial.transform import Rotation as R
 import matplotlib.cm as cm
 from matplotlib.widgets import Button
 
@@ -243,6 +244,13 @@ def get_gray_probe_data(data):
 @prt.transformer
 def get_board_position(data):
     return data[6:9]
+
+
+@prt.transformer
+def get_board_rot(data):
+    data = R.from_quat(data['board']['rot'])
+
+    return data.as_euler('zxy', degrees=True)
 
 
 def get_red_pixel_point(data, calibrate=False):
