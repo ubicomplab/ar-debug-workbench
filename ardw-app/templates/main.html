@@ -15,10 +15,10 @@
             </div>
             <div id="menubar-right">
                 <!-- tools buttons are hidden for study (TODO remove)-->
-                <div id="tools" style="display:none;">
-                    <div id="tools-ptr" class="button tool-button" onclick="toolButton('ptr')">+ PTR</div>
-                    <div id="tools-dmm" class="button tool-button" onclick="toolButton('dmm')">+ DMM</div>
-                    <div id="tools-osc" class="button tool-button" onclick="toolButton('osc')">+ OSC</div>
+                <div id="tools">
+                    <div id="tools-ptr" class="button tool-button hidden" onclick="toolButton('ptr')">+ PTR</div>
+                    <div id="tools-dmm" class="button tool-button hidden" onclick="toolButton('dmm')">+ DMM</div>
+                    <div id="tools-osc" class="button tool-button hidden" onclick="toolButton('osc')">+ OSC</div>
                     <div id="open-debug" class="button tool-button">
                         <span>Show Debug Panel</span>
                         <div id="record-icon" class="hidden"></div>
@@ -208,6 +208,15 @@
                     <div id="sidebar-notes">
                         Notes:&nbsp;
                         <textarea name="sidebar-notes" rows="3"></textarea>
+                    </div>
+                    <div id="sidebar-dmm-control">
+                        DMM Instrument Panel
+                        <div id="sidebar-dmm-buttons">
+                            <div class="selected">Voltage</div>
+                            <div class="">Resistance</div>
+                            <div class="">Diode</div>
+                        </div>
+                        <span id="sidebar-dmm-value">--------</span>
                     </div>
                     <div id="sidebar-cards">
                         <div id="sidebar-custom-dmm" class="sidebar-card hidden">

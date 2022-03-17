@@ -528,6 +528,28 @@ div.canvas-container>canvas {
     margin-top: 4px;
 }
 
+#sidebar-dmm-buttons {
+    display: flex;
+    flex-direction: row;
+}
+
+#sidebar-dmm-buttons > div {
+    background-color: #ddd;
+    margin: 5px;
+    padding: 3px 5px;
+    border-radius: 4px;
+    border: 1px solid #000;
+    cursor: pointer;
+}
+
+#sidebar-dmm-buttons > div:hover {
+    background-color: #ccc;
+}
+
+#sidebar-dmm-buttons > div.selected, #sidebar-dmm-buttons > div.selected:hover {
+    background-color: rgba(0, 123, 255, 0.5);
+}
+
 #sidebar-cards {
     height: 1px;
     /* this height is overridden by flex-grow, but necessary for it to work */

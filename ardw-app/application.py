@@ -1,5 +1,5 @@
 from flask import Flask
-from flask import render_template, send_from_directory
+from flask import render_template, send_from_directory, Response
 from flask.helpers import url_for
 from flask_socketio import SocketIO
 from flask_socketio import emit
@@ -189,7 +189,8 @@ def get_datadicts():
 
 @app.route("/queryValue/<function>")
 def query_value(instrumentType="dmm", function="no_function"):
-    return queryValue(instrumentType, function)
+    return Response("404", mimetype='text')
+    # return queryValue(instrumentType, function)
 
 
 @app.route("/instrument_panel")
@@ -288,7 +289,8 @@ def handle_connect():
             "neg": [config.get("Rendering", "DmmNegDotColor"), config.get("Rendering", "DmmNegSelectionColor")],
             "osc": [config.get("Rendering", "OscDotColor"), config.get("Rendering", "OscSelectionColor")],
         },
-        "track_board": config.getboolean("Dev", "TrackBoard")
+        "track_board": config.getboolean("Dev", "TrackBoard"),
+        "dmmpanel": config.getint("Study", "DmmPanelRefreshFrequency"),
     })
 
 
@@ -514,6 +516,19 @@ def handle_study_event(data):
         socketio.emit("study-event", {"event": "timer", "on": study_timer["on"], "time": display_time})
 
 
+@socketio.on("dmm")
+def handle_dmm(data):
+    global dmm_mode
+    if "mode" in data:
+        # client changed mode
+        dmm_mode = data["mode"]
+        socketio.emit("dmm", data)
+    else:
+        # client is requesting current value
+        unit, val = measure_dmm()
+        socketio.emit("dmm", {"unit": unit, "val": val})
+
+
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
@@ -736,18 +751,16 @@ def make_selection(new_selection):
 # wrapper for getting DMM measurement from SCPI
 # returns tuple of unit, value
 def measure_dmm():
-    logging.info("Making a voltage DMM measurement")
-    value = queryValue("dmm", "voltage")
-    #logging.error("measure_dmm() not yet implemented")
-    return 'volts', value
+    global dmm_mode
+    value = queryValue("dmm", dmm_mode)
+    return dmm_mode, value
 
 
 # wrapper for getting oscilloscope measurement from SCPI
 # returns tuple of unit, value
 def measure_osc():
-    logging.info("Making a osc frequency measurement")
     value = queryValue("osc","frequency")
-    #logging.error("measure_osc() not yet implemented")
+    logging.error("measure_osc() not yet implemented")
     return None, None
 
 
@@ -778,11 +791,11 @@ def make_tool_selection(device, new_selection=None):
             # record a measurement if both probes are set
             if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
                 logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
-                return
                 dmm_unit, dmm_val = measure_dmm()
                 tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
                 make_tool_selection(None)
             if tool_selections["osc"] is not None:
+                return
                 osc_unit, osc_val = measure_osc()
                 tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
                 make_tool_selection(None)
@@ -1439,6 +1452,9 @@ if __name__ == "__main__":
     except KeyError:
         study_modules = []
         logging.error("Study component list contained unknown comp ref, study cannot be run")
+
+    # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
+    dmm_mode = "no_function"
 
 
     if len(sys.argv) > 1:

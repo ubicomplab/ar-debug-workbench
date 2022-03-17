@@ -111,33 +111,38 @@ def queryValue(instrumentType="dmm", function="no_function"):
 
         for attempt in range(5):
             if function == "no_function":
-                return Response("--------", mimetype='text')
+                # return Response("--------", mimetype='text')
+                return None
 
             try:
+                value = None
                 if function == "voltage":
                     value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
                     logging.info(f"Measured value = {value} VDC")
-                    return Response(str(value), mimetype='text')
+                    # return Response(str(value), mimetype='text')
 
                 if function == "resistance":
                     value = float(dmms[0].query(':MEAS:RES?'))
                     logging.info(f"Measured value = {value} ohms")
-                    return Response(str(value), mimetype='text')
+                    # return Response(str(value), mimetype='text')
 
                 if function == "diode":
                     value = float(dmms[0].query(':MEAS:RES?'))
                     logging.info(f"Measured value = {value} ohms")
-                    return Response(str(value), mimetype='text')
+                    # return Response(str(value), mimetype='text')
 
                 if function == "continuity":
                     value = float(dmms[0].query(':MEAS:CONT?'))
                     logging.info(f"Measured value = {value}")
-                    return Response(str(value), mimetype='text')
+                    # return Response(str(value), mimetype='text')
 
                 if function == "dc_current":
                     value = float(dmms[0].query(':MEAS:CURR:DC?'))
                     logging.info(f"Measured value = {value} A")
-                    return Response(str(value), mimetype='text')
+                    # return Response(str(value), mimetype='text')
+
+                if value:
+                    return value
             
             except:
                 print("Instrument can't communicate -- resetting")

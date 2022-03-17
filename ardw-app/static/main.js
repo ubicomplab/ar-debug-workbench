@@ -1173,6 +1173,17 @@ function initPage() {
   var sidebar = document.getElementById("sidebar");
   var sidebar_name = sidebar.querySelector('*[name="sidebar-name"]');
   var sidebar_notes = sidebar.querySelector('*[name="sidebar-notes"]');
+
+  var sidebar_dmm_buttons = document.getElementById("sidebar-dmm-buttons").children;
+  sidebar_dmm_buttons[0].addEventListener("click", () => {
+    socket.emit("dmm", {"mode": "voltage"});
+  });
+  sidebar_dmm_buttons[1].addEventListener("click", () => {
+    socket.emit("dmm", {"mode": "resistance"});
+  });
+  sidebar_dmm_buttons[2].addEventListener("click", () => {
+    socket.emit("dmm", {"mode": "diode"});
+  });
   
   [sidebar_name, sidebar_notes].forEach((input) => {
     input.addEventListener("focusout", () => {
@@ -1404,6 +1415,12 @@ function initSocket() {
       probes[device].color.sel = colors[1];
       probes[device].color.zone = colors[1];
     }
+
+    if (data.dmmpanel) {
+      setInterval(() => {
+        socket.emit("dmm", {})
+      }, data.dmmpanel);
+    }
   })
 
   socket.on("study-event", (data) => {
@@ -1433,6 +1450,21 @@ function initSocket() {
       default:
         console.log(data);
         break;
+    }
+  })
+
+  socket.on("dmm", (data) => {
+    if (data.mode) {
+      var sidebar_dmm_buttons = document.getElementById("sidebar-dmm-buttons").children;
+      for (let btn of sidebar_dmm_buttons) {
+        btn.classList.remove("selected");
+      }
+      if (data.mode == "voltage") sidebar_dmm_buttons[0].classList.add("selected");
+      else if (data.mode == "resistance") sidebar_dmm_buttons[1].classList.add("selected");
+      else sidebar_dmm_buttons[2].classList.add("selected");
+    } else {
+      var dmm_val = document.getElementById("sidebar-dmm-value");
+      dmm_val.innerText = data.val;
     }
   })
 }
