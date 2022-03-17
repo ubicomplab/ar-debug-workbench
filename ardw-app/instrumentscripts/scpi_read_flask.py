@@ -44,7 +44,6 @@ channel = 2
 rm = pyvisa.ResourceManager()
 resources = rm.list_resources()
 
-
 # @app.route("/")
 def index():
     return (
@@ -87,6 +86,14 @@ def initializeInstruments():
 
     # inst.write("*rst; status:preset; *cls")
 
+def releaseInstruments():
+    dmms = []
+    oscs = []
+    print("attempting to close insturments")
+    rm.close()
+    print("closed insturments")
+
+    # inst.write("*rst; status:preset; *cls")
 
 # @app.route('/voltageMode')
 # def voltageMode():
@@ -102,31 +109,51 @@ def initializeInstruments():
 def queryValue(instrumentType="dmm", function="no_function"):
     if instrumentType == "dmm":
 
-        if function == "no_function":
-            return Response("--------", mimetype='text')
+        for attempt in range(5):
+            if function == "no_function":
+                return Response("--------", mimetype='text')
 
-        if function == "voltage":
             try:
-                value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
-                logging.info(f"Measured value = {value} VDC")
-                return Response(str(value), mimetype='text')
+                if function == "voltage":
+                    value = float(dmms[0].query(':MEASure:VOLTage:DC?'))
+                    logging.info(f"Measured value = {value} VDC")
+                    return Response(str(value), mimetype='text')
+
+                if function == "resistance":
+                    value = float(dmms[0].query(':MEAS:RES?'))
+                    logging.info(f"Measured value = {value} ohms")
+                    return Response(str(value), mimetype='text')
+
+                if function == "diode":
+                    value = float(dmms[0].query(':MEAS:RES?'))
+                    logging.info(f"Measured value = {value} ohms")
+                    return Response(str(value), mimetype='text')
+
+                if function == "continuity":
+                    value = float(dmms[0].query(':MEAS:CONT?'))
+                    logging.info(f"Measured value = {value}")
+                    return Response(str(value), mimetype='text')
+
+                if function == "dc_current":
+                    value = float(dmms[0].query(':MEAS:CURR:DC?'))
+                    logging.info(f"Measured value = {value} A")
+                    return Response(str(value), mimetype='text')
+            
             except:
-                dmms[0].write("*rst; status:preset; *cls")
+                print("Instrument can't communicate -- resetting")
+                releaseInstruments()
 
-        if function == "resistance":
-            value = float(dmms[0].query(':MEAS:RES?'))
-            logging.info(f"Measured value = {value} ohms")
-            return Response(str(value), mimetype='text')
+                print("loading new pyvisa resouce manager")
+                rm = pyvisa.ResourceManager()
+                resources = rm.list_resources()
 
-        if function == "continuity":
-            value = float(dmms[0].query(':MEAS:CONT?'))
-            logging.info(f"Measured value = {value}")
-            return Response(str(value), mimetype='text')
+                print("Reinitializing...")
+                initializeInstruments()
+                print("Reinitialized...")
 
-        if function == "dc_current":
-            value = float(dmms[0].query(':MEAS:CURR:DC?'))
-            logging.info(f"Measured value = {value} A")
-            return Response(str(value), mimetype='text')
+            else:
+                break
+
 
     elif instrumentType == "osc":
         if function == "frequency":
