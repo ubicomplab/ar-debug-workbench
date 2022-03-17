@@ -68,16 +68,16 @@ socket.on("study-event", (data) => {
             }
             task_buttons[data.task].classList.add("selected");
             if (data.task == "off") {
-                step_text.innerText = "Step N/A";
+                step_text.firstChild.textContent = "Step N/A";
                 status_text.innerText = "";
             } else {
-                step_text.innerText = "Ready to Start";
+                step_text.firstChild.textContent = "Ready to Start";
                 next_button.innerText = "Start";
                 status_text.innerText = "";
             }
             break;
         case "highlight":
-            step_text.innerText = `Step ${data.step + 1}`;
+            step_text.firstChild.textContent = `Step ${data.step + 1}`;
             next_button.innerText = "Skip";
             status_text.innerText = "In-Progress";
             boardviz_text.innerText = data.boardviz ? "On" : "Off";

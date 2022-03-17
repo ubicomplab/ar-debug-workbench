@@ -14,7 +14,8 @@
                 <h1 id="projtitle"></h1>
             </div>
             <div id="menubar-right">
-                <div id="tools">
+                <!-- tools buttons are hidden for study (TODO remove)-->
+                <div id="tools" style="display:none;">
                     <div id="tools-ptr" class="button tool-button" onclick="toolButton('ptr')">+ PTR</div>
                     <div id="tools-dmm" class="button tool-button" onclick="toolButton('dmm')">+ DMM</div>
                     <div id="tools-osc" class="button tool-button" onclick="toolButton('osc')">+ OSC</div>
@@ -258,7 +259,8 @@
                 </div>
             </div>
         </div>
-        <div id="tool-popup" class="hidden">
+        <!-- tool popup is forcibly hidden for study (TODO remove)-->
+        <div id="tool-popup" class="hidden" style="display:none;">
             <span onclick="toolPopupX()">X</span>
             <div id="tool-popup-title">Adding Selection Probe</div>
             <div id="tool-popup-text">

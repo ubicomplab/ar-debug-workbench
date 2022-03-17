@@ -84,32 +84,32 @@ function projectorDeselectAll() {
   drawHighlights();
 }
 
-var counter = 0;
-var n = 200;
-var sums = {
+var boardoff_counter = 0;
+var boardoff_n = 200;
+var boardoff_sums = {
   "x": 0,
   "y": 0,
   "r": 0,
 }
 function calcBoardOffset(boardpos) {
-  if (counter < n) {
-    sums.x += boardpos.x;
-    sums.y += boardpos.y;
-    sums.r += boardpos.z
-  } else if (counter == n) {
-    sums.x /= n;
-    sums.y /= n;
-    sums.r /= n;
+  if (boardoff_counter < boardoff_n) {
+    boardoff_sums.x += boardpos.x;
+    boardoff_sums.y += boardpos.y;
+    boardoff_sums.r += boardpos.z
+  } else if (boardoff_counter == boardoff_n) {
+    boardoff_sums.x /= boardoff_n;
+    boardoff_sums.y /= boardoff_n;
+    boardoff_sums.r /= boardoff_n;
 
     console.log(`transform is x=${transform.tx.toFixed(4)}, y=${transform.ty.toFixed(4)}, r=${transform.r.toFixed(4)}`);
-    console.log(`boardpos was x=${sums.x.toFixed(4)}, y=${sums.y.toFixed(4)}, r=${sums.r.toFixed(4)}`);
+    console.log(`boardpos was x=${boardoff_sums.x.toFixed(4)}, y=${boardoff_sums.y.toFixed(4)}, r=${boardoff_sums.r.toFixed(4)}`);
 
-    var offx = -transform.tx * transform.z + sums.x;
-    var offy = transform.ty * transform.z + sums.y;
-    var offr = -transform.r - sums.r;
+    var offx = -transform.tx * transform.z + boardoff_sums.x;
+    var offy = transform.ty * transform.z + boardoff_sums.y;
+    var offr = -transform.r - boardoff_sums.r;
     console.log(`theoretical offset is x=${offx.toFixed(4)}, y=${offy.toFixed(4)}, r=${offr.toFixed(4)}`)
   }
-  counter++;
+  boardoff_counter++;
 }
 
 /** Initializes all socket listeners for the projector */
@@ -253,6 +253,18 @@ function initSocket() {
     }
   })
 }
+
+window.addEventListener("keydown", (evt) => {
+  if (evt.key == "c") {
+    console.log("Recalculating board offset");
+    boardoff_counter = 0;
+    boardoff_sums = {
+      "x": 0,
+      "y": 0,
+      "r": 0
+    }
+  }
+})
 
 
 window.onload = () => {

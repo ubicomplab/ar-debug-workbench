@@ -206,7 +206,11 @@ def instrument_panel():
 # -- socket --
 @socketio.on("connect")
 def handle_connect():
-    global active_connections, selection, projector_mode, projector_calibration, board_pos, active_session, active_session_is_recording
+    global active_connections
+    global selection
+    global projector_mode, projector_calibration, board_pos
+    global active_session, active_session_is_recording
+    global study_state, compdict
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -256,6 +260,25 @@ def handle_connect():
 
     if active_session_is_recording:
         emit("debug-session", {"event": "record", "record": "true"})
+
+    if study_state["active"]:
+        step = study_state["step"]
+        task = study_state["task"]
+        refid = study_state["current_modules"][step]
+        ref = compdict[refid]["ref"]
+
+        emit("study-event", {"event": "task", "task": task})
+        if step > -1:
+            emit("study-event", {
+                "event": "highlight",
+                "task": task,
+                "refid": refid,
+                "ref": ref,
+                "boardviz": study_state["boardviz"],
+                "step": step
+            })
+            if study_state["step_done"]:
+                emit("study-event", {"event": "success", "refid": refid, "task": task})
 
     # not sure if there's a better way to avoid spamming all clients every time one connects
     emit("config", {
@@ -424,47 +447,50 @@ def handle_study_event(data):
 
         socketio.emit("study-event", data)
     elif data["event"] == "step":
-        # only permit a step if we're actually doing a study and the participant has finished their step
-        if study_state["active"] and study_state["step_done"]:
-            study_state["step"] += 1
-            study_state["step_done"] = False
-            study_state["step_start"] = time.time()
+        if study_state["active"]:
+            # only permit a step if we're actually doing a study
 
-            step = study_state["step"]
-            task = study_state["task"]
+            if not study_state["step_done"]:
+                # step is still underway, so this is a "skip"
+                study_log("Skip")
+                study_state["step_done"] = True
+                # highlight the component as if it was successful
+                refid = study_state["current_modules"][study_state["step"]]
+                socketio.emit("study-event", {"event": "success", "refid": refid, "task": study_state["task"]})
+            else:
+                # step has been completed, so this is a "next"
+                study_state["step"] += 1
+                study_state["step_done"] = False
+                study_state["step_start"] = time.time()
 
-            if task == "1A" or task == "1B":
-                if step == 10:
-                    study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
-                elif step == 20:
-                    study_log("Finished")
-                    study_state["active"] = False
-                    study_state["task"] = None
-                    socketio.emit("study-event", {"event": "task", "task": "off"})
-                    return
-            # TODO similar check for Task 2
+                step = study_state["step"]
+                task = study_state["task"]
 
-            refid = study_state["current_modules"][step]
-            ref = compdict[refid]["ref"]
-            boardviz_text = "with" if study_state["boardviz"] else "without"
-            study_log(f"Component {ref} {boardviz_text} BoardViz")
+                if task == "1A" or task == "1B":
+                    if step == len(study_modules) / 2:
+                        study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+                    elif step == len(study_modules):
+                        study_log("Finished")
+                        study_state["active"] = False
+                        study_state["task"] = None
+                        socketio.emit("study-event", {"event": "task", "task": "off"})
+                        return
+                # TODO similar check for Task 2
 
-            # TODO highlight the next thing
-            highlight_data = {
-                "event": "highlight",
-                "task": task,
-                "refid": refid,
-                "ref": ref,
-                "boardviz": study_state["boardviz"],
-                "step": step
-            }
-            socketio.emit("study-event", highlight_data)
+                refid = study_state["current_modules"][step]
+                ref = compdict[refid]["ref"]
 
-            #socketio.emit("study-event", {"event": "step", "step": step})
-    elif data["event"] == "skip":
-        # TODO allow facilitator to manually skip a step that the participant fails to complete
-        logging.warning("study skip NotYetImplemented")
-        pass
+                boardviz_text = "with" if study_state["boardviz"] else "without"
+                study_log(f"Component {ref} {boardviz_text} BoardViz")
+
+                socketio.emit("study-event", {
+                    "event": "highlight",
+                    "task": task,
+                    "refid": refid,
+                    "ref": ref,
+                    "boardviz": study_state["boardviz"],
+                    "step": step
+                })
     elif data["event"] == "note":
         study_log(f"Custom note: {data['note']}")
     elif data["event"] == "select":
