@@ -102,21 +102,21 @@ var active_tool_request = false;
 var sidebar_shown = false;
 
 /** Controls size of debug session sidebar */
-sidebar_split = Split(["#display", "#sidebar"], {
+var sidebar_split = Split(["#display", "#sidebar"], {
   sizes: [100, 0],
   minSize: 0,
   gutterSize: 5,
   onDragEnd: resizeAll
 });
 /** Controls relative size of schematic and layout views */
-display_split = Split(["#schematic-div", "#layout-div"], {
+var display_split = Split(["#schematic-div", "#layout-div"], {
   sizes: [50, 50],
   minSize: 0,
   gutterSize: 5,
   onDragEnd: resizeAll
 });
 /** Controls relative size of front and back layout views */
-canvas_split = Split(["#front-canvas", "#back-canvas"], {
+var canvas_split = Split(["#front-canvas", "#back-canvas"], {
   sizes: [50, 50],
   minSize: 0,
   gutterSize: 5,
@@ -1403,6 +1403,36 @@ function initSocket() {
       probes[device].color.loc = colors[0];
       probes[device].color.sel = colors[1];
       probes[device].color.zone = colors[1];
+    }
+  })
+
+  socket.on("study-event", (data) => {
+    switch (data.event) {
+      case "task":
+        study_listening_for_1B = false;
+        deselectAll(true);
+        break;
+      case "highlight":
+        deselectAll(true);
+        if (data.task == "1A") {
+          selectComponent(data.refid);
+        } else if (data.task == "1B") {
+          if (data.boardviz) {
+            study_listening_for_1B = false;
+          } else {
+            study_listening_for_1B = true;
+            study_component = data.refid;
+          }
+        }
+        break;
+      case "success":
+        if (data.task == "1B") {
+          selectComponent(data.refid);
+        }
+        break;
+      default:
+        console.log(data);
+        break;
     }
   })
 }
