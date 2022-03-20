@@ -440,12 +440,17 @@ def handle_study_event(data):
             study_state["active"] = True
             study_state["task"] = data["task"]
 
-            shuffled = study_modules.copy()
-            np.random.shuffle(shuffled)
-            study_state["current_modules"] = shuffled
-            study_state["step"] = -1
-            study_state["step_done"] = True
-            study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
+            if data["task"] == "2":
+                # active debug session and load card preset
+                pass
+            else:
+                # set up modules for task 1a/b
+                shuffled = study_modules.copy()
+                np.random.shuffle(shuffled)
+                study_state["current_modules"] = shuffled
+                study_state["step"] = -1
+                study_state["step_done"] = True
+                study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
 
         socketio.emit("study-event", data)
     elif data["event"] == "step":
@@ -527,6 +532,15 @@ def handle_dmm(data):
         # client is requesting current value
         unit, val = measure_dmm()
         socketio.emit("dmm", {"unit": unit, "val": val})
+
+
+@socketio.on("board-update")
+def handle_board_update(data):
+    global do_board_update
+
+    # client is requesting a one-time board update
+    logging.info("One-time board pos update")
+    do_board_update = True
 
 
 @socketio.on("debug")
@@ -613,11 +627,14 @@ def init_data(pcbdata, schdata):
                 continue
 
             refid = ref_to_id[netpin["ref"]]
-            for unitnum in compdict[refid]["units"]:
-                for unitpin in compdict[refid]["units"][unitnum]["pins"]:
-                    if netpin["pin"] == unitpin["num"]:
-                        unitpin["net"] = netinfo["name"]
-                        schids.add(compdict[refid]["units"][unitnum]["schid"])
+            try:
+                for unitnum in compdict[refid]["units"]:
+                    for unitpin in compdict[refid]["units"][unitnum]["pins"]:
+                        if netpin["pin"] == unitpin["num"]:
+                            unitpin["net"] = netinfo["name"]
+                            schids.add(compdict[refid]["units"][unitnum]["schid"])
+            except KeyError:
+                logging.error(f"KeyError for net {netinfo['name']} ref {netpin['ref']} pin {netpin['pin']}")
         if len(schids) == 0:
             logging.warning(f"{netinfo['name']} has no valid pins")
         else:
@@ -1130,7 +1147,7 @@ def update_boardpos(x, y, r):
 
 
 def listen_udp():
-    global socketio, active_session_is_recording, study_state
+    global socketio, active_session_is_recording, study_state, do_board_update
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1176,7 +1193,8 @@ def listen_udp():
         board_update = board_update[:2]
 
         ts_board = time.perf_counter()
-        if config.getboolean("Dev", "TrackBoard"):
+        if config.getboolean("Dev", "TrackBoard") or do_board_update:
+            do_board_update = False
             update_boardpos(board_update[0], board_update[1], board_rot)
         ts_board = time.perf_counter() - ts_board
 
@@ -1357,6 +1375,7 @@ if __name__ == "__main__":
         "y": 0,
         "r": 0
     }
+    do_board_update = False
 
     # Server tracks connected tools
     tools = {
@@ -1446,12 +1465,21 @@ if __name__ == "__main__":
         "start": 0
     }
     study_modules = config.get("Study", "ComponentList").split(",")
+    logging.info("Study component list is being loaded")
     try:
-        study_modules = [ref_to_id[ref] for ref in study_modules]
-        logging.info("Study component list loaded properly, study can be run")
+        study_modules = [ref_to_id[ref.strip()] for ref in study_modules]
     except KeyError:
         study_modules = []
-        logging.error("Study component list contained unknown comp ref, study cannot be run")
+        logging.error("Study component list contained unknown comp ref, task 1a/b cannot be run")
+
+    study_bringup = config.get("Study", "BringupList").split(",")
+    study_bringup = [net.strip() for net in study_bringup]
+    logging.info("Study bringup list is being loaded")
+    for net in study_bringup:
+        if net not in netdict:
+            study_bringup = []
+            logging.error("Study bringup list contained unknown net, task 2 cannot be run")
+            break
 
     # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
     dmm_mode = "no_function"
