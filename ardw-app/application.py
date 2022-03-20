@@ -211,7 +211,7 @@ def handle_connect():
     global selection
     global projector_mode, projector_calibration, board_pos
     global active_session, active_session_is_recording
-    global study_state, compdict
+    global study_state, study_settings, compdict
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -280,6 +280,9 @@ def handle_connect():
             })
             if study_state["step_done"]:
                 emit("study-event", {"event": "success", "refid": refid, "task": task})
+
+    for task, val in study_settings["WithBoardVizFirst"].items():
+        emit("study-event", {"event": "settings", "task": task, "first_with": val})
 
     # not sure if there's a better way to avoid spamming all clients every time one connects
     emit("config", {
@@ -424,7 +427,7 @@ def handle_tool_debug(data):
 
 @socketio.on("study-event")
 def handle_study_event(data):
-    global study_state, study_timer, study_modules, compdict
+    global study_state, study_timer, study_modules, study_settings, compdict
 
     if len(study_modules) == 0:
         logging.error("Received study event, but modules failed to initialize, ignoring")
@@ -450,7 +453,8 @@ def handle_study_event(data):
                 study_state["current_modules"] = shuffled
                 study_state["step"] = -1
                 study_state["step_done"] = True
-                study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
+                # study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
+                study_state["boardviz"] = study_settings["WithBoardVizFirst"][data["task"]]
 
         socketio.emit("study-event", data)
     elif data["event"] == "step":
@@ -475,7 +479,8 @@ def handle_study_event(data):
 
                 if task == "1A" or task == "1B":
                     if step == len(study_modules) / 2:
-                        study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+                        # study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+                        study_state["boardviz"] = not study_settings["WithBoardVizFirst"][data["task"]]
                     elif step == len(study_modules):
                         study_log("Finished")
                         study_state["active"] = False
@@ -519,6 +524,9 @@ def handle_study_event(data):
             study_log(f"Custom timer took {display_time:.3f}s")
 
         socketio.emit("study-event", {"event": "timer", "on": study_timer["on"], "time": display_time})
+    elif data["event"] == "settings":
+        study_settings["WithBoardVizFirst"][data["task"]] = data["first_with"]
+        socketio.emit("study-event", data)
 
 
 @socketio.on("dmm")
@@ -1458,7 +1466,7 @@ if __name__ == "__main__":
         "step": 0,                  # current index in current_modules (can be -1)
         "step_done": False,         # iff False, participant has not yet completed this step
         "step_start": 0,            # time.time() at the start of this step
-        "boardviz": True            # iff True, BoardViz is on for this step
+        "boardviz": True,           # iff True, BoardViz is on for this step
     }
     study_timer = {
         "on": False,
@@ -1480,6 +1488,12 @@ if __name__ == "__main__":
             study_bringup = []
             logging.error("Study bringup list contained unknown net, task 2 cannot be run")
             break
+    study_settings = {
+        "WithBoardVizFirst": {
+            "1A": False,
+            "1B": False,
+        },
+    }
 
     # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
     dmm_mode = "no_function"
