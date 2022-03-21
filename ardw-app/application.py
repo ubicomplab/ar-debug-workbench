@@ -452,21 +452,21 @@ def handle_study_event(data):
                 # activate debug session and load card preset
                 # negative probe should always be on GND
                 # unit is always volts
-                for netname in study_bringup:
+                for rail in study_bringup:
                     new_card = {
                         "device": "dmm",
                         "pos": {
                         "type": "net",
-                        "val": netname
+                        "val": rail["net"],
                         },
                         "neg": {
                         "type": "net",
-                        "val": "GND"
+                        "val": "GND",
                         },
-                        "unit": "V",
+                        "unit": "voltage",
                         "val": None,
-                        "lo": None,
-                        "hi": None
+                        "lo": rail["lo"],
+                        "hi": rail["hi"],
                     }
                     handle_debug_session({"event": "custom", "card": new_card})
             else:
@@ -802,7 +802,10 @@ def make_selection(new_selection):
 # returns tuple of unit, value
 def measure_dmm():
     global dmm_mode
+    # convert to float in case it comes in as a string
     value = queryValue("dmm", dmm_mode)
+    if value is not None:
+        value = float(value)
     return dmm_mode, value
 
 
@@ -1359,6 +1362,57 @@ def study_log(msg):
     logging.info(f"Study ({tt}) {msg}")
 
 
+# loads study variables from config file and checks for validity
+def load_study():
+    global study_settings, ref_to_id, netdict
+
+    modules = config.get("Study", "ComponentList").split(",")
+    try:
+        modules = [ref_to_id[ref.strip()] for ref in modules]
+    except KeyError:
+        modules = []
+        study_settings["CanRunTask1"] = False
+        logging.error("Study component list contained unknown comp ref, task 1a/b cannot be run")
+    else:
+        study_settings["CanRunTask1"] = True
+        logging.info("Study component list loaded successfully, task 1a/b can be run")
+
+    bringup_list = config.get("Study", "BringupList").split(",")
+    bringup_list = [netname.strip() for netname in bringup_list]
+
+    bringup_okay = True
+    for net in bringup_list:
+        if net not in netdict:
+            bringup_okay = False
+            logging.error("Study bringup list contained unknown net, task 2 cannot be run")
+            break
+
+    if bringup_okay:
+        bringup_bounds = config.get("Study", "BringupBounds").split(",")
+        try:
+            bringup_bounds = [float(bound.strip()) for bound in bringup_bounds]
+        except ValueError:
+            bringup_okay = False
+            logging.error("Study bringup bounds cannot be parsed into numbers, task 2 cannot be run")
+
+    if bringup_okay and 2 * len(bringup_list) != len(bringup_bounds):
+        bringup_okay = False
+        logging.error("Length of bringup nets and bounds lists do not match, task 2 cannot be run")
+
+    bringup_combined = []
+    if bringup_okay:
+        logging.info("Study bringup list loaded successfully, task 2 can be run")
+        for i, netname in enumerate(bringup_list):
+            bringup_combined.append({
+                "net": netname,
+                "lo": bringup_bounds[2*i],
+                "hi": bringup_bounds[2*i + 1],
+            })
+
+    study_settings["CanRunTask2"] = bringup_okay
+
+    return modules, bringup_combined
+
 
 if __name__ == "__main__":
     schdata = None
@@ -1512,24 +1566,8 @@ if __name__ == "__main__":
         "on": False,
         "start": 0
     }
-    study_modules = config.get("Study", "ComponentList").split(",")
-    logging.info("Study component list is being loaded")
-    try:
-        study_modules = [ref_to_id[ref.strip()] for ref in study_modules]
-    except KeyError:
-        study_modules = []
-        study_settings["CanRunTask1"] = False
-        logging.error("Study component list contained unknown comp ref, task 1a/b cannot be run")
 
-    study_bringup = config.get("Study", "BringupList").split(",")
-    study_bringup = [net.strip() for net in study_bringup]
-    logging.info("Study bringup list is being loaded")
-    for net in study_bringup:
-        if net not in netdict:
-            study_bringup = []
-            study_settings["CanRunTask2"] = False
-            logging.error("Study bringup list contained unknown net, task 2 cannot be run")
-            break
+    study_modules, study_bringup = load_study()
 
     # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
     dmm_mode = "no_function"

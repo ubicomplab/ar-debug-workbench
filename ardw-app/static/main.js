@@ -1469,7 +1469,11 @@ function initSocket() {
       else sidebar_dmm_buttons[2].classList.add("selected");
     } else {
       var dmm_val = document.getElementById("sidebar-dmm-value");
-      dmm_val.innerText = data.val;
+      if (data.val === null) {
+        dmm_val.innerText = "--------";
+      } else {
+        dmm_val.innerText = data.val;
+      }
     }
   })
 }
