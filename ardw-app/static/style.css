@@ -697,6 +697,9 @@ div.canvas-container>canvas {
     width: 70px;
     cursor: pointer;
 }
+.study-buttons > .button.long {
+    width: 110px;
+}
 .study-buttons > .button:hover {
     background-color: #ccc
 }

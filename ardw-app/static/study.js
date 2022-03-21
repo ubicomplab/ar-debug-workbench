@@ -1,5 +1,25 @@
 var socket = io();
 
+var first_with = {
+    "1A": {
+        "with": document.getElementById("first-with-1a"),
+        "without": document.getElementById("first-without-1a"),
+    },
+    "1B": {
+        "with": document.getElementById("first-with-1b"),
+        "without": document.getElementById("first-without-1b"),
+    }
+}
+
+for (let task in first_with) {
+    first_with[task].with.addEventListener("click", () => {
+        socket.emit("study-event", {"event": "settings", "task": task, "first_with": true});
+    });
+    first_with[task].without.addEventListener("click", () => {
+        socket.emit("study-event", {"event": "settings", "task": task, "first_with": false});
+    });
+}
+
 var task_buttons = {
     "off": document.getElementById("task-off"),
     "1A": document.getElementById("task-1a"),
@@ -103,6 +123,15 @@ socket.on("study-event", (data) => {
                 clearInterval(timer_task);
                 timer_task = null;
                 timer_text.innerText = displaySeconds(data.time);
+            }
+            break;
+        case "settings":
+            if (data.first_with) {
+                first_with[data.task].with.classList.add("selected");
+                first_with[data.task].without.classList.remove("selected");
+            } else {
+                first_with[data.task].with.classList.remove("selected");
+                first_with[data.task].without.classList.add("selected");
             }
             break;
         default:

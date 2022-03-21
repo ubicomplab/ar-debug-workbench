@@ -1019,7 +1019,7 @@ function initPage() {
 
   // Schematic selection
   var sch_selection_display = document.getElementById("sch-selection");
-  for (let i = 1; i <= num_schematics; i++) {
+  for (let i = 1; i <= schdata.schematics.length; i++) {
     let div = document.createElement("div");
     div.innerHTML = `${i}. ${schdata.schematics[schid_to_idx[i]].name}`;
     div.innerHTML += `<span>&#9666;</span>`;
@@ -1058,6 +1058,11 @@ function initPage() {
     socket.emit("projector-adjust", { "type": "ty", "val": 0 });
     socket.emit("projector-adjust", { "type": "r", "val": 0 });
     socket.emit("projector-adjust", { "type": "z", "val": 1 });
+  });
+
+  var projector_boardtrack = document.getElementById("settings-projector-track");
+  projector_boardtrack.addEventListener("click", () => {
+    socket.emit("board-update", {});
   });
 
   projector_sliders["tx"]["func"] = (val, increment=0) => {
@@ -1417,7 +1422,7 @@ function initSocket() {
     }
 
     if (data.dmmpanel) {
-      setInterval(() => {
+      window.setInterval(() => {
         socket.emit("dmm", {})
       }, data.dmmpanel);
     }

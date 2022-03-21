@@ -736,6 +736,7 @@ function switchSchematic(schid) {
   sch_zoom_default = Math.min(xfactor, yfactor) / schematic_canvas.transform.s;
 
   // Triggers redraw
+  console.log(`switching to schid ${schid}`)
   schematic_canvas.img.src = `http://${window.location.host}/sch${schid}`;
 
   clearCanvas(schematic_canvas.bg);

@@ -211,7 +211,7 @@ def handle_connect():
     global selection
     global projector_mode, projector_calibration, board_pos
     global active_session, active_session_is_recording
-    global study_state, compdict
+    global study_state, study_settings, compdict
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -280,6 +280,9 @@ def handle_connect():
             })
             if study_state["step_done"]:
                 emit("study-event", {"event": "success", "refid": refid, "task": task})
+
+    for task, val in study_settings["WithBoardVizFirst"].items():
+        emit("study-event", {"event": "settings", "task": task, "first_with": val})
 
     # not sure if there's a better way to avoid spamming all clients every time one connects
     emit("config", {
@@ -424,7 +427,7 @@ def handle_tool_debug(data):
 
 @socketio.on("study-event")
 def handle_study_event(data):
-    global study_state, study_timer, study_modules, compdict
+    global study_state, study_timer, study_modules, study_bringup, study_settings, compdict
 
     if len(study_modules) == 0:
         logging.error("Received study event, but modules failed to initialize, ignoring")
@@ -440,12 +443,46 @@ def handle_study_event(data):
             study_state["active"] = True
             study_state["task"] = data["task"]
 
-            shuffled = study_modules.copy()
-            np.random.shuffle(shuffled)
-            study_state["current_modules"] = shuffled
-            study_state["step"] = -1
-            study_state["step_done"] = True
-            study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
+            if data["task"] == "2":
+                if not study_settings["CanRunTask2"]:
+                    logging.warning("Tried to activate Task 2, but bring-up list was invalid")
+                    study_state["active"] = False
+                    return
+
+                # activate debug session and load card preset
+                # negative probe should always be on GND
+                # unit is always volts
+                for netname in study_bringup:
+                    new_card = {
+                        "device": "dmm",
+                        "pos": {
+                        "type": "net",
+                        "val": netname
+                        },
+                        "neg": {
+                        "type": "net",
+                        "val": "GND"
+                        },
+                        "unit": "V",
+                        "val": None,
+                        "lo": None,
+                        "hi": None
+                    }
+                    handle_debug_session({"event": "custom", "card": new_card})
+            else:
+                if not study_settings["CanRunTask1"]:
+                    logging.warning("Tried to activate Task 1, but component list was invalid")
+                    study_state["active"] = False
+                    return
+
+                # set up modules for task 1a/b
+                shuffled = study_modules.copy()
+                np.random.shuffle(shuffled)
+                study_state["current_modules"] = shuffled
+                study_state["step"] = -1
+                study_state["step_done"] = True
+                # study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
+                study_state["boardviz"] = study_settings["WithBoardVizFirst"][data["task"]]
 
         socketio.emit("study-event", data)
     elif data["event"] == "step":
@@ -470,7 +507,8 @@ def handle_study_event(data):
 
                 if task == "1A" or task == "1B":
                     if step == len(study_modules) / 2:
-                        study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+                        # study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
+                        study_state["boardviz"] = not study_settings["WithBoardVizFirst"][data["task"]]
                     elif step == len(study_modules):
                         study_log("Finished")
                         study_state["active"] = False
@@ -514,6 +552,9 @@ def handle_study_event(data):
             study_log(f"Custom timer took {display_time:.3f}s")
 
         socketio.emit("study-event", {"event": "timer", "on": study_timer["on"], "time": display_time})
+    elif data["event"] == "settings":
+        study_settings["WithBoardVizFirst"][data["task"]] = data["first_with"]
+        socketio.emit("study-event", data)
 
 
 @socketio.on("dmm")
@@ -527,6 +568,15 @@ def handle_dmm(data):
         # client is requesting current value
         unit, val = measure_dmm()
         socketio.emit("dmm", {"unit": unit, "val": val})
+
+
+@socketio.on("board-update")
+def handle_board_update(data):
+    global do_board_update
+
+    # client is requesting a one-time board update
+    logging.info("One-time board pos update")
+    do_board_update = True
 
 
 @socketio.on("debug")
@@ -613,11 +663,14 @@ def init_data(pcbdata, schdata):
                 continue
 
             refid = ref_to_id[netpin["ref"]]
-            for unitnum in compdict[refid]["units"]:
-                for unitpin in compdict[refid]["units"][unitnum]["pins"]:
-                    if netpin["pin"] == unitpin["num"]:
-                        unitpin["net"] = netinfo["name"]
-                        schids.add(compdict[refid]["units"][unitnum]["schid"])
+            try:
+                for unitnum in compdict[refid]["units"]:
+                    for unitpin in compdict[refid]["units"][unitnum]["pins"]:
+                        if netpin["pin"] == unitpin["num"]:
+                            unitpin["net"] = netinfo["name"]
+                            schids.add(compdict[refid]["units"][unitnum]["schid"])
+            except KeyError:
+                logging.error(f"KeyError for net {netinfo['name']} ref {netpin['ref']} pin {netpin['pin']}")
         if len(schids) == 0:
             logging.warning(f"{netinfo['name']} has no valid pins")
         else:
@@ -644,9 +697,6 @@ def init_data(pcbdata, schdata):
 
     return schid_to_idx, ref_to_id, pinref_to_idx, compdict, netdict, pindict
 
-
-# more magic numbers
-rotation_center = (148.5011, 105.0036)
 
 # converts optitrack pixels to layout mm in 2D
 def optitrack_to_layout_coords(point):
@@ -1100,14 +1150,7 @@ def new_history(dwell_time, dim=2):
 
 
 def update_boardpos(x, y, r):
-    global board_pos, projector_calibration
-
-    boardname = config.get("Study", "BoardName")
-    boardpos_offset = {
-        "x": config.get(boardname, "BoardposOffsetX"),
-        "y": config.get(boardname, "BoardposOffsetY"),
-        "r": config.get(boardname, "BoardposOffsetR"),
-    }
+    global board_pos, projector_calibration, boardpos_offset
 
     # projector_calibration is now adjustment for observed board position
     board_pos["x"] = (x - boardpos_offset["x"]) / projector_calibration["z"]
@@ -1130,7 +1173,7 @@ def update_boardpos(x, y, r):
 
 
 def listen_udp():
-    global socketio, active_session_is_recording, study_state
+    global socketio, active_session_is_recording, study_state, do_board_update
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1176,7 +1219,8 @@ def listen_udp():
         board_update = board_update[:2]
 
         ts_board = time.perf_counter()
-        if config.getboolean("Dev", "TrackBoard"):
+        if config.getboolean("Dev", "TrackBoard") or do_board_update:
+            do_board_update = False
             update_boardpos(board_update[0], board_update[1], board_rot)
         ts_board = time.perf_counter() - ts_board
 
@@ -1357,6 +1401,21 @@ if __name__ == "__main__":
         "y": 0,
         "r": 0
     }
+    do_board_update = False
+
+    boardname = config.get("Study", "BoardName")
+
+    # offset to convert between optitrack and layout coordinates
+    boardpos_offset = {
+        "x": config.getfloat(boardname, "BoardposOffsetX"),
+        "y": config.getfloat(boardname, "BoardposOffsetY"),
+        "r": config.getfloat(boardname, "BoardposOffsetR"),
+    }
+
+    # center of layout in layout coords,
+    # ie. where the projected board should be rotatated around
+    rotation_center = (config.getfloat(boardname, "BoardCenterX"),
+                       config.getfloat(boardname, "BoardCenterY"))
 
     # Server tracks connected tools
     tools = {
@@ -1439,19 +1498,38 @@ if __name__ == "__main__":
         "step": 0,                  # current index in current_modules (can be -1)
         "step_done": False,         # iff False, participant has not yet completed this step
         "step_start": 0,            # time.time() at the start of this step
-        "boardviz": True            # iff True, BoardViz is on for this step
+        "boardviz": True,           # iff True, BoardViz is on for this step
+    }
+    study_settings = {
+        "WithBoardVizFirst": {
+            "1A": False,
+            "1B": False,
+        },
+        "CanRunTask1": True,
+        "CanRunTask2": True,
     }
     study_timer = {
         "on": False,
         "start": 0
     }
     study_modules = config.get("Study", "ComponentList").split(",")
+    logging.info("Study component list is being loaded")
     try:
-        study_modules = [ref_to_id[ref] for ref in study_modules]
-        logging.info("Study component list loaded properly, study can be run")
+        study_modules = [ref_to_id[ref.strip()] for ref in study_modules]
     except KeyError:
         study_modules = []
-        logging.error("Study component list contained unknown comp ref, study cannot be run")
+        study_settings["CanRunTask1"] = False
+        logging.error("Study component list contained unknown comp ref, task 1a/b cannot be run")
+
+    study_bringup = config.get("Study", "BringupList").split(",")
+    study_bringup = [net.strip() for net in study_bringup]
+    logging.info("Study bringup list is being loaded")
+    for net in study_bringup:
+        if net not in netdict:
+            study_bringup = []
+            study_settings["CanRunTask2"] = False
+            logging.error("Study bringup list contained unknown net, task 2 cannot be run")
+            break
 
     # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
     dmm_mode = "no_function"
