@@ -142,6 +142,8 @@ def queryValue(instrumentType="dmm", function="no_function"):
                     # return Response(str(value), mimetype='text')
 
                 if value:
+                    if __name__ == "__main__":
+                        return Response(str(value), mimetype='text')
                     return value
             
             except:
