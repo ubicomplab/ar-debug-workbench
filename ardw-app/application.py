@@ -1,5 +1,5 @@
 from flask import Flask
-from flask import render_template, send_from_directory, Response
+from flask import render_template, send_from_directory, send_file, Response
 from flask.helpers import url_for
 from flask_socketio import SocketIO
 from flask_socketio import emit
@@ -202,6 +202,15 @@ def instrument_panel():
     )
 
 
+@app.route("/sound/<status>")
+def get_sound_success(status="fail"):
+    # status is "success" or "fail"
+    return send_file(
+        f"static/win7{status}.wav",
+        mimetype="audio/wav",
+    )
+
+
 # -- end app routing --
 
 # -- socket --
@@ -255,9 +264,9 @@ def handle_connect():
             }
             emit("debug-session", data)
 
-        nextid, nextcard = active_session.get_next()
-        if nextid != -1:
-            emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
+        next_id, next_card = active_session.get_next()
+        if next_id != -1:
+            emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
 
     if active_session_is_recording:
         emit("debug-session", {"event": "record", "record": "true"})
@@ -386,18 +395,18 @@ def handle_debug_session(data):
             "card": card.to_dict()
         })
 
-        nextid, nextcard = active_session.get_next()
-        if nextid != -1:
-            socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
+        next_id, next_card = active_session.get_next()
+        if next_id != -1:
+            socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
     elif data["event"] == "record":
         # client is turning recording on or off
         if data["record"] != active_session_is_recording:
             active_session_is_recording = data["record"]
             socketio.emit("debug-session", data)
 
-            nextid, nextcard = active_session.get_next()
-            if nextid != -1:
-                socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
+            next_id, next_card = active_session.get_next()
+            if next_id != -1:
+                socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
     elif data["event"] == "save":
         # client wants to save and exit session
         session_history.append(active_session)
@@ -812,7 +821,7 @@ def measure_dmm():
 # wrapper for getting oscilloscope measurement from SCPI
 # returns tuple of unit, value
 def measure_osc():
-    value = queryValue("osc","frequency")
+    # value = queryValue("osc","frequency")
     logging.error("measure_osc() not yet implemented")
     return None, None
 
@@ -835,10 +844,10 @@ def make_tool_selection(device, new_selection=None):
 
         if active_session_is_recording and new_selection is not None:
             # if we hit something that is not the next card, stop highlighting the next card
-            _, nextcard = active_session.get_next()
-            if nextcard is not None:
-                if (device == "pos" and nextcard.pos != new_selection) or \
-                        (device == "neg" and nextcard.neg != new_selection):
+            _, next_card = active_session.get_next()
+            if next_card is not None:
+                expected = next_card.pos if device == "pos" else next_card.neg
+                if new_selection != expected:
                     socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
 
             # record a measurement if both probes are set
@@ -969,7 +978,15 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         logging.info(f"probe {probe} hit {len(hits)} things")
         can_reselect[probe] = False
 
-        # TODO auto disambiguation if we have a guided measurement
+        # auto disambiguation if we have a guided measurement
+        _, next_card = active_session.get_next()
+        if next_card is not None:
+            # we have a guided card, so auto-disambiguate
+            expected = next_card.pos if probe == "pos" else next_card.neg
+            for hit in hits:
+                if hit == expected:
+                    make_tool_selection(probe, hit)
+                    return
 
         # if we still need disambiguation, generate menu
         board_multimenu["active"] = True
@@ -977,15 +994,8 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         board_multimenu["tip-anchor"] = tippos
         board_multimenu["end-origin"] = endpos
 
-        """
-        # TODO instead of forcing the hits list to len 4, disamb menu should handle arbitrary number
-        if len(hits) < 4:
-            hits += [None] * (4 - len(hits))
-        board_multimenu["options"] = hits[:4]
-        """
         board_multimenu["options"] = hits
         
-        # TODO display multimeter disambiguation menu
         socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
 
 
@@ -1340,9 +1350,9 @@ def tool_measure(device, pos, neg, unit, val):
         "update": update
     })
 
-    nextid, nextcard = active_session.get_next()
-    if nextid != -1:
-        socketio.emit("debug-session", {"event": "next", "id": nextid, "card": nextcard.to_dict()})
+    next_id, next_card = active_session.get_next()
+    if next_id != -1:
+        socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
 
 
 def autoconnect_tools(enabled):
