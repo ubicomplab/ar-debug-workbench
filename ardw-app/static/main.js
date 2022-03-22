@@ -125,6 +125,12 @@ var canvas_split = Split(["#front-canvas", "#back-canvas"], {
 });
 
 
+/** Sound played on task success */
+var sound_success = new Audio("sound/success");
+/** Sound played on task failure */
+var sound_failure = new Audio("sound/fail");
+
+
 /**
  * Zooms layerdict to match given bbox and targetsize, rotating appropriately for layout
  * @param {*} layerdict Any layerdict
@@ -1448,9 +1454,13 @@ function initSocket() {
         }
         break;
       case "success":
+        sound_success.play();
         if (data.task == "1B") {
           selectComponent(data.refid);
         }
+        break;
+      case "failure":
+        sound_failure.play();
         break;
       default:
         console.log(data);

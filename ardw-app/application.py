@@ -1,5 +1,5 @@
 from flask import Flask
-from flask import render_template, send_from_directory, Response
+from flask import render_template, send_from_directory, send_file, Response
 from flask.helpers import url_for
 from flask_socketio import SocketIO
 from flask_socketio import emit
@@ -199,6 +199,15 @@ def instrument_panel():
         "instrument_panel.html",
         query=url_for("query_value", function=""),
         freq=config.getint("Study", "DmmPanelRefreshFrequency")
+    )
+
+
+@app.route("/sound/<status>")
+def get_sound_success(status="fail"):
+    # status is "success" or "fail"
+    return send_file(
+        f"static/win7{status}.wav",
+        mimetype="audio/wav",
     )
 
 
@@ -812,7 +821,7 @@ def measure_dmm():
 # wrapper for getting oscilloscope measurement from SCPI
 # returns tuple of unit, value
 def measure_osc():
-    value = queryValue("osc","frequency")
+    # value = queryValue("osc","frequency")
     logging.error("measure_osc() not yet implemented")
     return None, None
 
