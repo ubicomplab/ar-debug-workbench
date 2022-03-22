@@ -28,7 +28,7 @@ logging.basicConfig(
     filename="ardw.log",
     filemode="w",
     # encoding="utf-8",
-    level="DEBUG",
+    level="INFO",
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logging.info("Server started")
@@ -1280,9 +1280,9 @@ def listen_udp():
             time.sleep(diff)
         elif -diff > 0.05:
             # more than 50ms behind
-            # logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
-            #     f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
-            #     f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
+                f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
+                f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")
@@ -1328,6 +1328,8 @@ def tool_measure(device, pos, neg, unit, val):
     if not tools[device]["ready"]:
         logging.warning("measurement before tool was setup, ignoring")
         return
+
+    logging.info(f"tool measurement at {pos['val']} and {neg['val']} is {unit} {val}")
 
     card, id, update = active_session.measure(device, pos, neg, unit, val)
 

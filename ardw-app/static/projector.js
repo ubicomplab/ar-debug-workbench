@@ -95,7 +95,7 @@ function calcBoardOffset(boardpos) {
   if (boardoff_counter < boardoff_n) {
     boardoff_sums.x += boardpos.x;
     boardoff_sums.y += boardpos.y;
-    boardoff_sums.r += boardpos.z
+    boardoff_sums.r += boardpos.r;
   } else if (boardoff_counter == boardoff_n) {
     boardoff_sums.x /= boardoff_n;
     boardoff_sums.y /= boardoff_n;
@@ -107,7 +107,11 @@ function calcBoardOffset(boardpos) {
     var offx = -transform.tx * transform.z + boardoff_sums.x;
     var offy = transform.ty * transform.z + boardoff_sums.y;
     var offr = -transform.r - boardoff_sums.r;
-    console.log(`theoretical offset is x=${offx.toFixed(4)}, y=${offy.toFixed(4)}, r=${offr.toFixed(4)}`)
+    console.log(`theoretical offset is x=${offx.toFixed(4)}, y=${offy.toFixed(4)}, r=${offr.toFixed(4)}`);
+
+    var avgx = (pcbdata.edges_bbox.minx + pcbdata.edges_bbox.maxx) / 2;
+    var avgy = (pcbdata.edges_bbox.miny + pcbdata.edges_bbox.maxy) / 2;
+    console.log(`edgecut center is (${avgx.toFixed(2)},${avgy.toFixed(2)})`);
   }
   boardoff_counter++;
 }
@@ -202,6 +206,7 @@ function initSocket() {
         break;
       case "next":
         // TODO support osc
+        console.log(active_session_is_recording)
         if (active_session_is_recording) {
           if (data.id == -1) {
             // deselect
