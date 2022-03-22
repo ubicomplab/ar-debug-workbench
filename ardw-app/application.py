@@ -274,21 +274,22 @@ def handle_connect():
     if study_state["active"]:
         step = study_state["step"]
         task = study_state["task"]
-        refid = study_state["current_modules"][step]
-        ref = compdict[refid]["ref"]
-
         emit("study-event", {"event": "task", "task": task})
-        if step > -1:
-            emit("study-event", {
-                "event": "highlight",
-                "task": task,
-                "refid": refid,
-                "ref": ref,
-                "boardviz": study_state["boardviz"],
-                "step": step
-            })
-            if study_state["step_done"]:
-                emit("study-event", {"event": "success", "refid": refid, "task": task})
+
+        if task == "1A" or task == "1B":
+            refid = study_state["current_modules"][step]
+            ref = compdict[refid]["ref"]
+            if step > -1:
+                emit("study-event", {
+                    "event": "highlight",
+                    "task": task,
+                    "refid": refid,
+                    "ref": ref,
+                    "boardviz": study_state["boardviz"],
+                    "step": step
+                })
+                if study_state["step_done"]:
+                    emit("study-event", {"event": "success", "refid": refid, "task": task})
 
     for task, val in study_settings["WithBoardVizFirst"].items():
         emit("study-event", {"event": "settings", "task": task, "first_with": val})
@@ -438,10 +439,6 @@ def handle_tool_debug(data):
 def handle_study_event(data):
     global study_state, study_timer, study_modules, study_bringup, study_settings, compdict
 
-    if len(study_modules) == 0:
-        logging.error("Received study event, but modules failed to initialize, ignoring")
-        return
-
     if data["event"] == "task":
         if data["task"] == "off":
             study_log("Turning study mode off")
@@ -495,7 +492,7 @@ def handle_study_event(data):
 
         socketio.emit("study-event", data)
     elif data["event"] == "step":
-        if study_state["active"]:
+        if study_state["active"] and (study_state["task"] == "1A" or study_state["task"] == "1B"):
             # only permit a step if we're actually doing a study
 
             if not study_state["step_done"]:
@@ -543,7 +540,7 @@ def handle_study_event(data):
     elif data["event"] == "note":
         study_log(f"Custom note: {data['note']}")
     elif data["event"] == "select":
-        if study_state["task"] == "1B" and not study_state["boardviz"]:
+        if study_state["active"] and study_state["task"] == "1B" and not study_state["boardviz"]:
             # this event should only be sent for Task 1B Without BoardViz
             if "point" in data:
                 study_selection("layout", data=data)

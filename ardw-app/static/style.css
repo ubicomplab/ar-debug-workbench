@@ -567,6 +567,10 @@ div.canvas-container>canvas {
     margin-bottom: 4px;
 }
 
+.sidebar-card.selected {
+    border-color: #08f;
+}
+
 .sidebar-card:last-child {
     /* margin-bottom: 0; */
 }

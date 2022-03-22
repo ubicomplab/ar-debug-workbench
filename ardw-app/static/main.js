@@ -785,6 +785,10 @@ function debugSessionEvent(data) {
     case "next":
       // TODO support osc
       if (active_session_is_recording) {
+        let sidebar_cards = document.getElementById("sidebar-cards");
+        for (let card of sidebar_cards.children) {
+          card.classList.remove("selected");
+        }
         if (data.id == -1) {
           probes.pos.selection = null;
           probes.neg.selection = null;
@@ -795,6 +799,7 @@ function debugSessionEvent(data) {
           probes.pos.selection = data.card.pos;
           probes.neg.selection = data.card.neg;
           drawHighlights();
+          sidebar_cards.querySelector(`.card-${data.id}`).classList.add("selected");
         }
       }
       break;
@@ -1428,7 +1433,7 @@ function initSocket() {
     }
 
     if (data.dmmpanel) {
-      window.setInterval(() => {
+      setInterval(() => {
         socket.emit("dmm", {})
       }, data.dmmpanel);
     }
