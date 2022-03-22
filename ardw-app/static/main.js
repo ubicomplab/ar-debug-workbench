@@ -864,7 +864,18 @@ function initPage() {
   // TODO, add tool buttons currently handled by onclicks
   document.getElementById("open-debug").addEventListener("click", () => {
     toggleSidebar();
-  })
+  });
+
+  // Selection filter buttons
+  document.getElementById("selection-filter-comp").addEventListener("click", () => {
+    socket.emit("selection-filter", {"sel_type": "comp"})
+  });
+  document.getElementById("selection-filter-pin").addEventListener("click", () => {
+    socket.emit("selection-filter", {"sel_type": "pin"})
+  });
+  document.getElementById("selection-filter-net").addEventListener("click", () => {
+    socket.emit("selection-filter", {"sel_type": "net"})
+  });
 
   // Search field
   var search_input_field = document.getElementById("search-input");
@@ -1488,6 +1499,19 @@ function initSocket() {
         dmm_val.innerText = "--------";
       } else {
         dmm_val.innerText = data.val;
+      }
+    }
+  })
+
+  socket.on("selection-filter", (data) => {
+    for (let sel_type in data) {
+      var button = document.getElementById(`selection-filter-${sel_type}`);
+      button.classList.remove("disabled");
+      button.classList.remove("on");
+      if (data[sel_type] == -1) {
+        button.classList.add("disabled");
+      } else if (data[sel_type] == 1) {
+        button.classList.add("on");
       }
     }
   })

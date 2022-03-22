@@ -73,7 +73,26 @@ html, body {
     border-radius: 8px;
     box-sizing: border-box;
     /* width: 70px; */
+    height: min-content;
 }
+
+#selection-filter {
+    text-align: center;
+}
+
+#selection-filter>div {
+    margin-bottom: 8px;
+}
+
+#selection-filter .button.on {
+    background-color:rgba(0, 123, 255, 0.5);
+    border-color: rgba(0, 123, 255, 0.5);
+}
+#selection-filter .button.on:hover {
+    background-color:rgba(0, 123, 255, 0.7);
+    border-color: rgba(0, 123, 255, 0.7);
+}
+
 
 #record-icon {
     display: inline-block;
