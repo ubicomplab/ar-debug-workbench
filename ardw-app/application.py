@@ -366,6 +366,7 @@ def handle_debug_session(data):
     global session_history
     global active_session
     global active_session_is_recording
+    global study_state
 
     logging.info(f"Received debug session event {data}")
 
@@ -400,23 +401,31 @@ def handle_debug_session(data):
         if next_id != -1:
             socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
     elif data["event"] == "record":
-        # client is turning recording on or off
-        if data["record"] != active_session_is_recording:
-            active_session_is_recording = data["record"]
-            socketio.emit("debug-session", data)
+        # client is toggling recording
+        active_session_is_recording = not active_session_is_recording
 
-            update_selection_filter(all_on=True)
+        socketio.emit("debug-session", {"event": "record", "record": active_session_is_recording})
 
-            next_id, next_card = active_session.get_next()
-            if active_session_is_recording and next_id != -1:
-                socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
-            else:
-                socketio.emit("debug-session", {"event": "next", "id": -1})
+        # enables everything (except components if we're now recording)
+        update_selection_filter(all_on=True)
+
+        # for task 2 specifically we want only nets
+        if active_session_is_recording and study_state["active"] and study_state["task"] == "2":
+            update_selection_filter(allow_only="net")
+
+        next_id, next_card = active_session.get_next()
+        if active_session_is_recording and next_id != -1:
+            socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
+        else:
+            socketio.emit("debug-session", {"event": "next", "id": -1})
     elif data["event"] == "save":
         # client wants to save and exit session
         session_history.append(active_session)
         active_session = None
         active_session_is_recording = False
+        socketio.emit("debug-session", {"event": "record", "record": False})
+        update_selection_filter(all_on=True)
+
         # tell client how many sessions are saved
         data["count"] = len(session_history)
         socketio.emit("debug-session", data)
@@ -460,7 +469,10 @@ def handle_study_event(data):
                     study_state["active"] = False
                     return
 
-                update_selection_filter(allow_only="net")
+                # do this when record button is clicked instead
+                # update_selection_filter(allow_only="net")
+
+                handle_dmm({"mode": "voltage"})
 
                 # activate debug session and load card preset
                 # negative probe should always be on GND
@@ -843,7 +855,7 @@ def measure_osc():
 
 # actually makes a tool selection and echoes it to all clients to be displayed
 def make_tool_selection(device, new_selection=None):
-    global tool_selections
+    global tool_selections, active_session, active_session_is_recording
     logging.info(f"Making tool selection {device}: {new_selection}")
 
     if device is None:
@@ -854,28 +866,28 @@ def make_tool_selection(device, new_selection=None):
     else:
         # selection and tool selection are mutually exclusive
         make_selection(None)
-        tool_selections[device] = new_selection
-        socketio.emit("tool-selection", {"device": device, "selection": new_selection})
+
+        _, next_card = active_session.get_next()
+        if next_card is not None:
+            expected = next_card.pos if device == "pos" else next_card.neg
+            if new_selection != expected:
+                # if we have a custom card but measured something else, ignore it
+                new_selection = None
+                # socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
 
         if active_session_is_recording and new_selection is not None:
-            # if we hit something that is not the next card, stop highlighting the next card
-            _, next_card = active_session.get_next()
-            if next_card is not None:
-                expected = next_card.pos if device == "pos" else next_card.neg
-                if new_selection != expected:
-                    socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
+            tool_selections[device] = new_selection
+            socketio.emit("tool-selection", {"device": device, "selection": new_selection})
 
             # record a measurement if both probes are set
             if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
                 logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
                 dmm_unit, dmm_val = measure_dmm()
                 tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
-                make_tool_selection(None)
             if tool_selections["osc"] is not None:
                 return
                 osc_unit, osc_val = measure_osc()
                 tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
-                make_tool_selection(None)
 
 
 def make_study_select(refid, src_text):
@@ -883,7 +895,8 @@ def make_study_select(refid, src_text):
 
     if study_state["task"] == "2":
         logging.error("Task 2 NotYetImplemented")
-        return
+
+    can_reselect["probe"] = False
 
     runtime = time.time() - study_state["step_start"]
     if refid == study_state["current_modules"][study_state["step"]]:
@@ -961,6 +974,10 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
 
         # don't need a point since main.js ignores selection if from_optitrack=True
         socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
+    else:
+        # we missed inside the board, prevent repeats
+        # TODO pass up bool to clear dwell history instead
+        can_reselect[name] = False
 
 
 # handles a dmm selection event
@@ -968,16 +985,23 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
 def dmm_selection(probe, tippos, endpos, force_deselect=False):
     global pcbdata, pinref_to_idx, board_multimenu, can_reselect, tool_selections, selection_filter
 
-    if force_deselect:
-        tool_selections[probe] = None
-        socketio.emit("tool-selection", {"device": probe, "selection": None})
-        return
-
     if not active_session_is_recording:
         logging.info("attempted dmm selection without active session, ignoring")
         return
 
-    logging.info(f"attempting dmm selection for {probe}")
+    # logging.info(f"attempting dmm selection for {probe}")
+
+    # auto disambiguation if we have a guided measurement
+    # TODO this check may cause a performance hit when spammed on force_deselect=True
+    _, next_card = active_session.get_next()
+
+    if force_deselect:
+        # we touched down outside the board
+        if next_card is None:
+            # only deselect if we don't currently have a guided measurement
+            tool_selections[probe] = None
+            socketio.emit("tool-selection", {"device": probe, "selection": None})
+        return
 
     # board layer is hardcoded for now
     layer = "F"
@@ -1002,9 +1026,6 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
     elif len(hits) > 1:
         logging.info(f"probe {probe} hit {len(hits)} things")
         can_reselect[probe] = False
-
-        # auto disambiguation if we have a guided measurement
-        _, next_card = active_session.get_next()
         if next_card is not None:
             # we have a guided card, so auto-disambiguate
             expected = next_card.pos if probe == "pos" else next_card.neg
@@ -1022,11 +1043,18 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         board_multimenu["options"] = hits
         
         socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
+    else:
+        # we didn't select anything, but stop empty sel spam
+        can_reselect[probe] = False
 
 
 # handles a study selection event, either from the client layout or optitrack
 def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=None):
     global study_state, pcbdata, pinref_to_idx, can_reselect, selection_filter
+
+    if force_deselect:
+        # we're outside the board
+        return
 
     if name == "layout":
         # we're from layout, so we have data
@@ -1272,7 +1300,7 @@ def listen_udp():
         # update_probe_history(probe_history, red_tip, red_end)
         update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
         update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
-        if study_state["active"]:
+        if study_state["active"] and study_state["task"] != "2":
             if not study_state["step_done"]:
                 # we only actually want to check for events if we are actively doing a step
                 _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=study_selection)
@@ -1321,9 +1349,9 @@ def listen_udp():
             time.sleep(diff)
         elif -diff > 0.05:
             # more than 50ms behind
-            logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
-                f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
-                f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            # logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
+            #     f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
+            #     f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")
@@ -1380,6 +1408,8 @@ def tool_measure(device, pos, neg, unit, val):
         "id": id,
         "update": update
     })
+
+    make_tool_selection(None)
 
     next_id, next_card = active_session.get_next()
     if next_id != -1:
@@ -1466,8 +1496,6 @@ def load_study():
 def update_selection_filter(toggle=None, all_on=False, allow_only=None):
     global selection_filter
 
-    if toggle is not None:
-        selection_filter[toggle] = (selection_filter[toggle] + 1) % 2
     if all_on:
         selection_filter["comp"] = 1
         selection_filter["pin"] = 1
@@ -1480,6 +1508,9 @@ def update_selection_filter(toggle=None, all_on=False, allow_only=None):
 
     if active_session_is_recording:
         selection_filter["comp"] = -1
+
+    if toggle is not None and selection_filter[toggle] != -1:
+        selection_filter[toggle] = (selection_filter[toggle] + 1) % 2
 
     socketio.emit("selection-filter", selection_filter)
 

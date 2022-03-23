@@ -181,6 +181,8 @@ function initSocket() {
     calcBoardOffset(data["boardpos"]);
   })
   socket.on("tool-selection", (data) => {
+    console.log("tool-selection")
+    console.log(data)
     if (data.selection == "multi") {
       // TODO multi menu
       multimenu_active = {"hits": data.hits, "layer": data.layer, "device": data.device}
@@ -208,7 +210,7 @@ function initSocket() {
         // TODO support osc
         console.log(active_session_is_recording)
         if (active_session_is_recording) {
-          if (data.id == -1) {
+          if (data.id === -1) {
             // deselect
             probes.pos.selection = null;
             probes.neg.selection = null;
@@ -216,8 +218,11 @@ function initSocket() {
             drawHighlights();
           } else {
             // show user where to measure next
+            console.log("highlighting next!")
             probes.pos.selection = data.card.pos;
             probes.neg.selection = data.card.neg;
+            console.log(probes.pos.selection)
+            console.log(probes.neg.selection)
             drawHighlights();
           }
         }

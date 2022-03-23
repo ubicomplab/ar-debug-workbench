@@ -588,7 +588,8 @@ function toggleSidebar(x = false) {
 
 /** Handler for the debug session record button */
 function recordButton() {
-  socket.emit("debug-session", { "event": "record", "record": !active_session_is_recording });
+  // socket.emit("debug-session", { "event": "record", "record": !active_session_is_recording });
+  socket.emit("debug-session", {"event": "record"});
 }
 
 /** Updates the client recording state */
@@ -1496,7 +1497,7 @@ function initSocket() {
     } else {
       var dmm_val = document.getElementById("sidebar-dmm-value");
       if (data.val === null) {
-        dmm_val.innerText = "--------";
+        dmm_val.innerText = "Please select a mode to capture measurement";
       } else {
         dmm_val.innerText = data.val;
       }
