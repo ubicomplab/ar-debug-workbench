@@ -1164,7 +1164,7 @@ def multimenu_selection_linear(name, endpos):
 #   must take name, tip_pos, end_pos, and optional force_deselect
 # returns the dwell values of the tip and end
 def check_probe_events(name: str, history: dict, selection_fn):
-    global board_multimenu, can_reselect, socketio
+    global board_multimenu, can_reselect, tool_selections
 
     ts = time.perf_counter()
 
@@ -1180,6 +1180,10 @@ def check_probe_events(name: str, history: dict, selection_fn):
         # logging.info(f"{name} is out of zone at {tip_pos[0]:.0f}, {tip_pos[1]:.0f}, {tip_pos[2]:.0f}")
         # logging.info(f"zone is {reselection_zone}")
         can_reselect[name] = True
+        if name == "pos" or name == "neg":
+            # if we leave the safe box, undo current tool selection but do not send to clients
+            # if you send this to clients it will stop highlighting
+            tool_selections[name] = None
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
             socketio.emit("selection", {"type": "cancel-multi"})
@@ -1409,7 +1413,7 @@ def tool_measure(device, pos, neg, unit, val):
         "update": update
     })
 
-    make_tool_selection(None)
+    # make_tool_selection(None)
 
     next_id, next_card = active_session.get_next()
     if next_id != -1:
