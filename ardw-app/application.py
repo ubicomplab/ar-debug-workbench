@@ -884,12 +884,10 @@ def make_tool_selection(device, new_selection=None):
                 logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
                 dmm_unit, dmm_val = measure_dmm()
                 tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
-                make_tool_selection(None)
             if tool_selections["osc"] is not None:
                 return
                 osc_unit, osc_val = measure_osc()
                 tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
-                make_tool_selection(None)
 
 
 def make_study_select(refid, src_text):
@@ -991,9 +989,10 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         logging.info("attempted dmm selection without active session, ignoring")
         return
 
-    logging.info(f"attempting dmm selection for {probe}")
+    # logging.info(f"attempting dmm selection for {probe}")
 
     # auto disambiguation if we have a guided measurement
+    # TODO this check may cause a performance hit when spammed on force_deselect=True
     _, next_card = active_session.get_next()
 
     if force_deselect:
@@ -1044,6 +1043,9 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         board_multimenu["options"] = hits
         
         socketio.emit("tool-selection", {"device": probe, "selection": "multi", "layer": layer, "hits": hits})
+    else:
+        # we didn't select anything, but stop empty sel spam
+        can_reselect[probe] = False
 
 
 # handles a study selection event, either from the client layout or optitrack
@@ -1406,6 +1408,8 @@ def tool_measure(device, pos, neg, unit, val):
         "id": id,
         "update": update
     })
+
+    make_tool_selection(None)
 
     next_id, next_card = active_session.get_next()
     if next_id != -1:

@@ -181,6 +181,8 @@ function initSocket() {
     calcBoardOffset(data["boardpos"]);
   })
   socket.on("tool-selection", (data) => {
+    console.log("tool-selection")
+    console.log(data)
     if (data.selection == "multi") {
       // TODO multi menu
       multimenu_active = {"hits": data.hits, "layer": data.layer, "device": data.device}
@@ -219,8 +221,8 @@ function initSocket() {
             console.log("highlighting next!")
             probes.pos.selection = data.card.pos;
             probes.neg.selection = data.card.neg;
-            console.log(probes.pos)
-            console.log(probes.neg)
+            console.log(probes.pos.selection)
+            console.log(probes.neg.selection)
             drawHighlights();
           }
         }
