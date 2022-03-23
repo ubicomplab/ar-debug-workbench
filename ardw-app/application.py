@@ -883,7 +883,8 @@ def make_study_select(refid, src_text):
 
     if study_state["task"] == "2":
         logging.error("Task 2 NotYetImplemented")
-        return
+        
+    can_reselect["probe"] = False
 
     runtime = time.time() - study_state["step_start"]
     if refid == study_state["current_modules"][study_state["step"]]:
@@ -961,6 +962,10 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
 
         # don't need a point since main.js ignores selection if from_optitrack=True
         socketio.emit("selection", {"type": "multi", "layer": layer, "hits": hits, "from_optitrack": True})
+    else:
+        # we missed inside the board, prevent repeats
+        # TODO pass up bool to clear dwell history instead
+        can_reselect[name] = False
 
 
 # handles a dmm selection event
