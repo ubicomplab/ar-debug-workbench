@@ -441,7 +441,7 @@ def handle_tool_debug(data):
 
 @socketio.on("study-event")
 def handle_study_event(data):
-    global study_state, study_timer, study_modules, study_bringup, study_settings, compdict
+    global study_state, study_timer, study_practice, study_modules, study_bringup, study_settings, compdict
 
     if data["event"] == "task":
         if data["task"] == "off":
@@ -491,9 +491,11 @@ def handle_study_event(data):
                 update_selection_filter(allow_only="comp")
 
                 # set up modules for task 1a/b
+                practice = study_practice.copy()
                 shuffled = study_modules.copy()
                 np.random.shuffle(shuffled)
-                study_state["current_modules"] = shuffled
+                halfway = len(shuffled) // 2
+                study_state["current_modules"] = practice + shuffled[:halfway] + practice + shuffled[halfway:]
                 study_state["step"] = -1
                 study_state["step_done"] = True
                 # study_state["boardviz"] = config.getboolean("Study", f"Task{data['task']}WithBoardVizFirst")
@@ -521,10 +523,11 @@ def handle_study_event(data):
                 task = study_state["task"]
 
                 if task == "1A" or task == "1B":
-                    if step == len(study_modules) / 2:
+                    lc = len(study_state["current_modules"])
+                    if step == lc // 2:
                         # study_state["boardviz"] = not config.getboolean("Study", f"Task{task}WithBoardVizFirst")
-                        study_state["boardviz"] = not study_settings["WithBoardVizFirst"][data["task"]]
-                    elif step == len(study_modules):
+                        study_state["boardviz"] = not study_settings["WithBoardVizFirst"][task]
+                    elif step == lc:
                         study_log("Finished")
                         study_state["active"] = False
                         study_state["task"] = None
@@ -761,8 +764,8 @@ def update_reselection_zone():
     hbuffer = config.getfloat("Optitrack", "ReselectHorizontalBuffer")
     vmin = config.getfloat("Optitrack", "ReselectVerticalMinimum")
     vmax = config.getfloat("Optitrack", "ReselectVerticalMaximum")
-    bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
     bounds = np.sort(bounds, axis=0)
+    bounds = bounds + np.tile([[-hbuffer], [hbuffer]], 2)
 
     reselection_zone = {
         "x": bounds[:, 0],
@@ -1157,7 +1160,7 @@ def check_probe_events(name: str, history: dict, selection_fn):
         return tip_dwell, end_dwell
     ts_isz = time.perf_counter() - ts_isz
 
-    # logging.info(f"{name} is in zone with tip dwell {tip_dwell:.1f}")
+    # logging.info(f"{name} is in zone at {tip_pos[0]:.0f}, {tip_pos[1]:.0f}, {tip_pos[2]:.0f} with tip dwell {tip_dwell:.1f}")
 
     ts_op = time.perf_counter()
     ts_op_name = "none"
@@ -1406,10 +1409,13 @@ def study_log(msg):
 def load_study():
     global study_settings, ref_to_id, netdict
 
+    practice = config.get("Study", "PracticeList").split(",")
     modules = config.get("Study", "ComponentList").split(",")
     try:
+        practice = [ref_to_id[ref.strip()] for ref in practice]
         modules = [ref_to_id[ref.strip()] for ref in modules]
     except KeyError:
+        practice = []
         modules = []
         study_settings["CanRunTask1"] = False
         logging.error("Study component list contained unknown comp ref, task 1a/b cannot be run")
@@ -1451,7 +1457,7 @@ def load_study():
 
     study_settings["CanRunTask2"] = bringup_okay
 
-    return modules, bringup_combined
+    return practice, modules, bringup_combined
 
 
 # updates the current selection filter
@@ -1631,7 +1637,7 @@ if __name__ == "__main__":
         "start": 0
     }
 
-    study_modules, study_bringup = load_study()
+    study_practice, study_modules, study_bringup = load_study()
 
     # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
     dmm_mode = "no_function"
