@@ -855,7 +855,7 @@ def measure_osc():
 
 # actually makes a tool selection and echoes it to all clients to be displayed
 def make_tool_selection(device, new_selection=None):
-    global tool_selections
+    global tool_selections, active_session, active_session_is_recording
     logging.info(f"Making tool selection {device}: {new_selection}")
 
     if device is None:
@@ -866,16 +866,18 @@ def make_tool_selection(device, new_selection=None):
     else:
         # selection and tool selection are mutually exclusive
         make_selection(None)
-        tool_selections[device] = new_selection
-        socketio.emit("tool-selection", {"device": device, "selection": new_selection})
+
+        _, next_card = active_session.get_next()
+        if next_card is not None:
+            expected = next_card.pos if device == "pos" else next_card.neg
+            if new_selection != expected:
+                # if we have a custom card but measured something else, ignore it
+                new_selection = None
+                # socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
 
         if active_session_is_recording and new_selection is not None:
-            # if we hit something that is not the next card, stop highlighting the next card
-            _, next_card = active_session.get_next()
-            if next_card is not None:
-                expected = next_card.pos if device == "pos" else next_card.neg
-                if new_selection != expected:
-                    socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
+            tool_selections[device] = new_selection
+            socketio.emit("tool-selection", {"device": device, "selection": new_selection})
 
             # record a measurement if both probes are set
             if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
@@ -985,16 +987,22 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
 def dmm_selection(probe, tippos, endpos, force_deselect=False):
     global pcbdata, pinref_to_idx, board_multimenu, can_reselect, tool_selections, selection_filter
 
-    if force_deselect:
-        tool_selections[probe] = None
-        socketio.emit("tool-selection", {"device": probe, "selection": None})
-        return
-
     if not active_session_is_recording:
         logging.info("attempted dmm selection without active session, ignoring")
         return
 
     logging.info(f"attempting dmm selection for {probe}")
+
+    # auto disambiguation if we have a guided measurement
+    _, next_card = active_session.get_next()
+
+    if force_deselect:
+        # we touched down outside the board
+        if next_card is None:
+            # only deselect if we don't currently have a guided measurement
+            tool_selections[probe] = None
+            socketio.emit("tool-selection", {"device": probe, "selection": None})
+        return
 
     # board layer is hardcoded for now
     layer = "F"
@@ -1019,9 +1027,6 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
     elif len(hits) > 1:
         logging.info(f"probe {probe} hit {len(hits)} things")
         can_reselect[probe] = False
-
-        # auto disambiguation if we have a guided measurement
-        _, next_card = active_session.get_next()
         if next_card is not None:
             # we have a guided card, so auto-disambiguate
             expected = next_card.pos if probe == "pos" else next_card.neg
