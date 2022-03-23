@@ -1496,7 +1496,7 @@ function initSocket() {
     } else {
       var dmm_val = document.getElementById("sidebar-dmm-value");
       if (data.val === null) {
-        dmm_val.innerText = "--------";
+        dmm_val.innerText = "Please select a mode to capture measurement";
       } else {
         dmm_val.innerText = data.val;
       }

@@ -462,6 +462,8 @@ def handle_study_event(data):
 
                 update_selection_filter(allow_only="net")
 
+                handle_dmm({"mode": "voltage"})
+
                 # activate debug session and load card preset
                 # negative probe should always be on GND
                 # unit is always volts
@@ -883,7 +885,7 @@ def make_study_select(refid, src_text):
 
     if study_state["task"] == "2":
         logging.error("Task 2 NotYetImplemented")
-        
+
     can_reselect["probe"] = False
 
     runtime = time.time() - study_state["step_start"]
@@ -1032,6 +1034,10 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
 # handles a study selection event, either from the client layout or optitrack
 def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=None):
     global study_state, pcbdata, pinref_to_idx, can_reselect, selection_filter
+
+    if force_deselect:
+        # we're outside the board
+        return
 
     if name == "layout":
         # we're from layout, so we have data
@@ -1277,7 +1283,7 @@ def listen_udp():
         # update_probe_history(probe_history, red_tip, red_end)
         update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
         update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
-        if study_state["active"]:
+        if study_state["active"] and study_state["task"] != "2":
             if not study_state["step_done"]:
                 # we only actually want to check for events if we are actively doing a step
                 _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=study_selection)
@@ -1326,9 +1332,9 @@ def listen_udp():
             time.sleep(diff)
         elif -diff > 0.05:
             # more than 50ms behind
-            logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
-                f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
-                f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
+            # logging.warning(f"low framerate ({frame_i // framerate}.{frame_i % framerate}): " +
+            #     f"{-diff*1000:.0f}ms behind ({ts_wait*1000:.0f}ms wait, {ts_board*1000:.0f} ms board, " +
+            #     f"{ts_check*1000:.0f}ms check, {ts_sock*1000:.0f}ms socket, {ts*1000:.0f}ms total)")
             pass
         else:
             #logging.info("frame (sorta) on time")
