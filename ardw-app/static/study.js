@@ -87,7 +87,7 @@ socket.on("study-event", (data) => {
                 task_buttons[task].classList.remove("selected");
             }
             task_buttons[data.task].classList.add("selected");
-            if (data.task == "off") {
+            if (data.task == "off" || data.task == "2") {
                 step_text.firstChild.textContent = "Step N/A";
                 status_text.innerText = "";
             } else {

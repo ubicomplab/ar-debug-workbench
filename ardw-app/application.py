@@ -274,21 +274,22 @@ def handle_connect():
     if study_state["active"]:
         step = study_state["step"]
         task = study_state["task"]
-        refid = study_state["current_modules"][step]
-        ref = compdict[refid]["ref"]
-
         emit("study-event", {"event": "task", "task": task})
-        if step > -1:
-            emit("study-event", {
-                "event": "highlight",
-                "task": task,
-                "refid": refid,
-                "ref": ref,
-                "boardviz": study_state["boardviz"],
-                "step": step
-            })
-            if study_state["step_done"]:
-                emit("study-event", {"event": "success", "refid": refid, "task": task})
+
+        if task == "1A" or task == "1B":
+            refid = study_state["current_modules"][step]
+            ref = compdict[refid]["ref"]
+            if step > -1:
+                emit("study-event", {
+                    "event": "highlight",
+                    "task": task,
+                    "refid": refid,
+                    "ref": ref,
+                    "boardviz": study_state["boardviz"],
+                    "step": step
+                })
+                if study_state["step_done"]:
+                    emit("study-event", {"event": "success", "refid": refid, "task": task})
 
     for task, val in study_settings["WithBoardVizFirst"].items():
         emit("study-event", {"event": "settings", "task": task, "first_with": val})
@@ -404,9 +405,13 @@ def handle_debug_session(data):
             active_session_is_recording = data["record"]
             socketio.emit("debug-session", data)
 
+            update_selection_filter(all_on=True)
+
             next_id, next_card = active_session.get_next()
-            if next_id != -1:
+            if active_session_is_recording and next_id != -1:
                 socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
+            else:
+                socketio.emit("debug-session", {"event": "next", "id": -1})
     elif data["event"] == "save":
         # client wants to save and exit session
         session_history.append(active_session)
@@ -438,15 +443,12 @@ def handle_tool_debug(data):
 def handle_study_event(data):
     global study_state, study_timer, study_modules, study_bringup, study_settings, compdict
 
-    if len(study_modules) == 0:
-        logging.error("Received study event, but modules failed to initialize, ignoring")
-        return
-
     if data["event"] == "task":
         if data["task"] == "off":
             study_log("Turning study mode off")
             study_state["active"] = False
             study_state["task"] = None
+            update_selection_filter(all_on=True)
         else:
             study_log(f"Switching study task to {data['task']}")
             study_state["active"] = True
@@ -457,6 +459,8 @@ def handle_study_event(data):
                     logging.warning("Tried to activate Task 2, but bring-up list was invalid")
                     study_state["active"] = False
                     return
+
+                update_selection_filter(allow_only="net")
 
                 # activate debug session and load card preset
                 # negative probe should always be on GND
@@ -484,6 +488,8 @@ def handle_study_event(data):
                     study_state["active"] = False
                     return
 
+                update_selection_filter(allow_only="comp")
+
                 # set up modules for task 1a/b
                 shuffled = study_modules.copy()
                 np.random.shuffle(shuffled)
@@ -495,7 +501,7 @@ def handle_study_event(data):
 
         socketio.emit("study-event", data)
     elif data["event"] == "step":
-        if study_state["active"]:
+        if study_state["active"] and (study_state["task"] == "1A" or study_state["task"] == "1B"):
             # only permit a step if we're actually doing a study
 
             if not study_state["step_done"]:
@@ -543,7 +549,7 @@ def handle_study_event(data):
     elif data["event"] == "note":
         study_log(f"Custom note: {data['note']}")
     elif data["event"] == "select":
-        if study_state["task"] == "1B" and not study_state["boardviz"]:
+        if study_state["active"] and study_state["task"] == "1B" and not study_state["boardviz"]:
             # this event should only be sent for Task 1B Without BoardViz
             if "point" in data:
                 study_selection("layout", data=data)
@@ -586,6 +592,12 @@ def handle_board_update(data):
     # client is requesting a one-time board update
     logging.info("One-time board pos update")
     do_board_update = True
+
+
+@socketio.on("selection-filter")
+def handle_selection_filter(data):
+    logging.info(f"updating selection filter to {data}")
+    update_selection_filter(toggle=data["sel_type"])
 
 
 @socketio.on("debug")
@@ -904,7 +916,7 @@ def client_selection(data):
 # handles a probe selection event
 # assumes this event was triggered under valid circumstances
 def probe_selection(name, tippos, endpos, force_deselect=False):
-    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, selection_filter
 
     if force_deselect:
         # we dwelled down outside of the board
@@ -915,10 +927,15 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
 
     point = optitrack_to_layout_coords(tippos)
 
+    type_filter = []
+    for sel_type, val in selection_filter.items():
+        if val == 1:
+            type_filter.append(sel_type)
+
     # TODO let user click on tracks?
     # TODO user setting for what types can be probed
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
-                   padding=config.getfloat("Optitrack", "PinPadding"), types=["comp", "pin", "net"])
+                   padding=config.getfloat("Optitrack", "PinPadding"), types=type_filter)
 
     if len(hits) == 1:
         can_reselect[name] = False
@@ -946,7 +963,7 @@ def probe_selection(name, tippos, endpos, force_deselect=False):
 # handles a dmm selection event
 # assumes this event was triggered under valid circumstances
 def dmm_selection(probe, tippos, endpos, force_deselect=False):
-    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, socketio, tool_selections
+    global pcbdata, pinref_to_idx, board_multimenu, can_reselect, tool_selections, selection_filter
 
     if force_deselect:
         tool_selections[probe] = None
@@ -964,9 +981,14 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
 
     point = optitrack_to_layout_coords(tippos)
 
+    type_filter = []
+    for sel_type, val in selection_filter.items():
+        if val == 1:
+            type_filter.append(sel_type)
+
     # the multimeter doesn't want to select components
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=True,
-                   padding=config.getfloat("Optitrack", "PinPadding"), types=["pin", "net"])
+                   padding=config.getfloat("Optitrack", "PinPadding"), types=type_filter)
 
     if len(hits) == 1:
         logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
@@ -1001,7 +1023,7 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
 
 # handles a study selection event, either from the client layout or optitrack
 def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=None):
-    global study_state, pcbdata, pinref_to_idx, can_reselect
+    global study_state, pcbdata, pinref_to_idx, can_reselect, selection_filter
 
     if name == "layout":
         # we're from layout, so we have data
@@ -1022,6 +1044,12 @@ def study_selection(name, tippos=None, endpos=None, force_deselect=False, data=N
 
         # prevent failure spam
         can_reselect[name] = False
+
+    # we're ignoring this one and leaving it hardcoded (interface-only for now)
+    type_filter = []
+    for sel_type, val in selection_filter.items():
+        if val == 1:
+            type_filter.append(sel_type)
 
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=pads,
         render_tracks=tracks, padding=padding, types=["comp"])
@@ -1426,6 +1454,30 @@ def load_study():
     return modules, bringup_combined
 
 
+# updates the current selection filter
+# components are disabled while we're in an active debug session
+# allow_only lets one specific type be permitted for a study task
+def update_selection_filter(toggle=None, all_on=False, allow_only=None):
+    global selection_filter
+
+    if toggle is not None:
+        selection_filter[toggle] = (selection_filter[toggle] + 1) % 2
+    if all_on:
+        selection_filter["comp"] = 1
+        selection_filter["pin"] = 1
+        selection_filter["net"] = 1
+    if allow_only is not None:
+        selection_filter["comp"] = -1
+        selection_filter["pin"] = -1
+        selection_filter["net"] = -1
+        selection_filter[allow_only] = 1
+
+    if active_session_is_recording:
+        selection_filter["comp"] = -1
+
+    socketio.emit("selection-filter", selection_filter)
+
+
 if __name__ == "__main__":
     schdata = None
     pcbdata = None
@@ -1583,6 +1635,13 @@ if __name__ == "__main__":
 
     # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
     dmm_mode = "no_function"
+
+    # -1 means disabled, 0 means off, 1 means on
+    selection_filter = {
+        "comp": 1,
+        "pin": 1,
+        "net": 1,
+    }
 
 
     if len(sys.argv) > 1:
