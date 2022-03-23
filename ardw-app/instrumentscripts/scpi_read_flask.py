@@ -113,7 +113,7 @@ def queryValue(instrumentType="dmm", function="no_function"):
             if function == "no_function":
                 # return Response("--------", mimetype='text')
                 if __name__ == "__main__":
-                    return Response("--------", mimetype='text')
+                    return Response("Please select a function", mimetype='text')
                 return None
 
             try:
@@ -129,8 +129,8 @@ def queryValue(instrumentType="dmm", function="no_function"):
                     # return Response(str(value), mimetype='text')
 
                 if function == "diode":
-                    value = float(dmms[0].query(':MEAS:RES?'))
-                    logging.info(f"Measured value = {value} ohms")
+                    value = float(dmms[0].query(':MEASure:DIODe?'))
+                    # logging.info(f"Measured value = {value} VDC")
                     # return Response(str(value), mimetype='text')
 
                 if function == "continuity":

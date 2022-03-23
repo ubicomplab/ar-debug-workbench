@@ -587,6 +587,7 @@ div.canvas-container>canvas {
 }
 
 .sidebar-card.selected {
+    background-color: rgb(247, 255, 153);
     border-color: #08f;
 }
 
