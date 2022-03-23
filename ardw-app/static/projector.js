@@ -237,6 +237,11 @@ function initSocket() {
       probes[device].color.sel = colors[1];
       probes[device].color.zone = colors[1];
     }
+    var root = document.documentElement;
+    console.log(data)
+    root.style.setProperty("--pad-color-highlight", data.padcolor);
+    root.style.setProperty("--track-color-highlight", data.trackcolor);
+    drawHighlights();
   })
 
   socket.on("study-event", (data) => {

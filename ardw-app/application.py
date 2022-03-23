@@ -55,6 +55,9 @@ app.config["SECRET_KEY"] = "secret!"
 socketio = SocketIO(app, async_mode="eventlet")
 thread = None
 
+# path to data folder
+dirpath = os.path.join(os.path.realpath("."), config.get("Server", "DataFolder"))
+
 
 # -- app routing --
 @app.route("/")
@@ -143,7 +146,6 @@ def get_schematic_svg(schid):
             continue
 
         filename = str(schematic["name"]).strip() + ".svg"
-        dirpath = os.path.join(os.path.realpath("."), "data")
 
         if not os.path.isfile(os.path.join(dirpath, filename)):
             # Kicad creates complicated svg file names for additional sheets
@@ -169,7 +171,7 @@ def get_schdata():
 def get_pcbdata():
     # for some reason pcbdata is getting modified by hitscan, even though it shouldn't
     # TODO find root issue
-    with open("./data/pcbdata.json", "r") as pcbfile:
+    with open(os.path.join(dirpath, "pcbdata.json"), "r") as pcbfile:
         return json.dumps(json.load(pcbfile))
 
     # return json.dumps(pcbdata)
@@ -1525,10 +1527,10 @@ if __name__ == "__main__":
     schdata = None
     pcbdata = None
 
-    with open("./data/schdata.json", "r") as schfile:
+    with open(os.path.join(dirpath, "schdata.json"), "r") as schfile:
         schdata = json.load(schfile)
 
-    with open("./data/pcbdata.json", "r") as pcbfile:
+    with open(os.path.join(dirpath, "pcbdata.json"), "r") as pcbfile:
         pcbdata = json.load(pcbfile)
 
     if schdata is None or pcbdata is None:
