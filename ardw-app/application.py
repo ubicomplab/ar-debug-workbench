@@ -304,6 +304,8 @@ def handle_connect():
         },
         "track_board": config.getboolean("Dev", "TrackBoard"),
         "dmmpanel": config.getint("Study", "DmmPanelRefreshFrequency"),
+        "padcolor": config.get("Rendering", "PadColorHighlight"),
+        "trackcolor": config.get("Rendering", "TrackColorHighlight"),
     })
 
 
@@ -1014,7 +1016,7 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
             type_filter.append(sel_type)
 
     # the multimeter doesn't want to select components
-    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=True,
+    hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
                    padding=config.getfloat("Optitrack", "PinPadding"), types=type_filter)
 
     if len(hits) == 1:
