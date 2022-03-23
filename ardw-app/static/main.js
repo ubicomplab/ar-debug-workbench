@@ -588,7 +588,8 @@ function toggleSidebar(x = false) {
 
 /** Handler for the debug session record button */
 function recordButton() {
-  socket.emit("debug-session", { "event": "record", "record": !active_session_is_recording });
+  // socket.emit("debug-session", { "event": "record", "record": !active_session_is_recording });
+  socket.emit("debug-session", {"event": "record"});
 }
 
 /** Updates the client recording state */

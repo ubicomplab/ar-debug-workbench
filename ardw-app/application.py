@@ -366,6 +366,7 @@ def handle_debug_session(data):
     global session_history
     global active_session
     global active_session_is_recording
+    global study_state
 
     logging.info(f"Received debug session event {data}")
 
@@ -400,23 +401,31 @@ def handle_debug_session(data):
         if next_id != -1:
             socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
     elif data["event"] == "record":
-        # client is turning recording on or off
-        if data["record"] != active_session_is_recording:
-            active_session_is_recording = data["record"]
-            socketio.emit("debug-session", data)
+        # client is toggling recording
+        active_session_is_recording = not active_session_is_recording
 
-            update_selection_filter(all_on=True)
+        socketio.emit("debug-session", {"event": "record", "record": active_session_is_recording})
 
-            next_id, next_card = active_session.get_next()
-            if active_session_is_recording and next_id != -1:
-                socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
-            else:
-                socketio.emit("debug-session", {"event": "next", "id": -1})
+        # enables everything (except components if we're now recording)
+        update_selection_filter(all_on=True)
+
+        # for task 2 specifically we want only nets
+        if active_session_is_recording and study_state["active"] and study_state["task"] == "2":
+            update_selection_filter(allow_only="net")
+
+        next_id, next_card = active_session.get_next()
+        if active_session_is_recording and next_id != -1:
+            socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
+        else:
+            socketio.emit("debug-session", {"event": "next", "id": -1})
     elif data["event"] == "save":
         # client wants to save and exit session
         session_history.append(active_session)
         active_session = None
         active_session_is_recording = False
+        socketio.emit("debug-session", {"event": "record", "record": False})
+        update_selection_filter(all_on=True)
+
         # tell client how many sessions are saved
         data["count"] = len(session_history)
         socketio.emit("debug-session", data)
@@ -460,7 +469,8 @@ def handle_study_event(data):
                     study_state["active"] = False
                     return
 
-                update_selection_filter(allow_only="net")
+                # do this when record button is clicked instead
+                # update_selection_filter(allow_only="net")
 
                 handle_dmm({"mode": "voltage"})
 
@@ -1477,8 +1487,6 @@ def load_study():
 def update_selection_filter(toggle=None, all_on=False, allow_only=None):
     global selection_filter
 
-    if toggle is not None:
-        selection_filter[toggle] = (selection_filter[toggle] + 1) % 2
     if all_on:
         selection_filter["comp"] = 1
         selection_filter["pin"] = 1
@@ -1491,6 +1499,9 @@ def update_selection_filter(toggle=None, all_on=False, allow_only=None):
 
     if active_session_is_recording:
         selection_filter["comp"] = -1
+
+    if toggle is not None and selection_filter[toggle] != -1:
+        selection_filter[toggle] = (selection_filter[toggle] + 1) % 2
 
     socketio.emit("selection-filter", selection_filter)
 
