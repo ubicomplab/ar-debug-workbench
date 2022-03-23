@@ -745,8 +745,9 @@ function debugSessionEvent(data) {
       sidebar.querySelector('*[name="sidebar-notes"]').value = data.notes;
       sidebar.querySelector('*[name="sidebar-timestamp"]').innerHTML = data.timestamp;
       break;
-    case "custom":
     case "measurement":
+      sound_success.play();
+    case "custom":
       if (data.update) {
         // Measurement for existing card
         updateDebugCard(data.card, data.id);
@@ -754,7 +755,6 @@ function debugSessionEvent(data) {
         // Custom card, or measurement without corresponding card
         addDebugCard(data.card, data.id);
       }
-      sound_success.play();
       break;
     case "record":
       setRecordState(data.record);
