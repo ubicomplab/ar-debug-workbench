@@ -754,6 +754,7 @@ function debugSessionEvent(data) {
         // Custom card, or measurement without corresponding card
         addDebugCard(data.card, data.id);
       }
+      sound_success.play();
       break;
     case "record":
       setRecordState(data.record);
