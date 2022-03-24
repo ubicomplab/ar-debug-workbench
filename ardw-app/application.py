@@ -524,7 +524,8 @@ def handle_study_event(data):
 
             if not study_state["step_done"]:
                 # step is still underway, so this is a "skip"
-                study_log("Skip")
+                runtime = time.time() - study_state["step_start"]
+                study_log(f"Skipped after {runtime:.3f}")
                 study_state["step_done"] = True
                 # highlight the component as if it was successful
                 refid = study_state["current_modules"][study_state["step"]]
