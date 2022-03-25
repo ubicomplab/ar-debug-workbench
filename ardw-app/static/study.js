@@ -41,9 +41,7 @@ task_buttons["2"].addEventListener("click", () => {
 })
 
 var next_button = document.getElementById("next");
-next_button.addEventListener("click", () => {
-    socket.emit("study-event", {"event": "step"})
-})
+next_button.addEventListener("click", goNext)
 
 var step_text = document.getElementById("step");
 var status_text = document.getElementById("status");
@@ -51,11 +49,13 @@ var boardviz_text = document.getElementById("boardviz");
 var comp_text = document.getElementById("comp");
 
 var custom_input = document.getElementById("custom-input");
-var custom_submit = document.getElementById("custom-btn");
-custom_submit.addEventListener("click", () => {
-    socket.emit("study-event", {"event": "note", "note": custom_input.value});
-    custom_input.value = "";
+custom_input.addEventListener("keydown", (evt) => {
+    if (evt.key === "Enter") {
+        submitCustom();
+    }
 })
+var custom_submit = document.getElementById("custom-btn");
+custom_submit.addEventListener("click", submitCustom)
 
 
 var timer_text = document.getElementById("timer-text");
@@ -68,6 +68,23 @@ var timer_val = 0;
 timer_btn.addEventListener("click", () => {
     socket.emit("study-event", {"event": "timer", "turn_on": !timer_on})
 })
+
+window.addEventListener("keydown", (evt) => {
+    if (evt.key == "n" && document.activeElement !== custom_input) {
+        goNext();
+    }
+})
+
+
+function goNext() {
+    socket.emit("study-event", {"event": "step"});
+}
+
+function submitCustom() {
+    var custom_input = document.getElementById("custom-input");
+    socket.emit("study-event", {"event": "note", "note": custom_input.value});
+    custom_input.value = "";
+}
 
 
 function displaySeconds(time, decimal=3) {
