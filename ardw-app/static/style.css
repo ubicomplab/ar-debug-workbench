@@ -121,7 +121,7 @@ html, body {
     font-size: 12pt;
     text-align: left;
     font-weight: normal;
-    display: none;
+    /* display: none; */
     position: absolute;
     background-color: white;
     right: 0;
@@ -139,7 +139,7 @@ html, body {
 }
 
 #menubar #settings:hover #settings-content {
-    display: block;
+    /* display: block; */
 }
 
 #menubar .settings-label {

@@ -41,9 +41,6 @@ var projector_sliders = {
   "z": {}
 };
 
-/** True when manual adjustment of the projector view is enabled */
-var adjust_with_keys = false;
-
 var sidebar_custom_selection = {
   "pos": {
     "type": null,
@@ -97,9 +94,8 @@ var tool_ready_state = {
   }
 };
 
+// DEPRECATED
 var active_tool_request = false;
-
-var sidebar_shown = false;
 
 /** Controls size of debug session sidebar */
 var sidebar_split = Split(["#display", "#sidebar"], {
@@ -129,6 +125,11 @@ var canvas_split = Split(["#front-canvas", "#back-canvas"], {
 var sound_success = new Audio("sound/success");
 /** Sound played on task failure */
 var sound_failure = new Audio("sound/fail");
+
+/** iff true, the settings menu is being displayed */
+var settings_open = false;
+/** iff true, manual adjustment of the projector view is enabled */
+var adjust_with_keys = false;
 
 
 /**
@@ -854,6 +855,24 @@ function floatFromText(val, lo, hi, def=0, increment=0) {
   }
 }
 
+function toggleSettings(evt, force_close=false) {
+  if (force_close) {
+    settings_open = false;
+  } else {
+    settings_open = !settings_open;
+  }
+
+  var settings_content = document.getElementById("settings-content");
+  if (settings_open) {
+    settings_content.classList.remove("hidden");
+    adjust_with_keys = true;
+  } else {
+    settings_content.classList.add("hidden");
+    adjust_with_keys = false;
+  }
+  document.getElementById("settings-projector-usekeys").checked = adjust_with_keys;
+}
+
 /**
  * Initializes various page elements, such as the menu bar and popups
  */
@@ -893,7 +912,7 @@ function initPage() {
   search_input_field.addEventListener("input", () => {
     searchlist.classList.remove("hidden");
   });
-  document.addEventListener("click", (e) => {
+  window.addEventListener("click", (e) => {
     if (!search_input_field.contains(e.target) && !searchlist.contains(e.target)) {
       searchlist.classList.add("hidden");
     }
@@ -915,6 +934,14 @@ function initPage() {
   }
 
   // Settings
+  var settings_btn = document.getElementById("settings-btn");
+  settings_btn.addEventListener("click", toggleSettings);
+  window.addEventListener("click", (evt) => {
+    var settings_content = document.getElementById("settings-content");
+    if (!settings_content.contains(evt.target) && !settings_btn.contains(evt.target)) {
+      toggleSettings(evt, true);
+    }
+  })
 
   // this is scuffed, do better later
   var display_checkboxes = document.querySelectorAll('input[name="settings-display"]');
