@@ -55,7 +55,13 @@ custom_input.addEventListener("keydown", (evt) => {
     }
 })
 var custom_submit = document.getElementById("custom-btn");
-custom_submit.addEventListener("click", submitCustom)
+custom_submit.addEventListener("click", submitCustom);
+
+window.addEventListener("keydown", (evt) => {
+    if (evt.key == "n" && document.activeElement !== custom_input) {
+        goNext();
+    }
+})
 
 
 var timer_text = document.getElementById("timer-text");
@@ -69,11 +75,71 @@ timer_btn.addEventListener("click", () => {
     socket.emit("study-event", {"event": "timer", "turn_on": !timer_on})
 })
 
+
+var probe_btn = document.getElementById("probe-btn");
+var probe_x = document.getElementById("probe-x-off");
+var probe_y = document.getElementById("probe-y-off");
+
+var probe_key_adjust = false;
+var probe_adjust = {
+    "x": 0,
+    "y": 0
+}
+
+probe_btn.addEventListener("click", () => {
+    probe_key_adjust = !probe_key_adjust;
+    if (probe_key_adjust) {
+        probe_btn.innerText = "On";
+        probe_btn.classList.add("selected");
+    } else {
+        probe_btn.innerText = "Off";
+        probe_btn.classList.remove("selected");
+    }
+});
+
 window.addEventListener("keydown", (evt) => {
-    if (evt.key == "n" && document.activeElement !== custom_input) {
-        goNext();
+    if  (document.activeElement === custom_input) {
+        return;
+    }
+    var did_something = false;
+    switch (evt.key) {
+        case "w":
+            // -y
+            probe_adjust.y -= 0.1;
+            did_something = true;
+            break;
+        case "s":
+            // +y
+            probe_adjust.y += 0.1;
+            did_something = true;
+            break;
+        case "a":
+            // -x
+            probe_adjust.x -= 0.1;
+            did_something = true;
+            break;
+        case "d":
+            // +x
+            probe_adjust.x += 0.1;
+            did_something = true;
+            break;
+    }
+    if (did_something) {
+        socket.emit("probe-adjust", probe_adjust)
     }
 })
+
+function probeListener(evt) {
+    if (evt.key === "Enter") {
+        var xoff = parseFloat(probe_x.value);
+        var yoff = parseFloat(probe_y.value);
+        if (isNaN(xoff)) xoff = 0;
+        if (isNaN(yoff)) yoff = 0;
+        socket.emit("probe-adjust", {"x": xoff, "y": yoff})
+    }
+}
+probe_x.addEventListener("keydown", probeListener)
+probe_y.addEventListener("keydown", probeListener)
 
 
 function goNext() {
@@ -155,4 +221,10 @@ socket.on("study-event", (data) => {
             console.log(data);
             break;
     }
+})
+
+socket.on("probe-adjust", (data) => {
+    probe_adjust = data;
+    probe_x.value = data.x.toFixed(1);
+    probe_y.value = data.y.toFixed(1);
 })

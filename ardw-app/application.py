@@ -223,7 +223,7 @@ def handle_connect():
     global projector_mode, projector_calibration, board_pos
     global active_session, active_session_is_recording
     global study_state, study_settings, compdict
-    global selection_filter
+    global selection_filter, probe_adjust
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -312,6 +312,8 @@ def handle_connect():
     })
 
     emit("selection-filter", selection_filter)
+
+    emit("probe-adjust", probe_adjust)
 
 
 @socketio.on("disconnect")
@@ -623,6 +625,13 @@ def handle_selection_filter(data):
     update_selection_filter(toggle=data["sel_type"])
 
 
+@socketio.on("probe-adjust")
+def handle_probe_adjust(data):
+    global probe_adjust
+    probe_adjust = data
+    socketio.emit("probe-adjust", data)
+
+
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
@@ -744,7 +753,7 @@ def init_data(pcbdata, schdata):
 
 # converts optitrack pixels to layout mm in 2D
 def optitrack_to_layout_coords(point):
-    global board_pos, projector_calibration, rotation_center
+    global board_pos, projector_calibration, rotation_center, probe_adjust
     x_off = board_pos["x"] + projector_calibration["tx"]
     y_off = board_pos["y"] + projector_calibration["ty"]
     r_off = board_pos["r"] + projector_calibration["r"]
@@ -753,13 +762,23 @@ def optitrack_to_layout_coords(point):
     x = point[0] / z_factor - x_off
     y = -point[1] / z_factor - y_off
     sh_point = rotate(Point(x, y), -r_off, origin=rotation_center, use_radians=False)
+
+    # probe adjust step
+    sh_point.x += probe_adjust["x"]
+    sh_point.y += probe_adjust["y"]
+
     return [sh_point.x, sh_point.y]
     # return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
 
 
 # convert layout mm to optitrack pixels in 2D
 def layout_to_optitrack_coords(point):
-    global board_pos, projector_calibration, rotation_center
+    global board_pos, projector_calibration, rotation_center, probe_adjust
+
+    # probe adjust step
+    point[0] -= probe_adjust["x"]
+    point[1] -= probe_adjust["y"]
+
     x_off = board_pos["x"] + projector_calibration["tx"]
     y_off = board_pos["y"] + projector_calibration["ty"]
     r_off = board_pos["r"] + projector_calibration["r"]
@@ -1652,11 +1671,6 @@ if __name__ == "__main__":
 
     # {x, y, z}, where each coordinate is [min, max]
     reselection_zone = None
-    update_reselection_zone()
-
-    if config.getboolean("Dev", "AutoconnectTools"):
-        # we just assume ptr and dmm are already connected
-        autoconnect_tools(["ptr", "dmm"])
 
     study_state = {
         "active": False,            # iff True, study mode is on
@@ -1679,9 +1693,6 @@ if __name__ == "__main__":
         "on": False,
         "start": 0
     }
-
-    study_practice, study_modules, study_bringup = load_study()
-
     # possible values: "no_function", "voltage", "resistance", "diode", "continuity"
     dmm_mode = "no_function"
 
@@ -1691,6 +1702,16 @@ if __name__ == "__main__":
         "pin": 1,
         "net": 1,
     }
+
+    probe_adjust = {"x": 0, "y": 0}
+
+    study_practice, study_modules, study_bringup = load_study()
+
+    update_reselection_zone()
+
+    if config.getboolean("Dev", "AutoconnectTools"):
+        # we just assume ptr and dmm are already connected
+        autoconnect_tools(["ptr", "dmm"])
 
 
     if len(sys.argv) > 1:

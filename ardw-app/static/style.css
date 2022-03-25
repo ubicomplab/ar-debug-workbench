@@ -742,4 +742,8 @@ div.canvas-container>canvas {
 .study-buttons > input[type="text"] {
     width: 180px;
 }
+.study-buttons input[type="text"].small {
+    width: 30px;
+    text-align: right;
+}
 

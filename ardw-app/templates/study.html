@@ -53,6 +53,26 @@
         <div id="timer-btn" class="button">Start</div>
     </div>
 
+    <h4>Manual Probe Offset</h4>
+    <div class="study-buttons">
+        <div class="text">When on, use WASD</div>
+        <div class="button" id="probe-btn">Off</div>
+    </div>
+    <div class="study-buttons">
+        <div class="text">
+            x:
+            <input type="text" id="probe-x-off" class="small"/>
+            mm
+        </div>
+    </div>
+    <div class="study-buttons">
+        <div class="text">
+            y:
+            <input type="text" id="probe-y-off" class="small"/>
+            mm
+        </div>
+    </div>
+
     <script src="{{socketiojs}}"></script>
     <script src="{{js}}"></script>
 </body>
