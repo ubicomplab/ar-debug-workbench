@@ -1352,8 +1352,15 @@ function initPage() {
   });
 
   document.getElementById("sidebar-export-button").addEventListener("click", () => {
-    console.log("Export function is WIP, doing nothing");
+    console.log("Session info output to log");
     socket.emit("debug-session", { "event": "export" });
+  })
+
+  // hacky addition for study: pressing n is the same as clicking next from the study control panel
+  window.addEventListener("keydown", (evt) => {
+    if (evt.key === "n" && document.activeElement !== search_input_field) {
+      socket.emit("study-event", {"event": "step"});
+    }
   })
 }
 
