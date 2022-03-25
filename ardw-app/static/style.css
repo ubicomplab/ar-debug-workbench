@@ -713,7 +713,7 @@ div.canvas-container>canvas {
     align-items: center;
     height: 30px;
 }
-.study-buttons > .button {
+.study-buttons .button {
     border: 1px solid #000;
     background-color: #ddd;
     border-radius: 4px;
@@ -721,25 +721,28 @@ div.canvas-container>canvas {
     width: 70px;
     cursor: pointer;
 }
-.study-buttons > .button.long {
+.study-buttons .button.long {
     width: 110px;
 }
-.study-buttons > .button:hover {
+.study-buttons .button:hover {
     background-color: #ccc
 }
-.study-buttons > .button.selected {
+.study-buttons .button.selected {
     background-color: rgba(0, 123, 255, 0.5);
 }
-.study-buttons > .button.selected:hover {
+.study-buttons .button.selected:hover {
     background-color: rgba(0, 123, 255, 0.5);
     /* background-color: rgba(0, 123, 255, 0.7); */
 }
-.study-buttons > .text {
+.study-buttons .text {
     width: 180px;
     margin: 0 4px;
     text-align: left;
 }
-.study-buttons > input[type="text"] {
+.study-buttons .text.long {
+    width: max-content;
+}
+.study-buttons input[type="text"] {
     width: 180px;
 }
 .study-buttons input[type="text"].small {

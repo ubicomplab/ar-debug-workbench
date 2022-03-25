@@ -75,71 +75,86 @@ timer_btn.addEventListener("click", () => {
     socket.emit("study-event", {"event": "timer", "turn_on": !timer_on})
 })
 
+/** each has HTML elements btn, xin, yin and values x, y where
+ *  x and y are in "mm", but technically in optitrack pixels */
+var probe_elements = {
+    "red": {},
+    "grey": {},
+}
+/** null, "red", or "grey" */
+var probe_listening = null;
 
-var probe_btn = document.getElementById("probe-btn");
-var probe_x = document.getElementById("probe-x-off");
-var probe_y = document.getElementById("probe-y-off");
+function probe_btn_click(color) {
+    probe_elements.red.btn.classList.remove("selected");
+    probe_elements.grey.btn.classList.remove("selected");
+    probe_elements.red.btn.innerText = "Off";
+    probe_elements.grey.btn.innerText = "Off";
 
-var probe_key_adjust = false;
-var probe_adjust = {
-    "x": 0,
-    "y": 0
+    if (probe_listening === color) {
+        probe_listening = null;
+    } else {
+        probe_listening = color;
+        probe_elements[color].btn.classList.add("selected");
+        probe_elements[color].btn.innerText = "On";
+    }
 }
 
-probe_btn.addEventListener("click", () => {
-    probe_key_adjust = !probe_key_adjust;
-    if (probe_key_adjust) {
-        probe_btn.innerText = "On";
-        probe_btn.classList.add("selected");
-    } else {
-        probe_btn.innerText = "Off";
-        probe_btn.classList.remove("selected");
-    }
-});
-
-window.addEventListener("keydown", (evt) => {
-    if  (document.activeElement === custom_input) {
-        return;
-    }
-    var did_something = false;
-    switch (evt.key) {
-        case "w":
-            // -y
-            probe_adjust.y -= 0.1;
-            did_something = true;
-            break;
-        case "s":
-            // +y
-            probe_adjust.y += 0.1;
-            did_something = true;
-            break;
-        case "a":
-            // -x
-            probe_adjust.x -= 0.1;
-            did_something = true;
-            break;
-        case "d":
-            // +x
-            probe_adjust.x += 0.1;
-            did_something = true;
-            break;
-    }
-    if (did_something) {
-        socket.emit("probe-adjust", probe_adjust)
-    }
-})
-
-function probeListener(evt) {
+function probe_input(evt, color) {
     if (evt.key === "Enter") {
-        var xoff = parseFloat(probe_x.value);
-        var yoff = parseFloat(probe_y.value);
+        var xoff = parseFloat(probe_elements[color].xin.value);
+        var yoff = parseFloat(probe_elements[color].yin.value);
         if (isNaN(xoff)) xoff = 0;
         if (isNaN(yoff)) yoff = 0;
-        socket.emit("probe-adjust", {"x": xoff, "y": yoff})
+        socket.emit("probe-adjust", {"probe": color, "x": xoff, "y": yoff});
     }
 }
-probe_x.addEventListener("keydown", probeListener)
-probe_y.addEventListener("keydown", probeListener)
+
+for (let color in probe_elements) {
+    probe_elements[color]["btn"] = document.getElementById(`${color}-btn`);
+    probe_elements[color]["xin"] = document.getElementById(`${color}-x`);
+    probe_elements[color]["yin"] = document.getElementById(`${color}-y`);
+    probe_elements[color]["x"] = 0;
+    probe_elements[color]["y"] = 0;
+
+    probe_elements[color].btn.addEventListener("click", () => {
+        probe_btn_click(color);
+    });
+    probe_elements[color].xin.addEventListener("keydown", (evt) => {
+        probe_input(evt, color);
+    });
+    probe_elements[color].yin.addEventListener("keydown", (evt) => {
+        probe_input(evt, color);
+    });
+}
+
+window.addEventListener("keydown", (evt) => {
+    if (document.activeElement !== custom_input && probe_listening !== null) {
+        var did_something = false;
+        var x = probe_elements[probe_listening].x;
+        var y = probe_elements[probe_listening].y;
+        switch (evt.key) {
+            case "w":
+                y -= 0.1;
+                did_something = true;
+                break;
+            case "s":
+                y += 0.1;
+                did_something = true;
+                break;
+            case "a":
+                x -= 0.1;
+                did_something = true;
+                break;
+            case "d":
+                x += 0.1;
+                did_something = true;
+                break;
+        }
+        if (did_something) {
+            socket.emit("probe-adjust", {"probe": probe_listening, "x": x, "y": y});
+        }
+    }
+})
 
 
 function goNext() {
@@ -224,7 +239,8 @@ socket.on("study-event", (data) => {
 })
 
 socket.on("probe-adjust", (data) => {
-    probe_adjust = data;
-    probe_x.value = data.x.toFixed(1);
-    probe_y.value = data.y.toFixed(1);
+    probe_elements[data.probe].x = data.x;
+    probe_elements[data.probe].y = data.y;
+    probe_elements[data.probe].xin.value = data.x.toFixed(1);
+    probe_elements[data.probe].yin.value = data.y.toFixed(1);
 })
