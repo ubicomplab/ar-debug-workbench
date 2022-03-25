@@ -24,6 +24,12 @@ from instrumentscripts.scpi_read_flask import initializeInstruments, queryValue
 from boardgeometry.hitscan import hitscan
 
 
+# CONFIG_FILE = "config_uno.ini"
+# CONFIG_FILE = "config_duo.ini"
+# CONFIG_FILE = "config_redboard.ini"
+CONFIG_FILE = "config_sounddetector.ini"
+
+
 logging.basicConfig(
     filename="ardw.log",
     filemode="w",
@@ -36,7 +42,7 @@ logging.info("Server started")
 # config file is split into the following sections:
 # Server, Optitrack, Dev
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read(CONFIG_FILE)
 
 
 if getattr(sys, 'frozen', False):
