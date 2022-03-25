@@ -223,6 +223,7 @@ def handle_connect():
     global projector_mode, projector_calibration, board_pos
     global active_session, active_session_is_recording
     global study_state, study_settings, compdict
+    global selection_filter
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -309,6 +310,8 @@ def handle_connect():
         "padcolor": config.get("Rendering", "PadColorHighlight"),
         "trackcolor": config.get("Rendering", "TrackColorHighlight"),
     })
+
+    emit("selection-filter", selection_filter)
 
 
 @socketio.on("disconnect")
