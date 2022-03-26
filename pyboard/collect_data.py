@@ -21,7 +21,7 @@ def encode_udp(data):
     if USE_BOARD:
         # print(data['tip_pos'][2])
         return struct.pack("f" * 14,
-                           data['red_tip_pixel'][0], data['red_tip_pixel'][1],data['tip_pos'][2],
+                           data['red_tip_pixel'][0], data['red_tip_pixel'][1], data['tip_pos'][2],
                            data['red_top_pixel'][0], data['red_top_pixel'][1],
                            data['board'][0], data['board'][1], data['board_pos'][2],
                            data['grey_tip_pixel'][0], data['grey_tip_pixel'][1], data['tip_pos'][5],
@@ -34,7 +34,8 @@ def encode_udp(data):
 
 def main():
     opti = get_opti_source(show_plot=False, use_board=USE_BOARD, use_tray=False)
-    board_rot = get_board_rot(opti)
+    if USE_BOARD:
+        board_rot = get_board_rot(opti)
     # prt.PrintLayer(board_rot)
     # fps = prt.FigureManager(fps=10000)
     # prt.TimePlotLayer(board_rot, ylim=(-200, 200), n_channels=3, fig_manager=fps)

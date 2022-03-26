@@ -770,10 +770,7 @@ def optitrack_to_layout_coords(point):
     sh_point = rotate(Point(x, y), -r_off, origin=rotation_center, use_radians=False)
 
     # probe adjust step
-    sh_point.x += probe_adjust["x"]
-    sh_point.y += probe_adjust["y"]
-
-    return [sh_point.x, sh_point.y]
+    return [sh_point.x + probe_adjust["x"], sh_point.y + probe_adjust["y"]]
     # return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
 
 
