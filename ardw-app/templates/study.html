@@ -53,24 +53,37 @@
         <div id="timer-btn" class="button">Start</div>
     </div>
 
-    <h4>Manual Probe Offset</h4>
+    <h4>Manual Probe Adjustment</h4>
     <div class="study-buttons">
-        <div class="text">When on, use WASD</div>
-        <div class="button" id="probe-btn">Off</div>
+        <div class="text long">When a probe is turned on, use WASD to adjust its x and y</div>
     </div>
     <div class="study-buttons">
+        <div class="text" style="font-weight:bold;">Red Probe</div>
         <div class="text">
             x:
-            <input type="text" id="probe-x-off" class="small"/>
+            <input type="text" id="red-x" class="small"/>
             mm
         </div>
-    </div>
-    <div class="study-buttons">
         <div class="text">
             y:
-            <input type="text" id="probe-y-off" class="small"/>
+            <input type="text" id="red-y" class="small"/>
             mm
         </div>
+        <div class="button" id="red-btn">Off</div>
+    </div>
+    <div class="study-buttons">
+        <div class="text" style="font-weight:bold;">Grey Probe</div>
+        <div class="text">
+            x:
+            <input type="text" id="grey-x" class="small"/>
+            mm
+        </div>
+        <div class="text">
+            y:
+            <input type="text" id="grey-y" class="small"/>
+            mm
+        </div>
+        <div class="button" id="grey-btn">Off</div>
     </div>
 
     <script src="{{socketiojs}}"></script>

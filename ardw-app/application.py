@@ -319,7 +319,8 @@ def handle_connect():
 
     emit("selection-filter", selection_filter)
 
-    emit("probe-adjust", probe_adjust)
+    emit("probe-adjust", {"probe": "red", "x": probe_adjust["red"]["x"], "y": probe_adjust["red"]["y"]})
+    emit("probe-adjust", {"probe": "grey", "x": probe_adjust["grey"]["x"], "y": probe_adjust["grey"]["y"]})
 
 
 @socketio.on("disconnect")
@@ -634,7 +635,8 @@ def handle_selection_filter(data):
 @socketio.on("probe-adjust")
 def handle_probe_adjust(data):
     global probe_adjust
-    probe_adjust = data
+    probe_adjust[data["probe"]]["x"] = data["x"]
+    probe_adjust[data["probe"]]["y"] = data["y"]
     socketio.emit("probe-adjust", data)
 
 
@@ -759,7 +761,7 @@ def init_data(pcbdata, schdata):
 
 # converts optitrack pixels to layout mm in 2D
 def optitrack_to_layout_coords(point):
-    global board_pos, projector_calibration, rotation_center, probe_adjust
+    global board_pos, projector_calibration, rotation_center
     x_off = board_pos["x"] + projector_calibration["tx"]
     y_off = board_pos["y"] + projector_calibration["ty"]
     r_off = board_pos["r"] + projector_calibration["r"]
@@ -769,18 +771,13 @@ def optitrack_to_layout_coords(point):
     y = -point[1] / z_factor - y_off
     sh_point = rotate(Point(x, y), -r_off, origin=rotation_center, use_radians=False)
 
-    # probe adjust step
-    return [sh_point.x + probe_adjust["x"], sh_point.y + probe_adjust["y"]]
+    return [sh_point.x, sh_point.y]
     # return [sh_point.x / z_factor - x_off, -sh_point.y / z_factor - y_off]
 
 
 # convert layout mm to optitrack pixels in 2D
 def layout_to_optitrack_coords(point):
-    global board_pos, projector_calibration, rotation_center, probe_adjust
-
-    # probe adjust step
-    point[0] -= probe_adjust["x"]
-    point[1] -= probe_adjust["y"]
+    global board_pos, projector_calibration, rotation_center
 
     x_off = board_pos["x"] + projector_calibration["tx"]
     y_off = board_pos["y"] + projector_calibration["ty"]
@@ -1279,7 +1276,7 @@ def update_boardpos(x, y, r):
 
 
 def listen_udp():
-    global socketio, active_session_is_recording, study_state, do_board_update
+    global socketio, active_session_is_recording, study_state, do_board_update, probe_adjust
 
     sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1320,6 +1317,13 @@ def listen_udp():
         red_tip[2] *= 1000
         grey_tip[2] *= 1000
         board_update[2] *= 1000
+
+        # manual probe adjust
+        # y adjust is negated because optitrack and layout ys are flipped
+        red_tip[0] += probe_adjust["red"]["x"]
+        red_tip[1] -= probe_adjust["red"]["y"]
+        grey_tip[0] += probe_adjust["grey"]["x"]
+        grey_tip[1] -= probe_adjust["grey"]["y"]
 
         # to avoid crashes for now, ignoring z values
         board_update = board_update[:2]
@@ -1706,7 +1710,11 @@ if __name__ == "__main__":
         "net": 1,
     }
 
-    probe_adjust = {"x": 0, "y": 0}
+    # probe_adjust = {"x": 0, "y": 0}
+    probe_adjust = {
+        "red": {"x": 0, "y": 0},
+        "grey": {"x": 0, "y": 0},
+    }
 
     study_practice, study_modules, study_bringup = load_study()
 
