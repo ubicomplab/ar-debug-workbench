@@ -1214,7 +1214,7 @@ def check_probe_events(name: str, history: dict, selection_fn):
         if board_multimenu["active"] and board_multimenu["source"] == name:
             board_multimenu["active"] = False
             socketio.emit("selection", {"type": "cancel-multi"})
-        if tip_pos[2] <= config.getfloat("Optitrack", "OutsideVerticalBuffer"):
+        if tip_dwell == 1 and tip_pos[2] <= config.getfloat("Optitrack", "OutsideVerticalBuffer"):
             selection_fn(name, tip_pos, end_pos, True)
         return tip_dwell, end_dwell
     ts_isz = time.perf_counter() - ts_isz
@@ -1339,7 +1339,7 @@ def listen_udp():
         update_probe_history(dmm_probe_history["pos"], red_tip, red_end)
         update_probe_history(dmm_probe_history["neg"], grey_tip, grey_end)
         if study_state["active"] and study_state["task"] != "2":
-            if not study_state["step_done"]:
+            if not study_state["step_done"] and (study_state["task"] == "1A" or study_state["boardviz"]):
                 # we only actually want to check for events if we are actively doing a step
                 _, _ = check_probe_events("probe", dmm_probe_history["pos"], selection_fn=study_selection)
         elif active_session_is_recording:
