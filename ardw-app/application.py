@@ -210,11 +210,10 @@ def instrument_panel():
     )
 
 
-@app.route("/sound/<status>")
-def get_sound_success(status="fail"):
-    # status is "success" or "fail"
+@app.route("/sound/<name>")
+def get_sound_success(name):
     return send_file(
-        f"static/win7{status}.wav",
+        f"static/{name}.wav",
         mimetype="audio/wav",
     )
 

@@ -122,9 +122,11 @@ var canvas_split = Split(["#front-canvas", "#back-canvas"], {
 
 
 /** Sound played on task success */
-var sound_success = new Audio("sound/success");
+var sound_success = new Audio("sound/win7success");
 /** Sound played on task failure */
-var sound_failure = new Audio("sound/fail");
+var sound_failure = new Audio("sound/win7fail");
+/** Sound played on debug measurement */
+var sound_measure = new Audio("sound/capture");
 
 /** iff true, the settings menu is being displayed */
 var settings_open = false;
@@ -747,7 +749,7 @@ function debugSessionEvent(data) {
       sidebar.querySelector('*[name="sidebar-timestamp"]').innerHTML = data.timestamp;
       break;
     case "measurement":
-      sound_success.play();
+      sound_measure.play();
     case "custom":
       if (data.update) {
         // Measurement for existing card
