@@ -26,8 +26,8 @@ from boardgeometry.hitscan import hitscan
 
 # CONFIG_FILE = "config_uno.ini"
 # CONFIG_FILE = "config_duo.ini"
-# CONFIG_FILE = "config_redboard.ini"
-CONFIG_FILE = "config_sounddetector.ini"
+CONFIG_FILE = "config_redboard.ini"
+# CONFIG_FILE = "config_sounddetector.ini"
 
 
 logging.basicConfig(
