@@ -32,7 +32,7 @@ CONFIG_FILE = "config_redboard.ini"
 
 logging.basicConfig(
     filename="ardw.log",
-    filemode="w",
+    #filemode="w",
     # encoding="utf-8",
     level="INFO",
     format="%(asctime)s - %(levelname)s - %(message)s"
