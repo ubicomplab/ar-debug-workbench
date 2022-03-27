@@ -1,0 +1,215 @@
+.normal#contentWrapper 
+{
+	width: 1074px;
+	margin-right: auto;
+	margin-left: auto;
+	user-select: none;
+	-moz-user-select: none;
+	-webkit-user-select: none;
+	-ms-user-select: none;
+}
+
+.normal #bumper
+{
+	position: relative;
+	width: 1074px;
+	height: 430px;
+	background-color: rgb(240,240,240);
+	background-image: url(../images/fp_background.svg);
+	background-repeat: no-repeat;
+	background-size: contain;
+	border-color: rgb(100,100,100);
+	border-style: solid;
+	border-width: 2px;
+}
+
+.normal #center 
+{
+	position: absolute;
+	left: 134px;
+}
+
+.normal #Display
+{
+	position: relative;
+	width: 560px;
+	border: 15px;
+	background-color: black;
+	padding: 3px;
+	clear: both;
+	border-color: rgb(140, 140, 140);
+	border-style: inset;
+}
+
+.fullscreen .canhide
+{
+	display: none;
+}
+
+.fullscreen #Display
+{
+	position: relative;
+	background-color: black;
+	width: 98vw;
+	max-width: 800px;
+	min-width: 400px;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+#DisplayCanvas
+{
+	width: 100%;
+	display: block;
+}
+
+#DisplayCanvas:hover
+{
+	cursor: pointer;
+}
+
+#left 
+{
+	position: absolute;
+	padding-top: 49px;
+	padding-left: 31px;
+}
+
+#GreenLabel 
+{
+	border-radius: 0 0 4px 4px;
+	float:right;
+	text-align:center;
+	font: 16px "helvetica neue", helvetica, arial, sans-serif;
+	color:#fff;
+	padding: 6px;
+	letter-spacing: 0.5px;
+	background: rgb(0, 150, 57);
+	margin-bottom: 3px;
+}
+
+#GreenLabel span
+{
+	font-weight: bold;
+}
+
+#right 
+{
+	position: absolute;
+	left: 762px;
+	padding-top: 49px;
+}
+
+.buttonSurround
+{
+	border-style: solid;
+	border-width: 2px;
+	border-color: rgb(100,100,100);
+	border-radius: 9px;
+	padding: 2px;
+	background-color: rgb(70,70,70);
+	margin-bottom: 8px;
+}
+
+.button 
+{
+	color: white;
+	background-color:rgb(130,130,130);
+	font: normal 11px "helvetica neue", helvetica, arial, sans-serif;
+	width: 66px;
+	height: 32px;
+	border-width: 1px;
+	border-style: outset;
+	border-color: rgb(180,180,180);
+	border-radius: 6px;
+	padding: 0px;
+	outline: none;
+}
+
+.button:hover 
+{
+	text-shadow:0 0 5px #fff;
+	cursor: pointer;
+}
+
+.button:active
+{
+	border-style: solid;
+	border-color: rgb(70,70,70);
+}
+
+.led
+{
+	position: absolute;
+	width: 13px;
+	height: 13px;
+	border-radius: 13px;
+	border-style: none;
+}
+
+#terminals.front .rear
+{
+	background-color: rgb(198, 212, 198);
+	border-color: rgb(162, 171, 162);
+}
+
+#terminals.rear .front
+{
+	background-color: rgb(198, 212, 198);
+	border-color: rgb(162, 171, 162);
+}
+
+.led.power
+{
+	left: 37px;
+	top: 377px;
+}
+
+.led.front
+{
+	left: 82px;
+	top: 276px;
+}
+
+.led.rear
+{
+	left: 82px;
+	top: 310px;
+}
+
+.green
+{
+	background-color: rgb(41, 255, 41);
+	border-color: rgb(57, 150, 57);
+	border-style: solid;
+	border-width: 2px;
+}
+
+.orange
+{
+	background-color: rgb(255, 200, 116);
+	border-color: rgb(216, 133, 17);
+	border-style: solid;
+	border-width: 2px;
+}
+
+.contextmenu
+{
+	z-index: 1;
+	font-family: sans-serif;
+	white-space: nowrap;
+	position: absolute;
+	padding-left: 10px;
+	padding-right: 10px;
+	border: 3px solid gray;
+	border-radius: 5px;
+	background-color: rgb(240,240,240);
+	display: none;
+}
+
+.contextmenu a
+{
+	text-decoration: none;
+	color: inherit;
+	cursor: pointer;
+}

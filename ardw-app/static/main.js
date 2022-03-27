@@ -41,9 +41,6 @@ var projector_sliders = {
   "z": {}
 };
 
-/** True when manual adjustment of the projector view is enabled */
-var adjust_with_keys = false;
-
 var sidebar_custom_selection = {
   "pos": {
     "type": null,
@@ -55,12 +52,11 @@ var sidebar_custom_selection = {
   }
 };
 
-var active_debug_session = false;
-
 /** true iff sidebar is open; independent of debug session state */
 var sidebar_is_open = false;
 
-var recording_is_on = false;
+/** true iff we are currently recording measurements */
+var active_session_is_recording = false;
 
 /**
  * Tracks all the currently enabled tools
@@ -70,7 +66,7 @@ var recording_is_on = false;
  * - selection: {probe: null when not connected, false when connected,
             and true (WIP) when it's the source of the last selection}
  */
-var tools = {
+var tool_ready_state = {
   "ptr": {
     "name": "Selection Probe",
     "ready": false,
@@ -98,31 +94,44 @@ var tools = {
   }
 };
 
+// DEPRECATED
 var active_tool_request = false;
 
-var sidebar_shown = false;
 /** Controls size of debug session sidebar */
-sidebar_split = Split(["#display", "#sidebar"], {
+var sidebar_split = Split(["#display", "#sidebar"], {
   sizes: [100, 0],
   minSize: 0,
   gutterSize: 5,
   onDragEnd: resizeAll
 });
 /** Controls relative size of schematic and layout views */
-display_split = Split(["#schematic-div", "#layout-div"], {
+var display_split = Split(["#schematic-div", "#layout-div"], {
   sizes: [50, 50],
   minSize: 0,
   gutterSize: 5,
   onDragEnd: resizeAll
 });
 /** Controls relative size of front and back layout views */
-canvas_split = Split(["#front-canvas", "#back-canvas"], {
+var canvas_split = Split(["#front-canvas", "#back-canvas"], {
   sizes: [50, 50],
   minSize: 0,
   gutterSize: 5,
   direction: "vertical",
   onDragEnd: resizeAll
 });
+
+
+/** Sound played on task success */
+var sound_success = new Audio("sound/win7success");
+/** Sound played on task failure */
+var sound_failure = new Audio("sound/win7fail");
+/** Sound played on debug measurement */
+var sound_measure = new Audio("sound/capture");
+
+/** iff true, the settings menu is being displayed */
+var settings_open = false;
+/** iff true, manual adjustment of the projector view is enabled */
+var adjust_with_keys = false;
 
 
 /**
@@ -353,10 +362,10 @@ function toolPopupX() {
 }
 
 function toolButton(type) {
-  if (!tools[type].ready && !active_tool_request) {
+  if (!tool_ready_state[type].ready && !active_tool_request) {
     console.log(`Requesting ${type} tool`);
     socket.emit("tool-request", { "type": type, "val": "device" });
-  } else if (tools[type].ready) {
+  } else if (tool_ready_state[type].ready) {
     console.log(`tool ${type} is already ready`);
   } else {
     // Show active tool request
@@ -372,19 +381,19 @@ function toolRequest(data) {
 
   console.log(data)
 
-  if (tools[data.type].ready) {
+  if (tool_ready_state[data.type].ready) {
     // This should never happen
     logerr(`Received ${data.type} tool request from server that was already ready`);
-    popup_title.innerText = tools[data.type].name;
+    popup_title.innerText = tool_ready_state[data.type].name;
     popup_text.innerText = "Already connected, closing...";
     popup_buttons.innerHTML = "";
     popup.classList.remove("hidden");
     setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
   } else {
-    popup_title.innerText = `Connecting ${tools[data.type].name}`;
+    popup_title.innerText = `Connecting ${tool_ready_state[data.type].name}`;
     switch (data.type) {
       case "ptr":
-        popup_text.innerHTML = `Connecting ${tools.ptr.name.toLowerCase()} with Optitrack<br />{optitrack instructions}`;
+        popup_text.innerHTML = `Connecting ${tool_ready_state.ptr.name.toLowerCase()} with Optitrack<br />{optitrack instructions}`;
         popup_buttons.innerHTML = "";
         break;
       case "dmm":
@@ -411,14 +420,17 @@ function toolConnect(data) {
   var popup_text = document.getElementById("tool-popup-text");
   var popup_buttons = document.getElementById("tool-popup-buttons");
 
-  popup_title.innerText = `Connecting ${tools[data.type].name}`;
+  popup_title.innerText = `Connecting ${tool_ready_state[data.type].name}`;
+
+  // for now, everything is a success
+  data["status"] = "success";
 
   if (data.status === "success") {
     switch (data.type) {
       case "ptr":
         console.log("ptr connected and ready to use");
-        tools.ptr.ready = true;
-        tools.ptr.selection = false;
+        tool_ready_state.ptr.ready = true;
+        tool_ready_state.ptr.selection = false;
 
         popup_text.innerHTML = "Probe connected! Closing..."
         popup_buttons.innerHTML = "";
@@ -432,24 +444,24 @@ function toolConnect(data) {
       case "dmm":
         if (data.val == "pos") {
           console.log("dmm pos probe connected");
-          tools.dmm.selection.pos = false;
+          tool_ready_state.dmm.selection.pos = false;
           popup_text.innerHTML = "Positive probe connected.";
         } else if (data.val == "neg") {
           console.log("dmm neg probe connected");
-          tools.dmm.selection.neg = false;
+          tool_ready_state.dmm.selection.neg = false;
           popup_text.innerHTML = "Negative probe connected.";
         } else {
           console.log("dmm connected");
-          tools.dmm.device = true;
+          tool_ready_state.dmm.device = true;
           popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
         }
 
         popup_buttons.innerHTML = "";
-        for (let dir in tools.dmm.selection) {
+        for (let dir in tool_ready_state.dmm.selection) {
           let div = document.createElement("div");
           div.classList.add("button");
           div.classList.add(`dmm-probe-${dir}`);
-          if (tools.dmm.selection[dir] === null) {
+          if (tool_ready_state.dmm.selection[dir] === null) {
             // has not yet been added
             div.innerHTML = `+ ${dir.toUpperCase()}`;
             div.addEventListener("click", () => {
@@ -464,11 +476,12 @@ function toolConnect(data) {
           popup_buttons.appendChild(div);
         }
 
-        if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
+        // if (tools.dmm.device && tools.dmm.selection.pos !== null && tools.dmm.selection.neg !== null) {
+        if (data.ready) {
           console.log("dmm ready to use")
-          tools.dmm.ready = true;
+          tool_ready_state.dmm.ready = true;
 
-          popup_text.innerHTML += `<br />${tools.dmm.name} ready to use, closing...`
+          popup_text.innerHTML += `<br />${tool_ready_state.dmm.name} ready to use, closing...`
           setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
 
           var toolbutton = document.getElementById("tools-dmm");
@@ -479,25 +492,25 @@ function toolConnect(data) {
       case "osc":
         if (data.val == "osc") {
           console.log("osc connected");
-          tools.osc.device = true;
+          tool_ready_state.osc.device = true;
           popup_text.innerHTML = "Device connected. Click below to add probes with optitrack.";
 
         } else {
           console.log(`osc chan ${data.val} probe connected`);
-          tools.osc.selection[data.val] = false;
+          tool_ready_state.osc.selection[data.val] = false;
         }
-        if (tools.osc.device) {
+        if (tool_ready_state.osc.device) {
           let channels_ready = 0;
-          for (let chan in tools.osc.selection) {
-            if (tools.osc.selection[chan] !== null) {
+          for (let chan in tool_ready_state.osc.selection) {
+            if (tool_ready_state.osc.selection[chan] !== null) {
               channels_ready += 1;
             }
           }
           if (channels_ready > 1) {
             console.log("osc ready to use");
-            tools.osc.ready = true;
+            tool_ready_state.osc.ready = true;
 
-            popup_text.innerHTML += `<br />${tools.osc.name} ready to use`;
+            popup_text.innerHTML += `<br />${tool_ready_state.osc.name} ready to use`;
             if (channels_ready == 4) {
               popup_text.innerHTML += ", closing...";
               setTimeout(toolPopupX, POPUP_AUTO_CLOSE);
@@ -516,7 +529,7 @@ function toolConnect(data) {
 
     if (data.val === "device") {
       // Device connection failed
-      popup_text.innerHTML = `${tools[data.type].name} was not found or failed to connect.`;
+      popup_text.innerHTML = `${tool_ready_state[data.type].name} was not found or failed to connect.`;
       popup_buttons.innerHTML = "";
 
       let retry_button = document.createElement("div");
@@ -536,11 +549,11 @@ function toolConnect(data) {
       // Probe connection failed
       popup_text.innerHTML = `Probe ${data.val} failed to connect. Ensure Optitrack is working and try again.`;
       popup_buttons.innerHTML = "";
-      for (let dir in tools.dmm.selection) {
+      for (let dir in tool_ready_state.dmm.selection) {
         let div = document.createElement("div");
         div.classList.add("button");
         div.classList.add(`dmm-probe-${dir}`);
-        if (tools.dmm.selection[dir] === null) {
+        if (tool_ready_state.dmm.selection[dir] === null) {
           // has not yet been added
           div.innerHTML = `+ ${dir.toUpperCase()}`;
           div.addEventListener("click", () => {
@@ -578,7 +591,8 @@ function toggleSidebar(x = false) {
 
 /** Handler for the debug session record button */
 function recordButton() {
-  socket.emit("debug-session", { "event": "record", "record": !recording_is_on });
+  // socket.emit("debug-session", { "event": "record", "record": !active_session_is_recording });
+  socket.emit("debug-session", {"event": "record"});
 }
 
 /** Updates the client recording state */
@@ -588,11 +602,11 @@ function setRecordState(record) {
   if (record) {
     button.classList.add("on");
     icon.classList.remove("hidden");
-    recording_is_on = true
+    active_session_is_recording = true
   } else {
     button.classList.remove("on");
     icon.classList.add("hidden");
-    recording_is_on = false
+    active_session_is_recording = false
   }
 }
 
@@ -639,144 +653,6 @@ function doCardsMatch(card1, card2) {
     card1.neg.type == card2.neg.type &&
     card1.neg.val == card2.neg.val &&
     card1.unit == card2.unit;
-}
-
-/** DEPRECATED */
-function addDebugCard_DEPR(from_user, measurement = null) {
-  var new_card = {
-    "pos": {
-      "type": null,
-      "val": null
-    },
-    "neg": {
-      "type": null,
-      "val": null
-    },
-    "bounds": {
-      "lo": null,
-      "hi": null
-    },
-    "value": null,
-    "unit": null,
-    "element": null
-  };
-
-  if (from_user) {
-    // User specified custom card and hit save
-
-    new_card.pos.type = sidebar_custom_selection.pos.type;
-    new_card.pos.val = sidebar_custom_selection.pos.val;
-
-    if (sidebar_custom_selection.neg.type === null) {
-      new_card.neg.type = "net";
-      new_card.neg.val = "GND";
-    } else {
-      new_card.neg.type = sidebar_custom_selection.neg.type;
-      new_card.neg.val = sidebar_custom_selection.neg.val;
-    }
-
-    // Rest of info can be taken straight from form
-    var sidebar_custom = document.getElementById("sidebar-custom-dmm");
-
-    let multiplier = units.getMultiplier(sidebar_custom.querySelector('*[name="unit-prefix"]').value);
-    let lo = parseFloat(sidebar_custom.querySelector('*[name="lo"]').value);
-    let hi = parseFloat(sidebar_custom.querySelector('*[name="hi"]').value);
-    if (!isNaN(lo)) {
-      new_card.bounds.lo = lo * multiplier;
-    }
-    if (!isNaN(hi)) {
-      new_card.bounds.hi = hi * multiplier;
-    }
-
-    let unit = sidebar_custom.querySelector('*[name="unit"]').value;
-    if (unit !== "none") {
-      new_card.unit = unit;
-    }
-
-    resetSidebarCustom();
-  } else {
-    // A measurement was taken during a session without a corresponding card
-    console.log("Measurement cards are WIP");
-    new_card.pos = measurement.pos;
-    new_card.neg = measurement.neg;
-    new_card.value = measurement.value;
-    new_card.unit = measurement.unit;
-  }
-
-  // No duplicate cards in session
-  let found_duplicate = false;
-  for (let card of current_debug_session.cards) {
-    if (card.pos.type == new_card.pos.type &&
-      card.pos.val == new_card.pos.val &&
-      card.neg.type == new_card.neg.type &&
-      card.neg.val == new_card.neg.val &&
-      card.unit == new_card.unit) {
-      found_duplicate = true;
-      break;
-    }
-  }
-  if (found_duplicate) {
-    return;
-  }
-
-  let div = document.createElement("div");
-  div.classList.add("sidebar-card");
-  let valtext = new_card.value !== null ? String(new_card.value) : "--";
-  if (new_card.unit !== null) {
-    valtext += new_card.unit;
-  }
-  div.innerHTML =
-    `<div class="card-row">
-        <span style="background: red;">&nbsp;</span>
-        <span class="sidebar-card-search">${getElementName(new_card.pos)}</span>
-    </div>
-    <div class="card-row">
-        <span style="background: black;">&nbsp;</span>
-        <span class="sidebar-card-search">${getElementName(new_card.neg)}</span>
-    </div>
-    <div class="card-row">
-        <span class="sidebar-result">${valtext}</span>
-    </div>`;
-
-  if (new_card.bounds.lo !== null || new_card.bounds.hi !== null) {
-    let lospan = document.createElement("span");
-    lospan.classList.add("bound");
-    if (new_card.bounds.lo !== null) {
-      lospan.innerHTML = new_card.bounds.lo;
-      if (new_card.value !== null) {
-        lospan.classList.add(new_card.value >= new_card.bounds.lo ? "good" : "bad");
-      }
-    } else {
-      lospan.innerHTML = "n/a";
-    }
-    let hispan = document.createElement("span");
-    hispan.classList.add("bound");
-    if (new_card.bounds.hi !== null) {
-      hispan.innerHTML = new_card.bounds.hi;
-      if (new_card.value !== null) {
-        hispan.classList.add(new_card.value <= new_card.bounds.hi ? "good" : "bad");
-      }
-    } else {
-      hispan.innerHTML = "n/a";
-    }
-
-    let bounddiv = document.createElement("div");
-    bounddiv.innerHTML = "(";
-    bounddiv.appendChild(lospan);
-    bounddiv.innerHTML += "-";
-    bounddiv.appendChild(hispan);
-    if (new_card.unit !== null) {
-      bounddiv.innerHTML += new_card.unit;
-    }
-    bounddiv.innerHTML += " )";
-
-    div.querySelector(".card-row:last-child").appendChild(bounddiv);
-  }
-
-  document.getElementById("sidebar-cards").appendChild(div);
-
-  new_card.element = div;
-  current_debug_session.cards.push(new_card);
 }
 
 /** Adds a new debug session card */
@@ -859,95 +735,6 @@ function updateDebugCard(card, id) {
   }
 }
 
-/** DEPRECATED */
-function dmmMeasurement(data) {
-  if (current_debug_session.name === null) {
-    console.log("Received measurement without an active debug session, ignoring");
-    return;
-  }
-
-  let pos_selection = null;
-  let neg_selection = null;
-  let poshits = [];
-  let neghits = [];
-
-  let layer = data.side; // F or B
-
-  for (let pin of pinHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
-    // poshits.push({ "type": "pin", "val": pin });
-  }
-  for (let net of netHitScan(layer, data.pos_coords.x, data.pos_coords.y)) {
-    poshits.push({ "type": "net", "val": net });
-  }
-  if (poshits.length == 0) {
-    logerr("Positive probe measured unknown pad/net");
-    return;
-  } else if (poshits.length > 1) {
-    console.log("Positive probe hit several components. Selection disambiguation is still WIP");
-    return;
-  } else {
-    pos_selection = poshits[0];
-  }
-
-  for (let pin of pinHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
-    // neghits.push({ "type": "pin", "val": pin });
-  }
-  for (let net of netHitScan(layer, data.neg_coords.x, data.neg_coords.y)) {
-    neghits.push({ "type": "net", "val": net });
-  }
-  if (neghits.length == 0) {
-    logerr("Negative probe measured unknown pad/net");
-    return;
-  } else if (neghits.length > 1) {
-    console.log("Negative probe hit several components. Selection disambiguation is still WIP");
-    return;
-  } else {
-    neg_selection = neghits[0];
-  }
-
-  let measurement = {
-    "pos": pos_selection,
-    "neg": neg_selection,
-    "value": data.val,
-    "unit": data.unit
-  };
-
-  // TODO show probes actually selecting
-
-  for (let card of current_debug_session.cards) {
-    if (doCardsMatch(card, measurement)) {
-      // update existing measurement instead
-      if (card.value !== null) {
-        console.log(`card ${card} already has a measurement but was measured again`);
-      } else {
-        card.value = measurement.value;
-        card.unit = measurement.unit;
-
-        card.element.querySelector('.sidebar-result').innerHTML = `${card.value}${card.unit}`;
-        let bounds = card.element.querySelectorAll('.bound');
-        if (card.bounds.lo !== null) {
-          if (card.bounds.lo <= card.value) {
-            bounds[0].classList.add("good");
-          } else {
-            bounds[0].classList.add("bad");
-          }
-        }
-        if (card.bounds.hi !== null) {
-          if (card.bounds.hi >= card.value) {
-            bounds[1].classList.add("good");
-          } else {
-            bounds[1].classList.add("bad");
-          }
-        }
-      }
-      return;
-    }
-  }
-
-  // No matching card found, just add one
-  addDebugCard_DEPR(from_user = false, measurement);
-}
-
 /** Handles a debug session event (from server socket) */
 function debugSessionEvent(data) {
   console.log("debug session event")
@@ -957,13 +744,13 @@ function debugSessionEvent(data) {
     case "new":
     case "edit":
       // A client requested a new debug session or is editing an existing one
-      active_debug_session = true
       sidebar.querySelector('*[name="sidebar-name"]').value = data.name;
       sidebar.querySelector('*[name="sidebar-notes"]').value = data.notes;
       sidebar.querySelector('*[name="sidebar-timestamp"]').innerHTML = data.timestamp;
       break;
-    case "custom":
     case "measurement":
+      sound_measure.play();
+    case "custom":
       if (data.update) {
         // Measurement for existing card
         updateDebugCard(data.card, data.id);
@@ -974,6 +761,12 @@ function debugSessionEvent(data) {
       break;
     case "record":
       setRecordState(data.record);
+      if (!active_session_is_recording) {
+        probes.pos.selection = null;
+        probes.neg.selection = null;
+        probes.osc.selection = null;
+        drawHighlights();
+      }
       break;
     case "save":
       // Session was saved and exited, so wipe all fields and close the sidebar
@@ -990,11 +783,30 @@ function debugSessionEvent(data) {
       setRecordState(false);
       toggleSidebar(true);
 
-      active_debug_session = false;
-
       break;
     case "export":
       console.log("export is WIP");
+      break;
+    case "next":
+      // TODO support osc
+      if (active_session_is_recording) {
+        let sidebar_cards = document.getElementById("sidebar-cards");
+        for (let card of sidebar_cards.children) {
+          card.classList.remove("selected");
+        }
+        if (data.id == -1) {
+          probes.pos.selection = null;
+          probes.neg.selection = null;
+          probes.osc.selection = null;
+          drawHighlights();
+        } else {
+          // Highlight the next card
+          probes.pos.selection = data.card.pos;
+          probes.neg.selection = data.card.neg;
+          drawHighlights();
+          sidebar_cards.querySelector(`.card-${data.id}`).classList.add("selected");
+        }
+      }
       break;
   }
 }
@@ -1024,6 +836,46 @@ function debugSessionEvent(data) {
 }
 
 /**
+ * Parses a text value (eg. from an input[type=text]) into a float
+ * @param {*} val text value
+ * @param {*} lo lower bound (inclusive)
+ * @param {*} hi upper bound (inclusive)
+ * @param {*} def default value if val is NaN (0 if not specified)
+ * @param {*} increment increment to be applied to parsed value (0 if not specified)
+ * @returns float value
+ */
+function floatFromText(val, lo, hi, def=0, increment=0) {
+  val = parseFloat(val) + increment;
+  if (isNaN(val)) {
+    return def;
+  } else if (val < lo) {
+    return lo;
+  } else if (val > hi) {
+    return hi;
+  } else {
+    return val;
+  }
+}
+
+function toggleSettings(evt, force_close=false) {
+  if (force_close) {
+    settings_open = false;
+  } else {
+    settings_open = !settings_open;
+  }
+
+  var settings_content = document.getElementById("settings-content");
+  if (settings_open) {
+    settings_content.classList.remove("hidden");
+    adjust_with_keys = true;
+  } else {
+    settings_content.classList.add("hidden");
+    adjust_with_keys = false;
+  }
+  document.getElementById("settings-projector-usekeys").checked = adjust_with_keys;
+}
+
+/**
  * Initializes various page elements, such as the menu bar and popups
  */
 function initPage() {
@@ -1035,7 +887,18 @@ function initPage() {
   // TODO, add tool buttons currently handled by onclicks
   document.getElementById("open-debug").addEventListener("click", () => {
     toggleSidebar();
-  })
+  });
+
+  // Selection filter buttons
+  document.getElementById("selection-filter-comp").addEventListener("click", () => {
+    socket.emit("selection-filter", {"sel_type": "comp"})
+  });
+  document.getElementById("selection-filter-pin").addEventListener("click", () => {
+    socket.emit("selection-filter", {"sel_type": "pin"})
+  });
+  document.getElementById("selection-filter-net").addEventListener("click", () => {
+    socket.emit("selection-filter", {"sel_type": "net"})
+  });
 
   // Search field
   var search_input_field = document.getElementById("search-input");
@@ -1051,7 +914,7 @@ function initPage() {
   search_input_field.addEventListener("input", () => {
     searchlist.classList.remove("hidden");
   });
-  document.addEventListener("click", (e) => {
+  window.addEventListener("click", (e) => {
     if (!search_input_field.contains(e.target) && !searchlist.contains(e.target)) {
       searchlist.classList.add("hidden");
     }
@@ -1073,6 +936,14 @@ function initPage() {
   }
 
   // Settings
+  var settings_btn = document.getElementById("settings-btn");
+  settings_btn.addEventListener("click", toggleSettings);
+  window.addEventListener("click", (evt) => {
+    var settings_content = document.getElementById("settings-content");
+    if (!settings_content.contains(evt.target) && !settings_btn.contains(evt.target)) {
+      toggleSettings(evt, true);
+    }
+  })
 
   // this is scuffed, do better later
   var display_checkboxes = document.querySelectorAll('input[name="settings-display"]');
@@ -1201,7 +1072,7 @@ function initPage() {
 
   // Schematic selection
   var sch_selection_display = document.getElementById("sch-selection");
-  for (let i = 1; i <= num_schematics; i++) {
+  for (let i = 1; i <= schdata.schematics.length; i++) {
     let div = document.createElement("div");
     div.innerHTML = `${i}. ${schdata.schematics[schid_to_idx[i]].name}`;
     div.innerHTML += `<span>&#9666;</span>`;
@@ -1242,15 +1113,21 @@ function initPage() {
     socket.emit("projector-adjust", { "type": "z", "val": 1 });
   });
 
+  var projector_boardtrack = document.getElementById("settings-projector-track");
+  projector_boardtrack.addEventListener("click", () => {
+    socket.emit("board-update", {});
+  });
+
   projector_sliders["tx"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -200, 200, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "tx", "val": intFromText(val, -4000, 4000, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "tx", "val": floatFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["tx"]["slider"] = document.getElementById("settings-projector-tx");
   projector_sliders["tx"]["label"] = document.getElementById("settings-projector-tx-label");
   projector_sliders.tx.slider.value = 0;
-  projector_sliders.tx.label.value = "0";
+  projector_sliders.tx.label.value = "0.0";
   projector_sliders.tx.slider.addEventListener("input", () => {
-    projector_sliders.tx.func(projector_sliders.tx.slider.value);
+    projector_sliders.tx.func(projector_sliders.tx.slider.value / 10);
   });
   projector_sliders.tx.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1260,14 +1137,15 @@ function initPage() {
   });
 
   projector_sliders["ty"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -200, 200, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "ty", "val": intFromText(val, -4000, 4000, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "ty", "val": floatFromText(val, -400, 400, 0, increment)})
   }
   projector_sliders["ty"]["slider"] = document.getElementById("settings-projector-ty");
   projector_sliders["ty"]["label"] = document.getElementById("settings-projector-ty-label");
   projector_sliders.ty.slider.value = 0;
-  projector_sliders.ty.label.value = 0;
+  projector_sliders.ty.label.value = "0.0";
   projector_sliders.ty.slider.addEventListener("input", () => {
-    projector_sliders.ty.func(projector_sliders.ty.slider.value);
+    projector_sliders.ty.func(projector_sliders.ty.slider.value / 10);
   });
   projector_sliders.ty.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1277,14 +1155,15 @@ function initPage() {
   });
 
   projector_sliders["r"]["func"] = (val, increment=0) => {
-    socket.emit("projector-adjust", {"type": "r", "val": intFromText(val, -180, 180, 0, increment)})
+    // socket.emit("projector-adjust", {"type": "r", "val": intFromText(val, -1800, 1800, 0, increment) / 10})
+    socket.emit("projector-adjust", {"type": "r", "val": floatFromText(val, -180, 180, 0, increment)})
   }
   projector_sliders["r"]["slider"] = document.getElementById("settings-projector-rotation");
   projector_sliders["r"]["label"] = document.getElementById("settings-projector-rotation-label");
   projector_sliders.r.slider.value = 0;
-  projector_sliders.r.label.value = 0;
+  projector_sliders.r.label.value = "0.0";
   projector_sliders.r.slider.addEventListener("input", () => {
-    projector_sliders.r.func(projector_sliders.r.slider.value);
+    projector_sliders.r.func(projector_sliders.r.slider.value / 10);
   });
   projector_sliders.r.label.addEventListener("keyup", (e) => {
     if (e.key === "Enter") {
@@ -1320,22 +1199,22 @@ function initPage() {
     if (adjust_with_keys) {
       switch (e.key) {
         case "a":
-          projector_sliders.tx.func(projector_sliders.tx.slider.value, -1);
+          projector_sliders.tx.func(projector_sliders.tx.slider.value / 10, -0.1);
           break;
         case "d":
-          projector_sliders.tx.func(projector_sliders.tx.slider.value, 1);
+          projector_sliders.tx.func(projector_sliders.tx.slider.value / 10, 0.1);
           break;
         case "w":
-          projector_sliders.ty.func(projector_sliders.ty.slider.value, -1);
+          projector_sliders.ty.func(projector_sliders.ty.slider.value / 10, -0.1);
           break;
         case "s":
-          projector_sliders.ty.func(projector_sliders.ty.slider.value, 1);
+          projector_sliders.ty.func(projector_sliders.ty.slider.value / 10, 0.1);
           break;
         case "q":
-          projector_sliders.r.func(projector_sliders.r.slider.value, -1);
+          projector_sliders.r.func(projector_sliders.r.slider.value / 10, -0.1);
           break;
         case "e":
-          projector_sliders.r.func(projector_sliders.r.slider.value, 1);
+          projector_sliders.r.func(projector_sliders.r.slider.value / 10, 0.1);
           break;
         case "r":
           projector_sliders.z.func(projector_sliders.z.slider.value, 1);
@@ -1352,6 +1231,17 @@ function initPage() {
   var sidebar = document.getElementById("sidebar");
   var sidebar_name = sidebar.querySelector('*[name="sidebar-name"]');
   var sidebar_notes = sidebar.querySelector('*[name="sidebar-notes"]');
+
+  var sidebar_dmm_buttons = document.getElementById("sidebar-dmm-buttons").children;
+  sidebar_dmm_buttons[0].addEventListener("click", () => {
+    socket.emit("dmm", {"mode": "voltage"});
+  });
+  sidebar_dmm_buttons[1].addEventListener("click", () => {
+    socket.emit("dmm", {"mode": "resistance"});
+  });
+  sidebar_dmm_buttons[2].addEventListener("click", () => {
+    socket.emit("dmm", {"mode": "diode"});
+  });
   
   [sidebar_name, sidebar_notes].forEach((input) => {
     input.addEventListener("focusout", () => {
@@ -1421,6 +1311,7 @@ function initPage() {
   custom_save_button.addEventListener("click", () => {
     if (sidebar_custom_selection.pos.type !== null) {
       var new_card = {
+        "device": "dmm",
         "pos": {
           "type": sidebar_custom_selection.pos.type,
           "val": sidebar_custom_selection.pos.val
@@ -1429,8 +1320,8 @@ function initPage() {
           "type": null,
           "val": null
         },
-        "val": null,
         "unit": null,
+        "val": null,
         "lo": null,
         "hi": null
       };
@@ -1441,6 +1332,13 @@ function initPage() {
       } else {
         new_card.neg.type = sidebar_custom_selection.neg.type;
         new_card.neg.val = sidebar_custom_selection.neg.val;
+      }
+
+      if (new_card.pos.type == "pin") {
+        new_card.pos.val = parseInt(new_card.pos.val);
+      }
+      if (new_card.neg.type == "pin") {
+        new_card.neg.val = parseInt(new_card.neg.val);
       }
 
       // Rest of info can be taken straight from form
@@ -1483,8 +1381,15 @@ function initPage() {
   });
 
   document.getElementById("sidebar-export-button").addEventListener("click", () => {
-    console.log("Export function is WIP, doing nothing");
+    console.log("Session info output to log");
     socket.emit("debug-session", { "event": "export" });
+  })
+
+  // hacky addition for study: pressing n is the same as clicking next from the study control panel
+  window.addEventListener("keydown", (evt) => {
+    if (evt.key === "n" && document.activeElement !== search_input_field) {
+      socket.emit("study-event", {"event": "step"});
+    }
   })
 }
 
@@ -1495,6 +1400,8 @@ function initSocket() {
     console.log("connected")
   });
   socket.on("selection", (data) => {
+    document.getElementById("sch-multi-click").classList.add("hidden");
+    document.getElementById("search-content").classList.add("hidden");
     switch (data.type) {
       case "comp":
         selectComponent(data.val);
@@ -1509,7 +1416,12 @@ function initSocket() {
         deselectAll(true);
         break;
       case "multi":
-        multiMenu(data.point, data.layer, data.hits)
+        if (!data.from_optitrack) {
+          multiMenu(data.point, data.layer, data.hits)
+        }
+        break;
+      case "cancel-multi":
+        document.getElementById("sch-multi-click").classList.add("hidden");
         break;
     }
   });
@@ -1521,9 +1433,13 @@ function initSocket() {
     }
   });
   socket.on("projector-adjust", (adjust) => {
-    let val = adjust.type === "z" ? adjust.val * 100 : adjust.val;
-    projector_sliders[adjust.type].slider.value = val;
-    projector_sliders[adjust.type].label.value = val;
+    if (adjust.type == "z") {
+      projector_sliders.z.slider.value = adjust.val * 100;
+      projector_sliders.z.label.value = adjust.val * 100;
+    } else {
+      projector_sliders[adjust.type].slider.value = adjust.val * 10;
+      projector_sliders[adjust.type].label.value = adjust.val.toFixed(1);
+    }
   });
 
   // tools
@@ -1537,32 +1453,105 @@ function initSocket() {
     toolConnect(data);
   });
 
-  socket.on("tool-measure", (data) => {
-    if (!tools[data.type].ready) {
-      console.log(`${data.type} tool received measurement but is not fully set up`);
-      return;
-    }
-    switch (data.type) {
-      case "ptr":
-        console.log(`received ptr selection at (${data.coords.x},${data.coords.y})`);
-        break;
-      case "dmm":
-        console.log(`measured ${data.val} ${data.unit} with pos at (${data.pos_coords.x},${data.pos_coords.y})
-                and neg probe at (${data.neg_coords.x},${data.neg_coords.y})`);
-        dmmMeasurement(data);
-        break;
-      case "osc":
-        console.log("I don't know what the oscilloscope should do");
-        break;
-    }
-  });
-
   socket.on("debug-session", (data) => {
     debugSessionEvent(data);
+  });
+
+  printcounter = 0
+  socket.on("udp", (data) => {
+    probes["pos"].location = data["tippos_layout"];
+    probes["neg"].location = data["greytip"];
+    drawHighlights();
   })
 
-  socket.on("udp", (data) => {
-    console.log(data)
+  socket.on("tool-selection", (data) => {
+    if (data.selection == "multi") {
+      // multi menu, so main page does nothing
+    } else {
+      probes[data.device].selection = data.selection;
+      drawHighlights();
+    }
+  })
+
+  socket.on("config", (data) => {
+    for (let device in data.devices) {
+      let colors = data.devices[device];
+      probes[device].color.loc = colors[0];
+      probes[device].color.sel = colors[1];
+      probes[device].color.zone = colors[1];
+    }
+
+    if (data.dmmpanel) {
+      setInterval(() => {
+        socket.emit("dmm", {})
+      }, data.dmmpanel);
+    }
+  })
+
+  socket.on("study-event", (data) => {
+    switch (data.event) {
+      case "task":
+        study_listening_for_1B = false;
+        deselectAll(true);
+        break;
+      case "highlight":
+        deselectAll(true);
+        if (data.task == "1A") {
+          selectComponent(data.refid);
+        } else if (data.task == "1B") {
+          if (data.boardviz) {
+            study_listening_for_1B = false;
+          } else {
+            study_listening_for_1B = true;
+            study_component = data.refid;
+          }
+        }
+        break;
+      case "success":
+        sound_success.play();
+        if (data.task == "1B") {
+          selectComponent(data.refid);
+        }
+        break;
+      case "failure":
+        sound_failure.play();
+        break;
+      default:
+        console.log(data);
+        break;
+    }
+  })
+
+  socket.on("dmm", (data) => {
+    if (data.mode) {
+      var sidebar_dmm_buttons = document.getElementById("sidebar-dmm-buttons").children;
+      for (let btn of sidebar_dmm_buttons) {
+        btn.classList.remove("selected");
+      }
+      if (data.mode == "voltage") sidebar_dmm_buttons[0].classList.add("selected");
+      else if (data.mode == "resistance") sidebar_dmm_buttons[1].classList.add("selected");
+      else sidebar_dmm_buttons[2].classList.add("selected");
+    } else {
+      var dmm_val = document.getElementById("sidebar-dmm-value");
+      if (data.val === null) {
+        dmm_val.innerText = "Please select a mode to capture measurement";
+      } else {
+        dmm_val.innerText = data.val;
+      }
+    }
+  })
+
+  socket.on("selection-filter", (data) => {
+    for (let sel_type in data) {
+      var button = document.getElementById(`selection-filter-${sel_type}`);
+      button.classList.remove("disabled");
+      button.classList.remove("on");
+      if (data[sel_type] == -1) {
+        button.classList.add("disabled");
+      } else if (data[sel_type] == 1) {
+        button.classList.add("on");
+      }
+    }
   })
 }
 

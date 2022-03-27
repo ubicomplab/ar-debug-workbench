@@ -3,7 +3,6 @@
 // It also contains some custom functions for the projector page,
 // mainly for handling socket selection events
 
-
 // Set to true so that functions in render.js ignore the resize transform (s/x/y)
 IS_PROJECTOR = true;
 
@@ -14,6 +13,9 @@ var transform = {
   "r": 0,
   "z": 1
 };
+
+var active_session_is_recording = false;
+
 
 /** Sets various ibom settings to false to avoid displaying unwanted things */
 function initSettings() {
@@ -82,6 +84,38 @@ function projectorDeselectAll() {
   drawHighlights();
 }
 
+var boardoff_counter = 0;
+var boardoff_n = 200;
+var boardoff_sums = {
+  "x": 0,
+  "y": 0,
+  "r": 0,
+}
+function calcBoardOffset(boardpos) {
+  if (boardoff_counter < boardoff_n) {
+    boardoff_sums.x += boardpos.x;
+    boardoff_sums.y += boardpos.y;
+    boardoff_sums.r += boardpos.r;
+  } else if (boardoff_counter == boardoff_n) {
+    boardoff_sums.x /= boardoff_n;
+    boardoff_sums.y /= boardoff_n;
+    boardoff_sums.r /= boardoff_n;
+
+    console.log(`transform is x=${transform.tx.toFixed(4)}, y=${transform.ty.toFixed(4)}, r=${transform.r.toFixed(4)}`);
+    console.log(`boardpos was x=${boardoff_sums.x.toFixed(4)}, y=${boardoff_sums.y.toFixed(4)}, r=${boardoff_sums.r.toFixed(4)}`);
+
+    var offx = -transform.tx * transform.z + boardoff_sums.x;
+    var offy = transform.ty * transform.z + boardoff_sums.y;
+    var offr = -transform.r - boardoff_sums.r;
+    console.log(`theoretical offset is x=${offx.toFixed(4)}, y=${offy.toFixed(4)}, r=${offr.toFixed(4)}`);
+
+    var avgx = (pcbdata.edges_bbox.minx + pcbdata.edges_bbox.maxx) / 2;
+    var avgy = (pcbdata.edges_bbox.miny + pcbdata.edges_bbox.maxy) / 2;
+    console.log(`edgecut center is (${avgx.toFixed(2)},${avgy.toFixed(2)})`);
+  }
+  boardoff_counter++;
+}
+
 /** Initializes all socket listeners for the projector */
 function initSocket() {
   socket = io();
@@ -89,6 +123,7 @@ function initSocket() {
     console.log("connected")
   });
   socket.on("selection", (selection) => {
+    multimenu_active = null;
     switch (selection.type) {
       case "comp":
         projectorSelectComponent(selection.val);
@@ -101,6 +136,16 @@ function initSocket() {
         break;
       case "deselect":
         projectorDeselectAll();
+        break;
+      case "multi":
+        if (selection.from_optitrack) {
+          multimenu_active = {"hits": selection.hits, "layer": selection.layer, "device": "probe"}
+          drawHighlights();
+        }
+        break;
+      case "cancel-multi":
+        multimenu_active = null;
+        drawHighlights();
         break;
     }
   });
@@ -116,8 +161,8 @@ function initSocket() {
     }
     resizeAll();
   });
-  socket.on("projector-adjust", (adjust) => {
-    transform[adjust["type"]] = adjust["val"];
+  socket.on("board-update", (update) => {
+    transform = update;
 
     for (let layerdict of [allcanvas.front, allcanvas.back]) {
       layerdict.transform.panx = layerdict.layer == "F" ? transform.tx : -transform.tx;
@@ -125,26 +170,117 @@ function initSocket() {
       ibom_settings.boardRotation = transform.r;
       layerdict.transform.zoom = transform.z;
     }
-
     resizeAll();
   })
   socket.on("udp", (data) => {
-     udp_selection = optitrackPixelToLayoutCoords(data)
-     drawHighlights()
+    probes["pos"].location = data["tippos_layout"];
+    probes["neg"].location = data["greytip"];
+    probe_end_delta = data["endpos_delta"];
+    drawHighlights();
+
+    calcBoardOffset(data["boardpos"]);
+  })
+  socket.on("tool-selection", (data) => {
+    console.log("tool-selection")
+    console.log(data)
+    if (data.selection == "multi") {
+      // TODO multi menu
+      multimenu_active = {"hits": data.hits, "layer": data.layer, "device": data.device}
+      drawHighlights();
+    } else {
+      probes[data.device].selection = data.selection;
+      drawHighlights();
+    }
+  })
+
+  socket.on("debug-session", (data) => {
+    // projector page just needs simplified debug session state for now
+    console.log(data)
+    switch (data.event) {
+      case "record":
+        active_session_is_recording = data.record;
+        if (!active_session_is_recording) {
+          probes.pos.selection = null;
+          probes.neg.selection = null;
+          probes.osc.selection = null;
+        }
+        drawHighlights();
+        break;
+      case "next":
+        // TODO support osc
+        console.log(active_session_is_recording)
+        if (active_session_is_recording) {
+          if (data.id === -1) {
+            // deselect
+            probes.pos.selection = null;
+            probes.neg.selection = null;
+            probes.osc.selection = null;
+            drawHighlights();
+          } else {
+            // show user where to measure next
+            console.log("highlighting next!")
+            probes.pos.selection = data.card.pos;
+            probes.neg.selection = data.card.neg;
+            console.log(probes.pos.selection)
+            console.log(probes.neg.selection)
+            drawHighlights();
+          }
+        }
+        break;
+    }
+  })
+
+  socket.on("config", (data) => {
+    for (let device in data.devices) {
+      let colors = data.devices[device];
+      probes[device].color.loc = colors[0];
+      probes[device].color.sel = colors[1];
+      probes[device].color.zone = colors[1];
+    }
+    var root = document.documentElement;
+    console.log(data)
+    root.style.setProperty("--pad-color-highlight", data.padcolor);
+    root.style.setProperty("--track-color-highlight", data.trackcolor);
+    drawHighlights();
+  })
+
+  socket.on("study-event", (data) => {
+    switch (data.event) {
+      case "task":
+        projectorDeselectAll();
+        break;
+      case "highlight":
+        projectorDeselectAll();
+        if (data.task == "1A" && data.boardviz) {
+          projectorSelectComponent(data.refid);
+        } else if (data.task == "1B") {
+          projectorSelectComponent(data.refid);
+        }
+        break;
+      case "success":
+        if (data.task == "1A") {
+          projectorSelectComponent(data.refid);
+        }
+        break;
+      default:
+        console.log(data);
+        break;
+    }
   })
 }
 
-/** Converts the optitrack pixel coords to layout pixel coords
- * by applying the layout canvas transform */
-function optitrackPixelToLayoutCoords(data) {
-  var zoom = allcanvas.front.transform.zoom;
-  var panx = allcanvas.front.transform.panx;
-  var pany = allcanvas.front.transform.pany;
-  return {
-    "x": (data.x) / zoom - panx,
-    "y": (-data.y) / zoom - pany
+window.addEventListener("keydown", (evt) => {
+  if (evt.key == "c") {
+    console.log("Recalculating board offset");
+    boardoff_counter = 0;
+    boardoff_sums = {
+      "x": 0,
+      "y": 0,
+      "r": 0
+    }
   }
-}
+})
+
 
 window.onload = () => {
   let data_urls = ["schdata", "pcbdata", "datadicts"]

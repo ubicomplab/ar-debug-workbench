@@ -15,7 +15,7 @@ def fix_file(svgpath, outpath=None):
 
     for linenum in range(len(data)):
         line = data[linenum]
-        matchpattern = 'width="(.*)" height="(.*)" viewBox="([0-9]*) ([0-9]*) ([0-9]*) ([0-9]*)"'
+        matchpattern = 'width="(.*)" height="(.*)" viewBox=" *([0-9]*) ([0-9]*) ([0-9]*) ([0-9]*) *"'
         match = re.search(matchpattern, line)
         if not match is None:
             print("Match found in line {}".format(linenum))

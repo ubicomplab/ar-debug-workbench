@@ -52,6 +52,9 @@ function logwarn(msg) {
  * @param {*} element Must be {type, val}
  */
 function getElementName(element) {
+  if (element === null) {
+    return "";
+  }
   switch (element.type) {
     case "comp":
       return `Component ${compdict[element.val].ref}`;
@@ -59,6 +62,10 @@ function getElementName(element) {
       return `Pin ${pindict[element.val].ref}.${pindict[element.val].num}`;
     case "net":
       return `Net ${element.val}`;
+    case "deselect":
+      return "Cancel"
+    default:
+      return ""
   }
 }
 

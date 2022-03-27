@@ -363,6 +363,7 @@ class PcbnewParser(EcadParser):
             for p in f.Pads():
                 pad_dict = self.parse_pad(p)
                 if pad_dict is not None:
+                    pad_dict["padname"] = p.GetPadName()
                     pads.append((p.GetPadName(), pad_dict))
 
             if pads:

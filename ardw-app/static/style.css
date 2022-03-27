@@ -73,7 +73,26 @@ html, body {
     border-radius: 8px;
     box-sizing: border-box;
     /* width: 70px; */
+    height: min-content;
 }
+
+#selection-filter {
+    text-align: center;
+}
+
+#selection-filter>div {
+    margin-bottom: 8px;
+}
+
+#selection-filter .button.on {
+    background-color:rgba(0, 123, 255, 0.5);
+    border-color: rgba(0, 123, 255, 0.5);
+}
+#selection-filter .button.on:hover {
+    background-color:rgba(0, 123, 255, 0.7);
+    border-color: rgba(0, 123, 255, 0.7);
+}
+
 
 #record-icon {
     display: inline-block;
@@ -102,7 +121,7 @@ html, body {
     font-size: 12pt;
     text-align: left;
     font-weight: normal;
-    display: none;
+    /* display: none; */
     position: absolute;
     background-color: white;
     right: 0;
@@ -120,7 +139,7 @@ html, body {
 }
 
 #menubar #settings:hover #settings-content {
-    display: block;
+    /* display: block; */
 }
 
 #menubar .settings-label {
@@ -528,6 +547,28 @@ div.canvas-container>canvas {
     margin-top: 4px;
 }
 
+#sidebar-dmm-buttons {
+    display: flex;
+    flex-direction: row;
+}
+
+#sidebar-dmm-buttons > div {
+    background-color: #ddd;
+    margin: 5px;
+    padding: 3px 5px;
+    border-radius: 4px;
+    border: 1px solid #000;
+    cursor: pointer;
+}
+
+#sidebar-dmm-buttons > div:hover {
+    background-color: #ccc;
+}
+
+#sidebar-dmm-buttons > div.selected, #sidebar-dmm-buttons > div.selected:hover {
+    background-color: rgba(0, 123, 255, 0.5);
+}
+
 #sidebar-cards {
     height: 1px;
     /* this height is overridden by flex-grow, but necessary for it to work */
@@ -543,6 +584,11 @@ div.canvas-container>canvas {
     padding: 4px;
     border-radius: 6px;
     margin-bottom: 4px;
+}
+
+.sidebar-card.selected {
+    background-color: rgb(247, 255, 153);
+    border-color: #08f;
 }
 
 .sidebar-card:last-child {
@@ -659,3 +705,48 @@ div.canvas-container>canvas {
     background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
     cursor: row-resize;
 }
+
+
+.study-buttons {
+    display: flex;
+    text-align: center;
+    align-items: center;
+    height: 30px;
+}
+.study-buttons .button {
+    border: 1px solid #000;
+    background-color: #ddd;
+    border-radius: 4px;
+    margin: 0 4px;
+    width: 70px;
+    cursor: pointer;
+}
+.study-buttons .button.long {
+    width: 110px;
+}
+.study-buttons .button:hover {
+    background-color: #ccc
+}
+.study-buttons .button.selected {
+    background-color: rgba(0, 123, 255, 0.5);
+}
+.study-buttons .button.selected:hover {
+    background-color: rgba(0, 123, 255, 0.5);
+    /* background-color: rgba(0, 123, 255, 0.7); */
+}
+.study-buttons .text {
+    width: 180px;
+    margin: 0 4px;
+    text-align: left;
+}
+.study-buttons .text.long {
+    width: max-content;
+}
+.study-buttons input[type="text"] {
+    width: 180px;
+}
+.study-buttons input[type="text"].small {
+    width: 30px;
+    text-align: right;
+}
+

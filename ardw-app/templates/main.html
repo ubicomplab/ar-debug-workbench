@@ -15,9 +15,16 @@
             </div>
             <div id="menubar-right">
                 <div id="tools">
-                    <div id="tools-ptr" class="button tool-button" onclick="toolButton('ptr')">+ PTR</div>
-                    <div id="tools-dmm" class="button tool-button" onclick="toolButton('dmm')">+ DMM</div>
-                    <div id="tools-osc" class="button tool-button" onclick="toolButton('osc')">+ OSC</div>
+                    <!-- tools buttons are hidden for study (TODO remove)-->
+                    <div id="tools-ptr" class="button tool-button hidden" onclick="toolButton('ptr')">+ PTR</div>
+                    <div id="tools-dmm" class="button tool-button hidden" onclick="toolButton('dmm')">+ DMM</div>
+                    <div id="tools-osc" class="button tool-button hidden" onclick="toolButton('osc')">+ OSC</div>
+                    <div id="selection-filter">
+                        <div>Selection Filter</div>
+                        <span id="selection-filter-comp" class="button on">Components</span>
+                        <span id="selection-filter-pin" class="button on">Pins</span>
+                        <span id="selection-filter-net" class="button on">Nets</span>
+                    </div>
                     <div id="open-debug" class="button tool-button">
                         <span>Show Debug Panel</span>
                         <div id="record-icon" class="hidden"></div>
@@ -40,7 +47,7 @@
                 </div>
                 <div id="settings">
                     <div id="settings-btn"></div>
-                    <div id="settings-content" class="menu-content">
+                    <div id="settings-content" class="menu-content hidden">
                         <div class="settings-label">Display Options</div>
                         <div class="settings-item">
                             Schematic
@@ -117,25 +124,28 @@
                             </label>
                         </div>
                         <div class="settings-item button" id="settings-projector-reset">
-                            Reset All
+                            Reset Transform
+                        </div>
+                        <div class="settings-item button" id="settings-projector-track">
+                            Jump to Board
                         </div>
                         <div class="settings-item slider-item">
                             <span>Translate X</span>
-                            <input type="text" id="settings-projector-tx-label" value="0" />mm
+                            <input type="text" id="settings-projector-tx-label" value="0.0" />mm
                             <br />
-                            <input type="range" id="settings-projector-tx" value="0" min="-200" max="200" />
+                            <input type="range" id="settings-projector-tx" value="0" min="-4000" max="4000" />
                         </div>
                         <div class="settings-item slider-item">
                             <span>Translate Y</span>
-                            <input type="text" id="settings-projector-ty-label" value="0" />mm
+                            <input type="text" id="settings-projector-ty-label" value="0.0" />mm
                             <br />
-                            <input type="range" id="settings-projector-ty" value="0" min="-200" max="200" />
+                            <input type="range" id="settings-projector-ty" value="0" min="-4000" max="4000" />
                         </div>
                         <div class="settings-item slider-item">
                             <span>Rotation</span>
-                            <input type="text" id="settings-projector-rotation-label" value="0" />&deg;
+                            <input type="text" id="settings-projector-rotation-label" value="0.0" />&deg;
                             <br />
-                            <input type="range" id="settings-projector-rotation" value="0" min="-180" max="180" />
+                            <input type="range" id="settings-projector-rotation" value="0" min="-1800" max="1800" />
                         </div>
                         <div class="settings-item slider-item">
                             <span>Scale</span>
@@ -168,6 +178,7 @@
                             <canvas id="F_fab" style="z-index: 11"></canvas>
                             <canvas id="F_slk" style="z-index: 12"></canvas>
                             <canvas id="F_hl" style="z-index: 13"></canvas>
+                            <canvas id="F_an" style="z-index: 14"></canvas>
                         </div>
                     </div>
                     <div id="back-canvas" touch-action="none">
@@ -176,6 +187,7 @@
                             <canvas id="B_fab" style="z-index: 11"></canvas>
                             <canvas id="B_slk" style="z-index: 12"></canvas>
                             <canvas id="B_hl" style="z-index: 13"></canvas>
+                            <canvas id="B_an" style="z-index: 14"></canvas>
                         </div>
                     </div>
                 </div>
@@ -205,6 +217,15 @@
                     <div id="sidebar-notes">
                         Notes:&nbsp;
                         <textarea name="sidebar-notes" rows="3"></textarea>
+                    </div>
+                    <div id="sidebar-dmm-control">
+                        DMM Instrument Panel
+                        <div id="sidebar-dmm-buttons">
+                            <div class="">Voltage</div>
+                            <div class="">Resistance</div>
+                            <div class="">Diode</div>
+                        </div>
+                        <span id="sidebar-dmm-value">--------</span>
                     </div>
                     <div id="sidebar-cards">
                         <div id="sidebar-custom-dmm" class="sidebar-card hidden">
@@ -236,10 +257,15 @@
                                     </select>
                                     <select name="unit">
                                         <option value="none"></option>
+                                        <!--
                                         <option value="V">V</option>
                                         <option value="I">A</option>
                                         <option value="R">&Omega;</option>
                                         <option value="C">F</option>
+                                        -->
+                                        <option value="voltage">V</option>
+                                        <option value="resistance">&Omega;</option>
+                                        <!--<option value="diode">V (diode)</option>-->
                                     </select>
                                 </div>
                                 <div name="save" class="button">Save</div>
@@ -256,7 +282,8 @@
                 </div>
             </div>
         </div>
-        <div id="tool-popup" class="hidden">
+        <!-- tool popup is forcibly hidden for study (TODO remove)-->
+        <div id="tool-popup" class="hidden" style="display:none;">
             <span onclick="toolPopupX()">X</span>
             <div id="tool-popup-title">Adding Selection Probe</div>
             <div id="tool-popup-text">
