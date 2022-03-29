@@ -1039,9 +1039,14 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
         if val == 1:
             type_filter.append(sel_type)
 
+    if study_state["active"] and study_state["task"] == "2":
+        padding = config.getfloat("Study", "DmmPadding")
+    else:
+        padding = config.getfloat("Optitrack", "PinPadding")
+
     # the multimeter doesn't want to select components
     hits = hitscan(point[0], point[1], pcbdata, pinref_to_idx, layer=layer, render_pads=True, render_tracks=False,
-                   padding=config.getfloat("Optitrack", "PinPadding"), types=type_filter)
+                   padding=padding, types=type_filter)
 
     if len(hits) == 1:
         logging.warning(f"multimeter probe hit a pin ({hits[0]}) that doesn't belong to any net")
