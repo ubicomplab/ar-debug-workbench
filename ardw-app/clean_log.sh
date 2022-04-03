@@ -9,8 +9,15 @@ fi
 
 > "$outfile"
 
-while IFS= read -r line; do
-  echo "$line" >> "$outfile"
-done < "$logfile"
+#sed -rn 's/^(.*),.* - INFO - Study (.*)$/\1 \2/' "$outfile"
 
+awk '/- INFO - Study /' "$logfile" > "$outfile"
 sed -ri '' -e 's/^(.*),.* - INFO - Study (.*)$/\1 \2/' "$outfile"
+
+#sed -r 's/^(.*),.* - INFO - Study (.*)$/\1 \2/g' "$logfile" > "$outfile"
+
+#while IFS= read -r line; do
+#  echo "$line" >> "$outfile"
+#done < "$logfile"
+
+#sed -ri '' -e 's/^(.*),.* - INFO - Study (.*)$/\1 \2/' "$outfile"
