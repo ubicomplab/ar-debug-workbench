@@ -24,9 +24,9 @@ from instrumentscripts.scpi_read_flask import initializeInstruments, queryValue
 from boardgeometry.hitscan import hitscan
 
 
-# CONFIG_FILE = "config_uno.ini"
+CONFIG_FILE = "config_uno.ini"
 # CONFIG_FILE = "config_duo.ini"
-CONFIG_FILE = "config_redboard.ini"
+# CONFIG_FILE = "config_redboard.ini"
 # CONFIG_FILE = "config_sounddetector.ini"
 
 
@@ -178,7 +178,16 @@ def get_pcbdata():
     # for some reason pcbdata is getting modified by hitscan, even though it shouldn't
     # TODO find root issue
     with open(os.path.join(dirpath, "pcbdata.json"), "r") as pcbfile:
-        return json.dumps(json.load(pcbfile))
+        pcbdata = json.load(pcbfile)
+
+        for i, footprint in enumerate(pcbdata["footprints"]):
+            # DNP list uses index in footprints, which should match refid
+            if i in pcbdata["bom"]["skipped"]:
+                footprint["dnp"] = True
+            else:
+                footprint["dnp"] = False
+
+        return json.dumps(pcbdata)
 
     # return json.dumps(pcbdata)
 
@@ -713,6 +722,17 @@ def init_data(pcbdata, schdata):
                 "bbox": comp["bbox"],
                 "pins": comp["pins"]
             }
+
+    for ref, refid in ref_to_id.items():
+        if refid not in compdict:
+            logging.warning(f"Component {ref} is in layout but not in schematic")
+
+    for refid in compdict:
+        # DNP list uses index in footprints, which should match refid
+        if refid in pcbdata["bom"]["skipped"]:
+            compdict[refid]["dnp"] = True
+        else:
+            compdict[refid]["dnp"] = False
 
     for netinfo in schdata["nets"]:
         schids = set()

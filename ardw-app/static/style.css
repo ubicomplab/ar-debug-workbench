@@ -5,7 +5,8 @@
     --pad-color-highlight: #D04040;
     --pad-color-highlight-weak: rgba(208, 64, 64, 0.5);
     --pin1-outline-color: #ffb629;
-    --pin1-outline-color-highlight: #b4ff03;
+    /* --pin1-outline-color-highlight: #b4ff03; */
+    --pin1-outline-color-highlight: #ffb629;
     --silkscreen-edge-color: #aa4;
     --silkscreen-polygon-color: #4aa;
     --silkscreen-text-color: #4aa;

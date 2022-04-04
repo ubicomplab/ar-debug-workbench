@@ -389,7 +389,7 @@ function drawFootprint(ctx, layer, scalefactor, footprint, padColor, padHoleColo
     for (var pad of footprint.pads) {
       if (pad.layers.includes(layer)) {
         drawPad(ctx, pad, padColor, outline);
-        if (pad.pin1 && ibom_settings.highlightpin1) {
+        if (ibom_settings.highlightpin1 && pad.pin1) {
           drawPad(ctx, pad, outlineColor, true);
         }
       }
@@ -493,9 +493,10 @@ function drawFootprints(canvas, layer, scalefactor, highlight) {
     }
   } else {
     for (let footprint of pcbdata.footprints) {
+      let outline = ibom_settings.renderDnpOutline && footprint.dnp;
       drawFootprint(ctx, layer, scalefactor, footprint,
         style.getPropertyValue('--pad-color'), style.getPropertyValue('--pad-hole-color'),
-        null, highlight, false);
+        style.getPropertyValue('--pin1-outline-color'), highlight, outline);
     }
   }
 }
