@@ -1439,7 +1439,7 @@ function drawCurrentSelection(canvasdict) {
 
   var mode_text = "Selection";
   if (active_session_is_recording) {
-    mode_text = "Debugging"
+    mode_text = "Measurement"
   }
 
   var textpt = {"x": origin.x, "y": origin.y}
