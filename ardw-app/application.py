@@ -1075,6 +1075,9 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
     for sel_type, val in selection_filter.items():
         if val == 1:
             type_filter.append(sel_type)
+    if next_card is not None and next_card.anno is not None:
+        # active card is an anno card, so we actually just want components
+        type_filter = ["comp"]
 
     if study_state["active"] and study_state["task"] == "2":
         padding = config.getfloat("Study", "DmmPadding")
