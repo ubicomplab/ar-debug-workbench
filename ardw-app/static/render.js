@@ -1210,6 +1210,7 @@ function drawAnnotationsOnLayer(canvasdict, clear=true) {
       var color = probes[multimenu_active.device].color.loc;
       drawMultiMenu(canvasdict, multimenu_active.hits, color);
     }
+    drawCurrentAnnotation(canvasdict);
   }
 }
 
@@ -1506,5 +1507,20 @@ function drawHLine(ctx, point, len) {
   ctx.moveTo(point.x, point.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
+}
+
+function drawCurrentAnnotation(canvasdict) {
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvasdict.anno.getContext("2d");
+
+  var fontsize = 40;
+  var origin = {"x": 20, "y": 280}
+
+  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.font = `${fontsize}px sans-serif`;
+
+  if (debug_annotation !== null) {
+    ctx.fillText(`Annotation: ${debug_annotation}`, origin.x, origin.y);
+  }
 }
 

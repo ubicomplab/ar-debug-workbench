@@ -215,14 +215,20 @@ function initSocket() {
             probes.pos.selection = null;
             probes.neg.selection = null;
             probes.osc.selection = null;
+            debug_annotation = null;
             drawHighlights();
           } else {
             // show user where to measure next
             console.log("highlighting next!")
             probes.pos.selection = data.card.pos;
-            probes.neg.selection = data.card.neg;
-            console.log(probes.pos.selection)
-            console.log(probes.neg.selection)
+            if (data.card.anno !== null) {
+              // anno card, so display the annotation
+              debug_annotation = data.card.anno;
+            } else {
+              // measurement card, so also highlight the negative rail
+              debug_annotation = null;
+              probes.neg.selection = data.card.neg;
+            }
             drawHighlights();
           }
         }

@@ -279,9 +279,25 @@
                                 <div name="save" class="button">Save</div>
                             </div>
                         </div>
+                        <div id="sidebar-custom-anno" class="sidebar-card hidden">
+                            <div class="card-row">
+                                <input type="text" name="anno" class="sidebar-card-search"
+                                    placeholder="Component..."
+                                    onkeyup="sidebarSearchHandler('anno')" />
+                                <div name="anno-content" class="search-content hidden"></div>
+                            </div>
+                            <div class="card-row">
+                                <input type="text" id="sidebar-anno-text" class="sidebar-card-search"
+                                    placeholder="Annotation..." />
+                                <div name="save" class="button">Save</div>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <div id="sidebar-add-button" class="button">Add Guided Measurement</div>
+                    </div>
+                    <div>
+                        <div id="sidebar-anno-button" class="button">Add Guided Annotation</div>
                     </div>
                     <div id="sidebar-buttons">
                         <div id="sidebar-save-button" class="button">Save and close</div>

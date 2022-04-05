@@ -931,18 +931,26 @@ def make_tool_selection(device, new_selection=None):
                 # socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
 
         if active_session_is_recording and new_selection is not None:
-            tool_selections[device] = new_selection
-            socketio.emit("tool-selection", {"device": device, "selection": new_selection})
+            if next_card is not None and next_card.anno is not None:
+                # anno card, so we selected the desired component instead of taking a measurement
+                active_session.step()
+                next_id, next_card = active_session.get_next()
+                if next_id != -1:
+                    socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
+            else:
+                # measurement card, so we selected a component
+                tool_selections[device] = new_selection
+                socketio.emit("tool-selection", {"device": device, "selection": new_selection})
 
-            # record a measurement if both probes are set
-            if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
-                logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
-                dmm_unit, dmm_val = measure_dmm()
-                tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
-            if tool_selections["osc"] is not None:
-                return
-                osc_unit, osc_val = measure_osc()
-                tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
+                # record a measurement if both probes are set
+                if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
+                    logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
+                    dmm_unit, dmm_val = measure_dmm()
+                    tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
+                if tool_selections["osc"] is not None:
+                    return
+                    osc_unit, osc_val = measure_osc()
+                    tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
 
 
 def make_study_select(refid, src_text):
