@@ -26,7 +26,7 @@
                         <span id="selection-filter-net" class="button on">Nets</span>
                     </div>
                     <div id="open-debug" class="button tool-button">
-                        <span>Show Debug Panel</span>
+                        <span>Show Measurement Panel</span>
                         <div id="record-icon" class="hidden"></div>
                     </div>
                 </div>
@@ -61,6 +61,14 @@
                             <input type="checkbox" name="settings-display" value="LF" checked />
                             B
                             <input type="checkbox" name="settings-display" value="LB" checked />
+                        </div>
+                        <div class="settings-item">
+                            Show Pin 1
+                            <input type="checkbox" name="settings-special" value="highlightpin1" />
+                        </div>
+                        <div class="settings-item">
+                            Show DNP
+                            <input type="checkbox" name="settings-special" value="renderDnpOutline" />
                         </div>
                         <div class="settings-label">Layout Options</div>
                         <div class="settings-item">
@@ -195,7 +203,7 @@
             <div id="sidebar">
                 <div>
                     <div id="sidebar-title">
-                        <h2>Debug Session</h2>
+                        <h2>Measurement Session</h2>
                         <div id="sidebar-help" style="display:none;">
                             <div>?</div>
                             <div id="sidebar-help-content">
@@ -271,9 +279,25 @@
                                 <div name="save" class="button">Save</div>
                             </div>
                         </div>
+                        <div id="sidebar-custom-anno" class="sidebar-card hidden">
+                            <div class="card-row">
+                                <input type="text" name="anno" class="sidebar-card-search"
+                                    placeholder="Component..."
+                                    onkeyup="sidebarSearchHandler('anno')" />
+                                <div name="anno-content" class="search-content hidden"></div>
+                            </div>
+                            <div class="card-row">
+                                <input type="text" id="sidebar-anno-text" class="sidebar-card-search"
+                                    placeholder="Annotation..." />
+                                <div name="save" class="button">Save</div>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <div id="sidebar-add-button" class="button">Add Guided Measurement</div>
+                    </div>
+                    <div>
+                        <div id="sidebar-anno-button" class="button">Add Guided Annotation</div>
                     </div>
                     <div id="sidebar-buttons">
                         <div id="sidebar-save-button" class="button">Save and close</div>

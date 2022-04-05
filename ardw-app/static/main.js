@@ -49,6 +49,10 @@ var sidebar_custom_selection = {
   "neg": {
     "type": null,
     "val": null
+  },
+  "anno": {
+    "type": null,
+    "val": null,
   }
 };
 
@@ -613,11 +617,11 @@ function setRecordState(record) {
 /** Handler for debug sidebar (part of custom debug card creation) */
 function sidebarSearchHandler(dir) {
   // TODO query selector name stuff is in case we want multiple customs at once
-  var input = document.getElementById("sidebar-custom-dmm").querySelector(`input[name="${dir}"]`);
+  var input = document.getElementById("sidebar-cards").querySelector(`input[name="${dir}"]`);
   var filter = input.value.toLowerCase();
   var tokens = filter.split(/(\s+)/).filter(e => e.trim().length > 0);
 
-  var divs = document.getElementById("sidebar-custom-dmm").querySelector(`div[name="${dir}-content"]`).getElementsByTagName("div");
+  var divs = document.getElementById("sidebar-cards").querySelector(`div[name="${dir}-content"]`).getElementsByTagName("div");
 
   searchHandler(tokens, divs);
 
@@ -646,6 +650,16 @@ function resetSidebarCustom() {
   sidebarSearchHandler("neg");
 }
 
+function resetSidebarAnno() {
+  sidebar_custom_selection.anno.type = null;
+  sidebar_custom_selection.anno.val = null;
+
+  document.getElementById("sidebar-custom-anno").querySelector('*[name="anno"]').value = "";
+  document.getElementById("sidebar-anno-text").value = "";
+
+  sidebarSearchHandler("anno");
+}
+
 /** Returns true if the cards have the same pos, neg, and unit */
 function doCardsMatch(card1, card2) {
   return card1.pos.type == card2.pos.type &&
@@ -653,6 +667,21 @@ function doCardsMatch(card1, card2) {
     card1.neg.type == card2.neg.type &&
     card1.neg.val == card2.neg.val &&
     card1.unit == card2.unit;
+}
+
+/** Adds a new anno debug session card */
+function addAnnoCard(card, id) {
+  var div = document.createElement("div");
+  div.classList.add("sidebar-card", `card-${id}`);
+  div.innerHTML =
+    `<div class="card-row">
+        <span class="sidebar-card-search">${getElementName(card.pos)}</span>
+    </div>
+    <div class="card-row">
+        <span class="sidebar-card-search">Annotation: ${card.anno}</span>
+    </div>`;
+
+  document.getElementById("sidebar-cards").appendChild(div);
 }
 
 /** Adds a new debug session card */
@@ -756,7 +785,13 @@ function debugSessionEvent(data) {
         updateDebugCard(data.card, data.id);
       } else {
         // Custom card, or measurement without corresponding card
-        addDebugCard(data.card, data.id);
+        if (data.card.anno !== null) {
+          // anno card, so the card looks different
+          addAnnoCard(data.card, data.id);
+        } else {
+          // measurement card, so add as before
+          addDebugCard(data.card, data.id);
+        }
       }
       break;
     case "record":
@@ -802,7 +837,12 @@ function debugSessionEvent(data) {
         } else {
           // Highlight the next card
           probes.pos.selection = data.card.pos;
-          probes.neg.selection = data.card.neg;
+          if (data.card.anno !== null) {
+            // anno card, so displaying the annotation on projector
+          } else {
+            // measurement card, so also highlight the negative rail
+            probes.neg.selection = data.card.neg;
+          }
           drawHighlights();
           sidebar_cards.querySelector(`.card-${data.id}`).classList.add("selected");
         }
@@ -992,6 +1032,16 @@ function initPage() {
       resetTransform(schematic_canvas);
     });
   });
+
+  var special_checkboxes = document.querySelectorAll('input[name="settings-special"]');
+  special_checkboxes.forEach((checkbox) => {
+    // Make sure we start in the correct state
+    checkbox.checked = ibom_settings[checkbox.value];
+
+    checkbox.addEventListener("click", () => {
+      socket.emit("special", {"prop": checkbox.value, "on": checkbox.checked});
+    });
+  })
 
   var render_checkboxes = document.querySelectorAll('input[name="settings-render"]');
   render_checkboxes.forEach((checkbox) => {
@@ -1369,12 +1419,56 @@ function initPage() {
       // TODO maybe pulse positive rail input field
     }
   });
-
   resetSidebarCustom();
+
+  var sidebar_anno = document.getElementById("sidebar-custom-anno");
+  var anno_input = sidebar_anno.querySelector('*[name="anno"]');
+  var anno_content = sidebar_anno.querySelector('*[name="anno-content"]');
+  for (let refid in compdict) {
+    let annodiv = document.createElement("div");
+    let name = getElementName({ "type": "comp", "val": refid });
+    annodiv.innerHTML = name;
+    annodiv.addEventListener("click", () => {
+      sidebar_custom_selection.anno.type = "comp";
+      sidebar_custom_selection.anno.val = refid;
+      anno_input.value = name;
+      anno_content.classList.add("hidden");
+    });
+    anno_content.appendChild(annodiv);
+  }
+
+  anno_input.addEventListener("focusin", () => { anno_content.classList.remove("hidden") });
+
+  var anno_save_button = sidebar_anno.querySelector('*[name="save"]');
+  anno_save_button.addEventListener("click", () => {
+    var refid = sidebar_custom_selection.anno.val
+    if (refid !== null) {
+      // TODO create anno card
+      var text = document.getElementById("sidebar-anno-text").value;
+
+      var new_card = {
+        "device": "dmm",
+        "pos": {"type": "comp", "val": refid},
+        "neg": null,
+        "anno": document.getElementById("sidebar-anno-text").value
+      };
+      socket.emit("debug-session", { "event": "custom", "card": new_card });
+
+      console.log(`WIP creating anno card for comp ${refid}: ${text}`);
+
+      resetSidebarAnno();
+      sidebar_anno.classList.add("hidden");
+    }
+  })
+
+  resetSidebarAnno();
 
   document.getElementById("sidebar-add-button").addEventListener("click", () => {
     sidebar_custom.classList.remove("hidden");
   });
+  document.getElementById("sidebar-anno-button").addEventListener("click", () => {
+    sidebar_anno.classList.remove("hidden");
+  })
 
   document.getElementById("sidebar-save-button").addEventListener("click", () => {
     socket.emit("debug-session", { "event": "save" });
@@ -1552,6 +1646,11 @@ function initSocket() {
         button.classList.add("on");
       }
     }
+  })
+
+  socket.on("special", (data) => {
+    ibom_settings[data.prop] = data.on;
+    resizeAll();
   })
 }
 

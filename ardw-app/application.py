@@ -24,9 +24,9 @@ from instrumentscripts.scpi_read_flask import initializeInstruments, queryValue
 from boardgeometry.hitscan import hitscan
 
 
-# CONFIG_FILE = "config_uno.ini"
+CONFIG_FILE = "config_uno.ini"
 # CONFIG_FILE = "config_duo.ini"
-CONFIG_FILE = "config_redboard.ini"
+# CONFIG_FILE = "config_redboard.ini"
 # CONFIG_FILE = "config_sounddetector.ini"
 
 
@@ -178,7 +178,21 @@ def get_pcbdata():
     # for some reason pcbdata is getting modified by hitscan, even though it shouldn't
     # TODO find root issue
     with open(os.path.join(dirpath, "pcbdata.json"), "r") as pcbfile:
-        return json.dumps(json.load(pcbfile))
+        pcbdata = json.load(pcbfile)
+
+        for i, footprint in enumerate(pcbdata["footprints"]):
+            # DNP list uses index in footprints, which should match refid
+            if i in pcbdata["bom"]["skipped"]:
+                footprint["dnp"] = True
+            else:
+                footprint["dnp"] = False
+
+        # hacky way to fix DNP for paper
+        if config.get("Study", "BoardName") == "Arduino Uno":
+            logging.info("Board is Uno, settings R2 to DNP")
+            pcbdata["footprints"][36]["dnp"] = True
+
+        return json.dumps(pcbdata)
 
     # return json.dumps(pcbdata)
 
@@ -229,6 +243,7 @@ def handle_connect():
     global active_session, active_session_is_recording
     global study_state, study_settings, compdict
     global selection_filter, probe_adjust
+    global special_state
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -320,6 +335,9 @@ def handle_connect():
 
     emit("probe-adjust", {"probe": "red", "x": probe_adjust["red"]["x"], "y": probe_adjust["red"]["y"]})
     emit("probe-adjust", {"probe": "grey", "x": probe_adjust["grey"]["x"], "y": probe_adjust["grey"]["y"]})
+
+    for prop, on in special_state.items():
+        emit("special", {"prop": prop, "on": on})
 
 
 @socketio.on("disconnect")
@@ -639,6 +657,13 @@ def handle_probe_adjust(data):
     socketio.emit("probe-adjust", data)
 
 
+@socketio.on("special")
+def handle_special(data):
+    global special_state
+    special_state[data["prop"]] = data["on"]
+    socketio.emit("special", data)
+
+
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
@@ -713,6 +738,10 @@ def init_data(pcbdata, schdata):
                 "bbox": comp["bbox"],
                 "pins": comp["pins"]
             }
+
+    for ref, refid in ref_to_id.items():
+        if refid not in compdict:
+            logging.warning(f"Component {ref} is in layout but not in schematic")
 
     for netinfo in schdata["nets"]:
         schids = set()
@@ -902,18 +931,26 @@ def make_tool_selection(device, new_selection=None):
                 # socketio.emit("debug-session", {"event": "next", "id": -1, "card": None})
 
         if active_session_is_recording and new_selection is not None:
-            tool_selections[device] = new_selection
-            socketio.emit("tool-selection", {"device": device, "selection": new_selection})
+            if next_card is not None and next_card.anno is not None:
+                # anno card, so we selected the desired component instead of taking a measurement
+                active_session.step()
+                next_id, next_card = active_session.get_next()
+                if next_id != -1:
+                    socketio.emit("debug-session", {"event": "next", "id": next_id, "card": next_card.to_dict()})
+            else:
+                # measurement card, so we selected a component
+                tool_selections[device] = new_selection
+                socketio.emit("tool-selection", {"device": device, "selection": new_selection})
 
-            # record a measurement if both probes are set
-            if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
-                logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
-                dmm_unit, dmm_val = measure_dmm()
-                tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
-            if tool_selections["osc"] is not None:
-                return
-                osc_unit, osc_val = measure_osc()
-                tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
+                # record a measurement if both probes are set
+                if tool_selections["pos"] is not None and tool_selections["neg"] is not None:
+                    logging.info(f"measured {tool_selections['pos']}, {tool_selections['neg']}")
+                    dmm_unit, dmm_val = measure_dmm()
+                    tool_measure("dmm", tool_selections["pos"], tool_selections["neg"], dmm_unit, dmm_val)
+                if tool_selections["osc"] is not None:
+                    return
+                    osc_unit, osc_val = measure_osc()
+                    tool_measure("osc", tool_selections["osc"], {"type": "net", "val": "GND"}, osc_unit, osc_val)
 
 
 def make_study_select(refid, src_text):
@@ -1038,6 +1075,9 @@ def dmm_selection(probe, tippos, endpos, force_deselect=False):
     for sel_type, val in selection_filter.items():
         if val == 1:
             type_filter.append(sel_type)
+    if next_card is not None and next_card.anno is not None:
+        # active card is an anno card, so we actually just want components
+        type_filter = ["comp"]
 
     if study_state["active"] and study_state["task"] == "2":
         padding = config.getfloat("Study", "DmmPadding")
@@ -1718,6 +1758,11 @@ if __name__ == "__main__":
     probe_adjust = {
         "red": {"x": 0, "y": 0},
         "grey": {"x": 0, "y": 0},
+    }
+
+    special_state = {
+        "highlightpin1": False,
+        "renderDnpOutline": False,
     }
 
     study_practice, study_modules, study_bringup = load_study()

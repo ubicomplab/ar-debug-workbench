@@ -3,14 +3,21 @@ import time
 
 
 class DebugCard:
-    def __init__(self, device, pos, neg, unit=None, val=None, lo=None, hi=None) -> None:
+    def __init__(self, device, pos, neg, unit=None, val=None, lo=None, hi=None, anno=None) -> None:
         self.device: str = device
         self.pos: dict = pos
         self.neg: dict = neg
+
+        # first type of card is a measurement
         self.unit: str = unit
         self.val: float = val
         self.lo: float = lo
         self.hi: float = hi
+
+        # second type of card has an annotation and a "pos" component, but neg=None
+        # when complete, val is set to placeholder "Done"
+        self.anno: str = anno
+
         if unit is None:
             self.lo = None
             self.hi = None
@@ -91,6 +98,12 @@ class DebugSession:
         # didn't have a matching card, so just append to end of deck
         self.cards.append(measure_card)
         return measure_card, len(self.cards) - 1, False
+
+    def step(self) -> None:
+        if self.next != -1 and self.cards[self.next].anno is not None:
+            # we're stepping past this anno card
+            self.cards[self.next].val = "Done"
+            self.__update_next()
 
     def export(self) -> None:
         logging.info("Export WIP")

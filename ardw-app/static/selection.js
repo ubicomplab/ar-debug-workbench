@@ -74,6 +74,9 @@ var probes = {
 /** Keeps track of the normalized probe end y-delta, s.t. row height is 1 */
 var probe_end_delta = null;
 
+/** Holds the current annotation text, only used in projector view */
+var debug_annotation = null;
+
 /** Maximum zoom level where entire schematic fits in the available space
  * Note this differs for each schematic sheet */
 var sch_zoom_default;

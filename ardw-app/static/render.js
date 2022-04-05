@@ -388,9 +388,16 @@ function drawFootprint(ctx, layer, scalefactor, footprint, padColor, padHoleColo
   if (ibom_settings.renderPads) {
     for (var pad of footprint.pads) {
       if (pad.layers.includes(layer)) {
+        if (outline) {
+          padColor = outlineColor;
+        }
         drawPad(ctx, pad, padColor, outline);
-        if (pad.pin1 && ibom_settings.highlightpin1) {
-          drawPad(ctx, pad, outlineColor, true);
+        if (ibom_settings.highlightpin1 && pad.pin1) {
+          if (IS_PROJECTOR) {
+            drawPad(ctx, pad, outlineColor, false);
+          } else {
+            drawPad(ctx, pad, outlineColor, true);
+          }
         }
       }
     }
@@ -463,6 +470,11 @@ function drawPins(canvas, layer, highlight) {
 
 function drawFootprints(canvas, layer, scalefactor, highlight) {
   var style = getComputedStyle(topmostdiv);
+  var color_pad = style.getPropertyValue('--pad-color');
+  var color_hole = style.getPropertyValue('--pad-hole-color');
+  var color_highlight = style.getPropertyValue('--pad-color-highlight');
+  var color_outline = style.getPropertyValue('--pad-color-highlight');
+
   var ctx = canvas.getContext("2d");
 
   ctx.lineWidth = 3 / scalefactor;
@@ -472,7 +484,7 @@ function drawFootprints(canvas, layer, scalefactor, highlight) {
     if (current_selection.type == "comp") {
       highlight_list.push({
         "val": current_selection.val,
-        "color": style.getPropertyValue('--pad-color-highlight')
+        "color": color_highlight
       });
     } else {
       for (let probe_name in probes) {
@@ -488,14 +500,19 @@ function drawFootprints(canvas, layer, scalefactor, highlight) {
 
     for (let highlight_info of highlight_list) {
       drawFootprint(ctx, layer, scalefactor, pcbdata.footprints[highlight_info.val],
-        highlight_info.color, style.getPropertyValue('--pad-hole-color'),
+        highlight_info.color, color_hole,
         null, highlight, false);
     }
   } else {
     for (let footprint of pcbdata.footprints) {
-      drawFootprint(ctx, layer, scalefactor, footprint,
-        style.getPropertyValue('--pad-color'), style.getPropertyValue('--pad-hole-color'),
-        null, highlight, false);
+      if (ibom_settings.renderDnpOutline && footprint.dnp) {
+        // DNP components are shown as highlighted if DNP setting is on
+        drawFootprint(ctx, layer, scalefactor, footprint,
+          color_highlight, color_hole, color_outline, true, false);
+      } else {
+        drawFootprint(ctx, layer, scalefactor, footprint,
+          color_pad, color_hole, color_outline, false, false);
+      }
     }
   }
 }
@@ -1193,6 +1210,7 @@ function drawAnnotationsOnLayer(canvasdict, clear=true) {
       var color = probes[multimenu_active.device].color.loc;
       drawMultiMenu(canvasdict, multimenu_active.hits, color);
     }
+    drawCurrentAnnotation(canvasdict);
   }
 }
 
@@ -1422,7 +1440,7 @@ function drawCurrentSelection(canvasdict) {
 
   var mode_text = "Selection";
   if (active_session_is_recording) {
-    mode_text = "Debugging"
+    mode_text = "Measurement"
   }
 
   var textpt = {"x": origin.x, "y": origin.y}
@@ -1489,5 +1507,20 @@ function drawHLine(ctx, point, len) {
   ctx.moveTo(point.x, point.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
+}
+
+function drawCurrentAnnotation(canvasdict) {
+  var style = getComputedStyle(topmostdiv);
+  var ctx = canvasdict.anno.getContext("2d");
+
+  var fontsize = 40;
+  var origin = {"x": 20, "y": 280}
+
+  ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
+  ctx.font = `${fontsize}px sans-serif`;
+
+  if (debug_annotation !== null) {
+    ctx.fillText(`Annotation: ${debug_annotation}`, origin.x, origin.y);
+  }
 }
 
