@@ -267,6 +267,11 @@ function initSocket() {
         break;
     }
   })
+
+  socket.on("special", (data) => {
+    ibom_settings[data.prop] = data.on;
+    resizeAll();
+  })
 }
 
 window.addEventListener("keydown", (evt) => {

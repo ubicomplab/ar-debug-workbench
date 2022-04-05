@@ -26,7 +26,7 @@
                         <span id="selection-filter-net" class="button on">Nets</span>
                     </div>
                     <div id="open-debug" class="button tool-button">
-                        <span>Show Debug Panel</span>
+                        <span>Show Measurement Panel</span>
                         <div id="record-icon" class="hidden"></div>
                     </div>
                 </div>
@@ -62,6 +62,14 @@
                             B
                             <input type="checkbox" name="settings-display" value="LB" checked />
                         </div>
+                        <div class="settings-item">
+                            Show Pin 1
+                            <input type="checkbox" name="settings-special" value="highlightpin1" />
+                        </div>
+                        <div class="settings-item">
+                            Show DNP
+                            <input type="checkbox" name="settings-special" value="renderDnpOutline" />
+                        </div>
                         <div class="settings-label">Layout Options</div>
                         <div class="settings-item">
                             Fab Layer
@@ -86,14 +94,6 @@
                         <div class="settings-item">
                             Zones
                             <input type="checkbox" name="settings-render" value="renderZones" />
-                        </div>
-                        <div class="settings-item">
-                            Show Pin 1
-                            <input type="checkbox" name="settings-render" value="highlightpin1" />
-                        </div>
-                        <div class="settings-item">
-                            Show DNP
-                            <input type="checkbox" name="settings-render" value="renderDnpOutline" />
                         </div>
                         <div class="settings-item slider-item">
                             <span>Board Rotation</span>
@@ -203,7 +203,7 @@
             <div id="sidebar">
                 <div>
                     <div id="sidebar-title">
-                        <h2>Debug Session</h2>
+                        <h2>Measurement Session</h2>
                         <div id="sidebar-help" style="display:none;">
                             <div>?</div>
                             <div id="sidebar-help-content">

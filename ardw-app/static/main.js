@@ -993,6 +993,16 @@ function initPage() {
     });
   });
 
+  var special_checkboxes = document.querySelectorAll('input[name="settings-special"]');
+  special_checkboxes.forEach((checkbox) => {
+    // Make sure we start in the correct state
+    checkbox.checked = ibom_settings[checkbox.value];
+
+    checkbox.addEventListener("click", () => {
+      socket.emit("special", {"prop": checkbox.value, "on": checkbox.checked});
+    });
+  })
+
   var render_checkboxes = document.querySelectorAll('input[name="settings-render"]');
   render_checkboxes.forEach((checkbox) => {
     // Make sure we start in the correct state
@@ -1552,6 +1562,11 @@ function initSocket() {
         button.classList.add("on");
       }
     }
+  })
+
+  socket.on("special", (data) => {
+    ibom_settings[data.prop] = data.on;
+    resizeAll();
   })
 }
 

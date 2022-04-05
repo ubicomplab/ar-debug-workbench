@@ -187,6 +187,11 @@ def get_pcbdata():
             else:
                 footprint["dnp"] = False
 
+        # hacky way to fix DNP for paper
+        if config.get("Study", "BoardName") == "Arduino Uno":
+            logging.info("Board is Uno, settings R2 to DNP")
+            pcbdata["footprints"][36]["dnp"] = True
+
         return json.dumps(pcbdata)
 
     # return json.dumps(pcbdata)
@@ -238,6 +243,7 @@ def handle_connect():
     global active_session, active_session_is_recording
     global study_state, study_settings, compdict
     global selection_filter, probe_adjust
+    global special_state
 
     active_connections += 1
     logging.info(f"Client connected ({active_connections} active)")
@@ -329,6 +335,9 @@ def handle_connect():
 
     emit("probe-adjust", {"probe": "red", "x": probe_adjust["red"]["x"], "y": probe_adjust["red"]["y"]})
     emit("probe-adjust", {"probe": "grey", "x": probe_adjust["grey"]["x"], "y": probe_adjust["grey"]["y"]})
+
+    for prop, on in special_state.items():
+        emit("special", {"prop": prop, "on": on})
 
 
 @socketio.on("disconnect")
@@ -648,6 +657,13 @@ def handle_probe_adjust(data):
     socketio.emit("probe-adjust", data)
 
 
+@socketio.on("special")
+def handle_special(data):
+    global special_state
+    special_state[data["prop"]] = data["on"]
+    socketio.emit("special", data)
+
+
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
@@ -726,13 +742,6 @@ def init_data(pcbdata, schdata):
     for ref, refid in ref_to_id.items():
         if refid not in compdict:
             logging.warning(f"Component {ref} is in layout but not in schematic")
-
-    for refid in compdict:
-        # DNP list uses index in footprints, which should match refid
-        if refid in pcbdata["bom"]["skipped"]:
-            compdict[refid]["dnp"] = True
-        else:
-            compdict[refid]["dnp"] = False
 
     for netinfo in schdata["nets"]:
         schids = set()
@@ -1738,6 +1747,11 @@ if __name__ == "__main__":
     probe_adjust = {
         "red": {"x": 0, "y": 0},
         "grey": {"x": 0, "y": 0},
+    }
+
+    special_state = {
+        "highlightpin1": False,
+        "renderDnpOutline": False,
     }
 
     study_practice, study_modules, study_bringup = load_study()
