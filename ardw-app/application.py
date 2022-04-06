@@ -24,8 +24,8 @@ from instrumentscripts.scpi_read_flask import initializeInstruments, queryValue
 from boardgeometry.hitscan import hitscan
 
 
-CONFIG_FILE = "config_uno.ini"
-# CONFIG_FILE = "config_duo.ini"
+# CONFIG_FILE = "config_uno.ini"
+CONFIG_FILE = "config_duo.ini"
 # CONFIG_FILE = "config_redboard.ini"
 # CONFIG_FILE = "config_sounddetector.ini"
 
@@ -189,8 +189,13 @@ def get_pcbdata():
 
         # hacky way to fix DNP for paper
         if config.get("Study", "BoardName") == "Arduino Uno":
-            logging.info("Board is Uno, settings R2 to DNP")
+            logging.info("Board is Uno, setting R2 to DNP")
             pcbdata["footprints"][36]["dnp"] = True
+        elif config.get("Study", "BoardName") == "Arduino Due":
+            logging.info("Board is Due, setting R8, R9, and JP5 to DNP")
+            pcbdata["footprints"][46]["dnp"] = True
+            pcbdata["footprints"][93]["dnp"] = True
+            pcbdata["footprints"][96]["dnp"] = True
 
         return json.dumps(pcbdata)
 
