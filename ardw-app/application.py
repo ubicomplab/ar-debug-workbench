@@ -899,10 +899,22 @@ def make_selection(new_selection):
 def measure_dmm():
     global dmm_mode
     # convert to float in case it comes in as a string
-    value = queryValue("dmm", dmm_mode)
+    # value = queryValue("dmm", dmm_mode)
+    value = ozValue("dmm", dmm_mode)
     if value is not None:
         value = float(value)
     return dmm_mode, value
+
+
+oz_counter = -1
+oz_list = []
+def ozValue(device, mode):
+    global oz_counter, oz_list
+    oz_counter += 1
+    if oz_counter < len(oz_list):
+        return oz_list[oz_counter]
+    else:
+        return None
 
 
 # wrapper for getting oscilloscope measurement from SCPI
