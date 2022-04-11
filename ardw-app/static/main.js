@@ -1580,7 +1580,7 @@ function initSocket() {
       probes[device].color.zone = colors[1];
     }
 
-    if (data.dmmpanel) {
+    if (data.dmmpanel && false) {
       setInterval(() => {
         socket.emit("dmm", {})
       }, data.dmmpanel);

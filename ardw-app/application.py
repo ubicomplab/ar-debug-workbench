@@ -1,3 +1,4 @@
+import shapely.geometry
 from flask import Flask
 from flask import render_template, send_from_directory, send_file, Response
 from flask.helpers import url_for
@@ -916,17 +917,18 @@ def make_selection(new_selection):
 def measure_dmm():
     global dmm_mode
     # convert to float in case it comes in as a string
-    value = queryValue("dmm", dmm_mode)
-    # value = ozValue("dmm", dmm_mode)
+    # value = queryValue("dmm", dmm_mode)
+    value = ozValue("dmm", dmm_mode)
     if value is not None:
         value = float(value)
     return dmm_mode, value
 
 
 oz_counter = -1
-oz_list = []
+oz_list = [3.28, 3.29, 12.42]
 def ozValue(device, mode):
     global oz_counter, oz_list
+    print(f"ozzy {oz_counter}")
     oz_counter += 1
     if oz_counter < len(oz_list):
         return oz_list[oz_counter]
