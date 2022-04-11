@@ -32,7 +32,7 @@ CONFIG_FILE = "config_duo.ini"
 
 logging.basicConfig(
     filename="ardw.log",
-    #filemode="w",
+    filemode="w",
     # encoding="utf-8",
     level="INFO",
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -330,10 +330,12 @@ def handle_connect():
             "neg": [config.get("Rendering", "DmmNegDotColor"), config.get("Rendering", "DmmNegSelectionColor")],
             "osc": [config.get("Rendering", "OscDotColor"), config.get("Rendering", "OscSelectionColor")],
         },
-        "track_board": config.getboolean("Dev", "TrackBoard"),
+        "track_board": do_board_track,
         "dmmpanel": config.getint("Study", "DmmPanelRefreshFrequency"),
         "padcolor": config.get("Rendering", "PadColorHighlight"),
         "trackcolor": config.get("Rendering", "TrackColorHighlight"),
+        "board_center": {"x": config.getfloat(boardname, "BoardCenterX"),
+                         "y": config.getfloat(boardname, "BoardCenterY")},
     })
 
     emit("selection-filter", selection_filter)
@@ -343,6 +345,8 @@ def handle_connect():
 
     for prop, on in special_state.items():
         emit("special", {"prop": prop, "on": on})
+
+    emit("boardtracktoggle", do_board_track)
 
 
 @socketio.on("disconnect")
@@ -669,6 +673,13 @@ def handle_special(data):
     socketio.emit("special", data)
 
 
+@socketio.on("boardtracktoggle")
+def handle_boardtracktoggle(data):
+    global do_board_track
+    do_board_track = not do_board_track
+    socketio.emit("boardtracktoggle", do_board_track)
+
+
 @socketio.on("debug")
 def handle_debug(data):
     print(data)
@@ -878,6 +889,12 @@ def update_probe_history(history, tip_update, end_update):
     history["end"][:, -1] = end_update
 
 
+def update_history(history, update):
+    history = np.roll(history, -1, axis=1)
+    history[:, -1] = update
+    return history
+
+
 # actually makes a selection and echoes it to all clients
 def make_selection(new_selection):
     global selection
@@ -899,8 +916,8 @@ def make_selection(new_selection):
 def measure_dmm():
     global dmm_mode
     # convert to float in case it comes in as a string
-    # value = queryValue("dmm", dmm_mode)
-    value = ozValue("dmm", dmm_mode)
+    value = queryValue("dmm", dmm_mode)
+    # value = ozValue("dmm", dmm_mode)
     if value is not None:
         value = float(value)
     return dmm_mode, value
@@ -1313,8 +1330,14 @@ def new_history(dwell_time, dim=2):
     return np.zeros((dim, history_len))
 
 
-def update_boardpos(x, y, r):
+def update_boardpos(x, y, r, history=None):
     global board_pos, projector_calibration, boardpos_offset
+
+    if history is not None:
+        median = np.median(history, axis=1)
+        x = median[0]
+        y = median[1]
+        r = median[2]
 
     # projector_calibration is now adjustment for observed board position
     board_pos["x"] = (x - boardpos_offset["x"]) / projector_calibration["z"]
@@ -1356,6 +1379,8 @@ def listen_udp():
         "neg": {"tip": new_history(dwell_time_tip, dim=3), "end": new_history(dwell_time_end)}
     }
 
+    boardpos_history = new_history(0.5, dim=3)
+
     nextframe = time.perf_counter() + 1. / framerate
     frame_i = 0
     while True:
@@ -1386,13 +1411,14 @@ def listen_udp():
         grey_tip[0] += probe_adjust["grey"]["x"]
         grey_tip[1] -= probe_adjust["grey"]["y"]
 
-        # to avoid crashes for now, ignoring z values
-        board_update = board_update[:2]
+        # we don't care about z, but want rotation
+        board_update[2] = board_rot
 
         ts_board = time.perf_counter()
-        if config.getboolean("Dev", "TrackBoard") or do_board_update:
+        boardpos_history = update_history(boardpos_history, board_update)
+        if do_board_track or do_board_update:
             do_board_update = False
-            update_boardpos(board_update[0], board_update[1], board_rot)
+            update_boardpos(*board_update, history=boardpos_history)
         ts_board = time.perf_counter() - ts_board
 
         ts_check = time.perf_counter()
@@ -1656,6 +1682,7 @@ if __name__ == "__main__":
         "r": 0
     }
     do_board_update = False
+    do_board_track = config.getboolean("Dev", "TrackBoard")
 
     boardname = config.get("Study", "BoardName")
 

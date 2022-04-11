@@ -237,14 +237,15 @@ function initSocket() {
   })
 
   socket.on("config", (data) => {
+    console.log(data)
     for (let device in data.devices) {
       let colors = data.devices[device];
       probes[device].color.loc = colors[0];
       probes[device].color.sel = colors[1];
       probes[device].color.zone = colors[1];
     }
+    rotation_center = data.board_center;
     var root = document.documentElement;
-    console.log(data)
     root.style.setProperty("--pad-color-highlight", data.padcolor);
     root.style.setProperty("--track-color-highlight", data.trackcolor);
     drawHighlights();

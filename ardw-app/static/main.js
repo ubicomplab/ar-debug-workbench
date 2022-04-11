@@ -582,13 +582,13 @@ function toggleSidebar(x = false) {
   if (x || sidebar_is_open) {
     sidebar_split.collapse(1);
     sidebar_is_open = false;
-    text.innerHTML = "Show Debug Panel ";
+    text.innerHTML = "Show Measurement Panel ";
   } else {
     // Resizes so that the debug panel is 305 pixels, which is a magic number that makes it look nice
     var min_percent = Math.ceil(305 / document.getElementById("main").offsetWidth * 100);
     sidebar_split.setSizes([100 - min_percent, min_percent]);
     sidebar_is_open = true;
-    text.innerHTML = "Hide Debug Panel ";
+    text.innerHTML = "Hide Measurement Panel ";
   }
   resizeAll();
 }
@@ -1165,6 +1165,11 @@ function initPage() {
 
   var projector_boardtrack = document.getElementById("settings-projector-track");
   projector_boardtrack.addEventListener("click", () => {
+    socket.emit("boardtracktoggle", {});
+  })
+
+  var projector_boardjump = document.getElementById("settings-projector-jump");
+  projector_boardjump.addEventListener("click", () => {
     socket.emit("board-update", {});
   });
 
@@ -1651,6 +1656,11 @@ function initSocket() {
   socket.on("special", (data) => {
     ibom_settings[data.prop] = data.on;
     resizeAll();
+  })
+
+  socket.on("boardtracktoggle", (data) => {
+    var input = document.getElementById("settings-projector-track")
+    input.checked = data
   })
 }
 

@@ -19,6 +19,7 @@ from flask import Flask, render_template, Response, request, redirect, url_for
 # import package
 import pyvisa
 import logging
+import visa
 
 # import argparse
 

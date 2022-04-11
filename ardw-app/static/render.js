@@ -57,9 +57,11 @@ var probe_crosshair = false;
 
 /** offset of the center of rotation for the projector canvas
  * currently just the center of the edge cut bbox */ 
-const rotation_center = {
-  "x": 148.5011,
-  "y": 105.0036
+var rotation_center = {
+//  "x": 148.5011,
+//  "y": 105.0036,
+    "x": 158.0,
+    "y": 108.75,
 }
 
 
@@ -358,8 +360,19 @@ function drawPadHole(ctx, pad, padHoleColor) {
   ctx.restore();
 }
 
+var proj_dontdraw = [
+  "PWMH1",
+  "PWML1",
+  "COMMUNICATION1",
+  "XIO1",
+  "ADCH1",
+  "ADCL1",
+  "POWER1"
+];
+
 // Note: outlineColor and outline are always null and false (we don't draw pin1 outlines)
 function drawFootprint(ctx, layer, scalefactor, footprint, padColor, padHoleColor, outlineColor, highlight, outline) {
+  if (IS_PROJECTOR && proj_dontdraw.includes(footprint.ref)) return;
   if (highlight) {
     // draw bounding box
     if (footprint.layer == layer) {
@@ -403,6 +416,12 @@ function drawFootprint(ctx, layer, scalefactor, footprint, padColor, padHoleColo
     }
     for (var pad of footprint.pads) {
       drawPadHole(ctx, pad, padHoleColor);
+    }
+  } else if (IS_PROJECTOR && ibom_settings.highlightpin1) {
+    for (var pad of footprint.pads) {
+      if (pad.pin1 && pad.layers.includes(layer)) {
+        drawPad(ctx, pad, outlineColor, false);
+      }
     }
   }
 }
@@ -1343,7 +1362,7 @@ function crosshairAtPoint(layerdict, coords, color) {
 }
 
 function drawToolLocations(layerdict) {
-  var radius = IS_PROJECTOR ? 6 : 1;
+  var radius = IS_PROJECTOR ? 3 : 1;
   for (let probe_name in probes) {
     let probe_info = probes[probe_name];
     if (probe_info.location !== null) {
@@ -1402,6 +1421,8 @@ function drawFPS(layerdict) {
   const padding = 20;
   const textcolor = "white";
 
+  // do not actually draw fps ever
+  return;
   if (!IS_PROJECTOR) {
     return;
   }
@@ -1433,7 +1454,7 @@ function drawCurrentSelection(canvasdict) {
   var ctx = canvasdict.anno.getContext("2d");
 
   var fontsize = 40;
-  var origin = {"x": 20, "y": 120}
+  var origin = {"x": 20, "y": 70}
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.font = `${fontsize}px sans-serif`;
@@ -1447,7 +1468,7 @@ function drawCurrentSelection(canvasdict) {
   ctx.fillText(`Mode: ${mode_text}`, textpt.x, textpt.y);
   textpt.y += fontsize * 1.25;
   if (!active_session_is_recording) {
-    ctx.fillText(`Current Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
+    ctx.fillText(`Selection: ${getElementName(current_selection)}`, textpt.x, textpt.y);
   } else {
     ctx.fillText(`Pos Probe: ${getElementName(probes.pos.selection)}`, textpt.x, textpt.y);
     textpt.y += fontsize * 1.25;
@@ -1459,7 +1480,7 @@ function drawMultiMenu(canvasdict, hits, color="blue") {
   // Config variables for the multi menu
   var fontsize = 40;
   var row_padding = 10;
-  var anchor = {"x": 1000, "y": 20}
+  var anchor = {"x": 600, "y": 20}
   var row_width = 300;
 
   var style = getComputedStyle(topmostdiv);
@@ -1514,7 +1535,7 @@ function drawCurrentAnnotation(canvasdict) {
   var ctx = canvasdict.anno.getContext("2d");
 
   var fontsize = 40;
-  var origin = {"x": 20, "y": 280}
+  var origin = {"x": 20, "y": 230}
 
   ctx.fillStyle = style.getPropertyValue('--pad-color-highlight');
   ctx.font = `${fontsize}px sans-serif`;
