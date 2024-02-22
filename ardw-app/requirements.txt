@@ -27,7 +27,7 @@ numpy==1.21.5
 packaging==21.3
 prompt-toolkit==3.0.24
 pycodestyle==2.8.0
-pyinstaller==4.4
+pyinstaller==5.13.1
 pyinstaller-hooks-contrib==2021.2
 pyparsing==3.0.6
 python-engineio==4.2.0
